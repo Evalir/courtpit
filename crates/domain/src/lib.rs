@@ -1,0 +1,6 @@
+//! Courtpit domain logic.
+//!
+//! Everything in this crate is pure: no IO, no async runtime, no database. Rules that decide
+//! outcomes (score validation, match state transitions, pairings, scoring) live here so they
+//! can be unit tested exhaustively. The server crate maps between these types and storage.
+#![deny(unsafe_code)]
