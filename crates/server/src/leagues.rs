@@ -12,6 +12,7 @@ use crate::{ApiError, Tenant, TenantTx, matches::DbDiscipline};
 
 pub mod entries;
 pub mod lifecycle;
+pub mod notify;
 pub mod standings;
 
 /// Lifecycle of a league season.
@@ -35,7 +36,7 @@ pub enum LeagueStatus {
 pub const LEAGUE_COLUMNS: &str = "id, name, discipline, registration_opens_at, \
     registration_closes_at, starts_at, ends_at, status, published_at, match_format, \
     entry_fee_minor, scoring_overrides, box_min_size, box_max_size, previous_league_id, \
-    created_at";
+    cancel_reason, created_at";
 
 /// A `leagues` row.
 #[derive(Debug, Clone, FromRow)]
@@ -70,6 +71,8 @@ pub struct LeagueRow {
     pub box_max_size: i32,
     /// The preceding season, if any.
     pub previous_league_id: Option<Uuid>,
+    /// Why the system cancelled the league, if it did.
+    pub cancel_reason: Option<String>,
     /// When the row was created.
     pub created_at: DateTime<Utc>,
 }
@@ -187,6 +190,8 @@ pub struct LeagueView {
     pub box_max_size: i32,
     /// The preceding season, if any.
     pub previous_league_id: Option<Uuid>,
+    /// Why the system cancelled the league (too few entries at the start date), if it did.
+    pub cancel_reason: Option<String>,
     /// When the row was created.
     pub created_at: DateTime<Utc>,
 }
@@ -210,6 +215,7 @@ impl LeagueView {
             box_min_size: league.box_min_size,
             box_max_size: league.box_max_size,
             previous_league_id: league.previous_league_id,
+            cancel_reason: league.cancel_reason,
             created_at: league.created_at,
         })
     }

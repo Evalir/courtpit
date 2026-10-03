@@ -204,6 +204,118 @@ async fn mixed_needs_one_female_and_one_male() {
     assert_eq!(done["status"], "confirmed");
 }
 
+/// Sets the community's mixed-doubles rule (the tenant cache would otherwise serve the old one).
+async fn set_mixed_rule(app: &TestApp, rule: &str) {
+    let _ = sqlx::query(
+        "UPDATE communities SET settings = jsonb_build_object('mixed_eligibility', $1::text)",
+    )
+    .bind(rule)
+    .execute(&app.db)
+    .await
+    .unwrap();
+    app.state.tenants.invalidate_all();
+}
+
+fn message(res: crate::common::Res) -> String {
+    res.expect(StatusCode::UNPROCESSABLE_ENTITY)["error"]["message"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+#[tokio::test]
+async fn other_enters_mixed_only_under_any_two_distinct() {
+    let (app, admin, ps) = setup(&["ana", "bo", "cy", "dee"]).await;
+    let (ana, bo, cy, dee) = (&ps[0], &ps[1], &ps[2], &ps[3]);
+    for (session, gender) in [
+        (ana, "female"),
+        (bo, "other"),
+        (cy, "other"),
+        (dee, "undisclosed"),
+    ] {
+        let _ = app.patch_me(session, json!({ "gender": gender })).await;
+    }
+    let league = open_league(&app, &admin, "mixed").await;
+    let invite = async |from: &Session, to: &Session| {
+        register(&app, from, &league, json!({ "partner_id": to.player_id })).await
+    };
+
+    // The default rule: exactly one female and one male.
+    let why = message(invite(ana, bo).await);
+    assert!(why.contains("one female and one male"), "{why}");
+    let why = message(register(&app, bo, &league, json!({ "looking_for_partner": true })).await);
+    assert!(
+        why.contains("other and undisclosed are not eligible"),
+        "{why}"
+    );
+
+    set_mixed_rule(&app, "any_two_distinct").await;
+    // Undisclosed is never eligible, alone or in a pair; two of a kind are not a mixed pair.
+    let why = message(invite(ana, dee).await);
+    assert!(why.contains("undisclosed is not eligible"), "{why}");
+    let why = message(register(&app, dee, &league, json!({ "looking_for_partner": true })).await);
+    assert!(why.contains("your profile"), "{why}");
+    let why = message(invite(bo, cy).await);
+    assert!(why.contains("different genders"), "{why}");
+    let _ = register(&app, cy, &league, json!({ "looking_for_partner": true }))
+        .await
+        .expect(StatusCode::CREATED);
+
+    // Female + other is a valid pair now.
+    let entry = invite(ana, bo).await.expect(StatusCode::CREATED);
+    // The rule is checked again on accept: back to the default, `other` is refused.
+    set_mixed_rule(&app, "female_male").await;
+    let why = message(act(&app, bo, &league, &entry, "accept").await);
+    assert!(why.contains("one female and one male"), "{why}");
+    set_mixed_rule(&app, "any_two_distinct").await;
+    let done = act(&app, bo, &league, &entry, "accept")
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(done["status"], "confirmed");
+    assert_eq!(done["player_ids"], json!([ana.player_id, bo.player_id]));
+}
+
+#[tokio::test]
+async fn admin_pairing_follows_the_mixed_rule() {
+    let (app, admin, ps) = setup(&["ana", "bo", "cy"]).await;
+    let (ana, bo, cy) = (&ps[0], &ps[1], &ps[2]);
+    for (session, gender) in [(ana, "other"), (bo, "female"), (cy, "other")] {
+        let _ = app.patch_me(session, json!({ "gender": gender })).await;
+    }
+    set_mixed_rule(&app, "any_two_distinct").await;
+    let league = open_league(&app, &admin, "mixed").await;
+    let mut entries = Vec::new();
+    for player in [ana, bo, cy] {
+        entries.push(
+            register(
+                &app,
+                player,
+                &league,
+                json!({ "looking_for_partner": true }),
+            )
+            .await
+            .expect(StatusCode::CREATED),
+        );
+    }
+    let pair = |first: &Value, second: &Value| {
+        app.post(&format!("/api/v1/admin/leagues/{league}/pair"))
+            .as_(&admin)
+            .json(json!({ "entry_ids": [first["id"], second["id"]] }))
+            .send()
+    };
+    let why = message(pair(&entries[0], &entries[2]).await);
+    assert!(why.contains("different genders"), "other + other: {why}");
+    set_mixed_rule(&app, "female_male").await;
+    let why = message(pair(&entries[0], &entries[1]).await);
+    assert!(
+        why.contains("one female and one male"),
+        "other + female: {why}"
+    );
+    set_mixed_rule(&app, "any_two_distinct").await;
+    let paired = pair(&entries[0], &entries[1]).await.expect(StatusCode::OK);
+    assert_eq!(paired["status"], "confirmed");
+}
+
 #[tokio::test]
 async fn admins_pair_solo_entries() {
     let (app, admin, ps) = setup(&["ana", "bo", "cy"]).await;

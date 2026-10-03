@@ -155,6 +155,36 @@ pub fn place<T: Ord + Copy + Hash>(
     Ok(cut(&ordered, &sizes))
 }
 
+/// Fewest entries a season needs: in total, and in every box.
+pub const MIN_ENTRIES: usize = 2;
+
+/// Why a placement cannot be played as a season.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum Unplayable {
+    /// Fewer than [`MIN_ENTRIES`] entries in the whole league.
+    #[error("Fewer than two entries were confirmed by the start date.")]
+    TooFewEntries,
+    /// The placement leaves a box with fewer than [`MIN_ENTRIES`] entries.
+    #[error("The draw would have left a box with fewer than two entries.")]
+    ThinBox,
+}
+
+/// Whether `entries` entries placed into `boxes` make a playable season: at least
+/// [`MIN_ENTRIES`] entries overall and in every box (a round robin needs opponents).
+pub fn playable<T>(entries: usize, boxes: &[Placed<T>]) -> Result<(), Unplayable> {
+    if entries < MIN_ENTRIES {
+        Err(Unplayable::TooFewEntries)
+    } else if boxes
+        .iter()
+        .any(|placed| placed.entries.len() < MIN_ENTRIES)
+    {
+        Err(Unplayable::ThinBox)
+    } else {
+        Ok(())
+    }
+}
+
 /// Promotion and relegation for a finished box, per finishing position (index 0 = 1st):
 /// `-1` promoted (to a lower tier number), `+1` relegated, `0` stays. The top `up` entries go
 /// up unless this is the top tier, the bottom `down` go down unless it is the bottom tier;
@@ -294,6 +324,50 @@ mod tests {
                 (1..=u32::try_from(boxes.len()).unwrap()).collect::<Vec<_>>()
             );
         }
+    }
+
+    fn seeds_of(n: usize) -> Vec<Seed<u32>> {
+        let utrs: Vec<i64> = (0..n)
+            .map(|idx| i64::try_from(idx * 37 % 100).unwrap())
+            .collect();
+        seeds(&utrs)
+    }
+
+    #[test]
+    fn a_season_needs_two_entries_and_no_thin_box() {
+        for n in 0..40 {
+            let boxes = place(&seeds_of(n), BoxSize::default()).unwrap();
+            let want = if n < 2 {
+                Err(Unplayable::TooFewEntries)
+            } else {
+                Ok(())
+            };
+            assert_eq!(playable(n, &boxes), want, "n={n}");
+        }
+        // Small custom boxes still never strand a lone entry.
+        for (min_size, max_size) in [(2, 2), (2, 3), (3, 3), (2, 16)] {
+            let limits = BoxSize { min_size, max_size };
+            for n in 2..40 {
+                let boxes = place(&seeds_of(n), limits).unwrap();
+                assert_eq!(
+                    playable(n, &boxes),
+                    Ok(()),
+                    "n={n} in {min_size}..={max_size}"
+                );
+            }
+        }
+        let thin = [Placed {
+            tier: 1,
+            entries: vec![1_u32],
+            utr_min: None,
+            utr_max: None,
+        }];
+        assert_eq!(playable(3, &thin), Err(Unplayable::ThinBox));
+        assert!(
+            Unplayable::TooFewEntries
+                .to_string()
+                .contains("Fewer than two")
+        );
     }
 
     #[test]

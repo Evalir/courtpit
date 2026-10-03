@@ -1,4 +1,4 @@
-//! `/api/v1/leagues` (members) and `/api/v1/admin/leagues` (setup, publish, cancel).
+//! `/api/v1/leagues` (members) and `/api/v1/admin/leagues` (setup, publish, cancel, finish).
 
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Utc};
@@ -16,9 +16,10 @@ use crate::{
     jobs::{self, Job},
     leagues::{
         self, LEAGUE_COLUMNS, LeagueRow, LeagueStatus, LeagueView,
+        lifecycle::{self, Closing},
         standings::{self, DivisionStanding},
     },
-    matches::DbDiscipline,
+    matches::{DbDiscipline, MATCH_COLUMNS, MatchRow, MatchView},
     models::{Page, PageParams, double_option, paginate},
 };
 
@@ -371,6 +372,107 @@ pub async fn cancel_league(
     let league = leagues::load(&mut tx, id, false).await?;
     tx.commit().await?;
     Ok(Json(LeagueView::new(league, &admin.tenant)?))
+}
+
+/// Query of `POST /admin/leagues/{id}/finish`.
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct FinishQuery {
+    /// Finish even though matches are still reported or disputed; they are left out of the
+    /// final table.
+    #[serde(default)]
+    pub force: bool,
+}
+
+/// Finishes an active league whose `ends_at` has passed (admin). Without `force`, refuses
+/// (409 `unresolved_matches`) while any match is still reported or disputed; before the end
+/// date it refuses with 409 `season_not_over`. Unplayed matches are cancelled and the final
+/// standings, season points and promotion/relegation are recorded, as the lifecycle job does.
+#[utoipa::path(post, path = "/api/v1/admin/leagues/{id}/finish", tag = "admin",
+    params(("id" = Uuid, Path), FinishQuery), security(("bearer" = [])),
+    responses((status = 200, body = LeagueView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody)))]
+pub async fn finish_league(
+    State(state): State<AppState>,
+    admin: CurrentPlayer,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiQuery(query): ApiQuery<FinishQuery>,
+) -> ApiResult<Json<LeagueView>> {
+    admin.require_admin()?;
+    let now = state.clock.now();
+    let mut tx = admin.tenant.begin(&state.db).await?;
+    let existing = leagues::load(&mut tx, id, true).await?;
+    if existing.status != LeagueStatus::Active {
+        return Err(ApiError::conflict("only an active league can be finished"));
+    }
+    if now < existing.ends_at {
+        return Err(ApiError::conflict_code(
+            "season_not_over",
+            format!(
+                "the season ends at {}; cancel the league instead to stop it earlier",
+                existing.ends_at.to_rfc3339()
+            ),
+        ));
+    }
+    if let Closing::Blocked(open) =
+        lifecycle::close_season(&mut tx, &admin.tenant, &existing, now, query.force).await?
+    {
+        let which = if open.count == 1 {
+            "1 league match is".to_owned()
+        } else {
+            format!("{} league matches are", open.count)
+        };
+        return Err(ApiError::conflict_code(
+            "unresolved_matches",
+            format!(
+                "{which} still reported or disputed; resolve them (see \
+                 GET /api/v1/admin/leagues/{id}/unresolved) or finish with ?force=true to \
+                 leave them out of the final table"
+            ),
+        ));
+    }
+    let league = leagues::load(&mut tx, id, false).await?;
+    tx.commit().await?;
+    Ok(Json(LeagueView::new(league, &admin.tenant)?))
+}
+
+/// The league's matches that still lack a result: `reported` (waiting for the other side or
+/// the auto-confirm deadline) and `disputed` (waiting for an admin). They block the season
+/// from finishing; newest first.
+#[utoipa::path(get, path = "/api/v1/admin/leagues/{id}/unresolved", tag = "admin",
+    params(("id" = Uuid, Path), PageParams), security(("bearer" = [])),
+    responses((status = 200, body = Page<MatchView>), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody)))]
+pub async fn unresolved_matches(
+    State(state): State<AppState>,
+    admin: CurrentPlayer,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiQuery(page): ApiQuery<PageParams>,
+) -> ApiResult<Json<Page<MatchView>>> {
+    admin.require_admin()?;
+    let limit = page.limit();
+    let cursor = page.uuid_cursor()?;
+    let mut tx = admin.tenant.begin(&state.db).await?;
+    let _ = leagues::load(&mut tx, id, false).await?;
+    let rows: Vec<MatchRow> = sqlx::query_as(&format!(
+        "SELECT {MATCH_COLUMNS} FROM matches
+         WHERE community_id = $1 AND league_id = $2 AND status IN ('reported', 'disputed')
+           AND ($3::uuid IS NULL OR id < $3)
+         ORDER BY id DESC LIMIT $4"
+    ))
+    .bind(tx.community_id())
+    .bind(id)
+    .bind(cursor)
+    .bind(limit + 1)
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    let page = paginate(rows, limit, |row| row.id.to_string());
+    Ok(Json(Page {
+        items: page.items.into_iter().map(MatchView::from).collect(),
+        next_cursor: page.next_cursor,
+    }))
 }
 
 /// Filters for `GET /leagues`.

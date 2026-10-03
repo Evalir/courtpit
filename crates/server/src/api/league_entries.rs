@@ -97,11 +97,12 @@ pub async fn register(
             }
             players::require_active_members(&mut tx, &[partner]).await?;
             entries::require_not_entered(&mut tx, league_id, partner, "your partner is").await?;
-            entries::check_mixed(&mut tx, discipline, &[player.id, partner]).await?;
+            entries::check_mixed(&mut tx, &player.tenant, discipline, &[player.id, partner])
+                .await?;
             EntryStatus::PendingPartner
         }
         (_, None, true) => {
-            entries::check_mixed(&mut tx, discipline, &[player.id]).await?;
+            entries::check_mixed(&mut tx, &player.tenant, discipline, &[player.id]).await?;
             EntryStatus::PendingPartner
         }
     };
@@ -236,7 +237,8 @@ pub async fn accept_invite(
     withdraw_solo(&mut tx, league_id, player.id).await?;
     entries::require_not_entered(&mut tx, league_id, player.id, "you are").await?;
     players::require_active_members(&mut tx, &[entry.created_by, player.id]).await?;
-    entries::check_mixed(&mut tx, league.discipline(), &[entry.created_by, player.id]).await?;
+    let pair = [entry.created_by, player.id];
+    entries::check_mixed(&mut tx, &player.tenant, league.discipline(), &pair).await?;
     complete(&mut tx, &entry, player.id).await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
@@ -364,7 +366,7 @@ pub async fn pair_entries(
     }
     let pair = [first_entry.created_by, second_entry.created_by];
     players::require_active_members(&mut tx, &pair).await?;
-    entries::check_mixed(&mut tx, league.discipline(), &pair).await?;
+    entries::check_mixed(&mut tx, &admin.tenant, league.discipline(), &pair).await?;
     let _ = sqlx::query(
         "UPDATE league_entries SET status = 'withdrawn', invited_partner_id = NULL,
             looking_for_partner = false, updated_at = now()

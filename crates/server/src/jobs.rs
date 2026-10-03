@@ -62,6 +62,16 @@ pub enum Job {
         reason = "keeps the `{}` payload shape stable on the wire and in stored rows"
     )]
     BackupDatabase {},
+    /// Emails one entrant that their league was cancelled at its start date. One job per
+    /// recipient, so a failed send retries on its own instead of re-mailing everyone.
+    NotifyLeagueCancelled {
+        /// The community that owns the league.
+        community_id: Uuid,
+        /// The cancelled league.
+        league_id: Uuid,
+        /// The player to tell.
+        player_id: Uuid,
+    },
 }
 
 impl Job {
@@ -75,6 +85,11 @@ impl Job {
             }
             Self::AdvanceLeague { league_id, .. } => Some(format!("league:{league_id}")),
             Self::BackupDatabase {} => Some("backup".to_owned()),
+            Self::NotifyLeagueCancelled {
+                league_id,
+                player_id,
+                ..
+            } => Some(format!("league_cancelled:{league_id}:{player_id}")),
         }
     }
 
@@ -214,6 +229,14 @@ async fn execute(state: &AppState, job: Job) -> anyhow::Result<()> {
             league_id,
         } => crate::leagues::lifecycle::advance(state, community_id, league_id).await,
         Job::BackupDatabase {} => crate::backup::run(state).await,
+        Job::NotifyLeagueCancelled {
+            community_id,
+            league_id,
+            player_id,
+        } => {
+            crate::leagues::notify::league_cancelled(state, community_id, league_id, player_id)
+                .await
+        }
     }
 }
 
