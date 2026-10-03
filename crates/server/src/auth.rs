@@ -1,5 +1,6 @@
 //! Authentication: one-time email codes, passwords, sessions and request extractors.
 
+pub mod oidc;
 pub mod rate_limit;
 pub mod secrets;
 mod session;

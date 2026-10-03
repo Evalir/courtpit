@@ -44,6 +44,26 @@ pub struct Config {
         default_value = "Courtpit <no-reply@courtpit.app>"
     )]
     pub email_from: String,
+    /// Accepted `aud` values for Sign in with Apple (bundle ids / service ids), comma-separated.
+    #[arg(long, env = "COURTPIT_APPLE_CLIENT_IDS", value_delimiter = ',')]
+    pub apple_client_ids: Vec<String>,
+    /// Accepted `aud` values for Google sign-in (OAuth client ids), comma-separated.
+    #[arg(long, env = "COURTPIT_GOOGLE_CLIENT_IDS", value_delimiter = ',')]
+    pub google_client_ids: Vec<String>,
+    /// Apple's JWKS endpoint.
+    #[arg(
+        long,
+        env = "COURTPIT_APPLE_JWKS_URL",
+        default_value = "https://appleid.apple.com/auth/keys"
+    )]
+    pub apple_jwks_url: String,
+    /// Google's JWKS endpoint.
+    #[arg(
+        long,
+        env = "COURTPIT_GOOGLE_JWKS_URL",
+        default_value = "https://www.googleapis.com/oauth2/v3/certs"
+    )]
+    pub google_jwks_url: String,
     /// Database settings.
     #[command(flatten)]
     pub db: DbConfig,
@@ -72,6 +92,10 @@ impl Default for Config {
             mailer: MailerKind::Log,
             resend_api_key: None,
             email_from: "Courtpit <no-reply@courtpit.app>".to_owned(),
+            apple_client_ids: Vec::new(),
+            google_client_ids: Vec::new(),
+            apple_jwks_url: "https://appleid.apple.com/auth/keys".to_owned(),
+            google_jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_owned(),
             db: DbConfig {
                 database_url: "postgres://courtpit:courtpit@127.0.0.1/courtpit".to_owned(),
                 db_max_connections: 10,

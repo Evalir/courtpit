@@ -11,5 +11,6 @@ mod auth;
 )]
 mod common;
 mod health;
+mod oidc;
 mod schema;
 mod tenancy;

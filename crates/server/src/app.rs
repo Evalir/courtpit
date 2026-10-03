@@ -13,7 +13,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
     api,
-    auth::rate_limit::RateLimiter,
+    auth::{oidc::OidcVerifier, rate_limit::RateLimiter},
     config::{Config, MailerKind},
     error::ErrorBody,
     mailer::{LogMailer, Mailer, ResendMailer},
@@ -33,6 +33,8 @@ pub struct AppState {
     pub mailer: Arc<dyn Mailer>,
     /// Per-IP / per-key auth rate limits (`auth_ip_limit_per_hour`).
     pub limiter: RateLimiter,
+    /// Apple / Google ID-token verification.
+    pub oidc: OidcVerifier,
 }
 
 impl AppState {
@@ -40,7 +42,9 @@ impl AppState {
     pub fn new(config: Config, db: PgPool, mailer: Arc<dyn Mailer>) -> Self {
         let tenants = TenantCache::new(Duration::from_secs(config.tenant_cache_ttl_secs));
         let limiter = RateLimiter::per_hour(config.auth_ip_limit_per_hour);
+        let oidc = OidcVerifier::from_config(&config);
         Self {
+            oidc,
             config: Arc::new(config),
             db,
             tenants,
@@ -87,6 +91,8 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::auth::set_password))
         .routes(routes!(api::auth::logout))
         .routes(routes!(api::auth::session))
+        .routes(routes!(api::oidc::oidc_login))
+        .routes(routes!(api::oidc::oidc_link))
         .split_for_parts()
 }
 
