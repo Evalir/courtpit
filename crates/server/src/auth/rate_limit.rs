@@ -1,21 +1,19 @@
-//! In-memory fixed-window rate limiting (per instance; good enough for abuse guardrails).
+//! Per-key rate limiting (in memory, per instance; good enough for abuse guardrails), backed by
+//! `governor`'s keyed GCRA limiter.
 
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU32, Ordering},
-    },
-    time::Duration,
-};
+use std::{num::NonZeroU32, sync::Arc};
 
-use moka::sync::Cache;
+use governor::{DefaultKeyedRateLimiter, Quota};
 
 use crate::ApiError;
 
-/// Counts hits per key in fixed windows of `window`.
+/// Keys tracked before stale ones are swept (so a flood of distinct keys cannot grow memory).
+const SWEEP_ABOVE: usize = 100_000;
+
+/// Allows a burst of `per_hour` hits per key, refilling one hit every `1h / per_hour`.
 #[derive(Clone)]
 pub struct RateLimiter {
-    hits: Cache<String, Arc<AtomicU32>>,
+    inner: Arc<DefaultKeyedRateLimiter<String>>,
 }
 
 impl std::fmt::Debug for RateLimiter {
@@ -25,25 +23,22 @@ impl std::fmt::Debug for RateLimiter {
 }
 
 impl RateLimiter {
-    /// A limiter whose counters reset `window` after the first hit.
-    pub fn new(window: Duration) -> Self {
+    /// A limiter allowing `per_hour` hits per key per hour (a limit of 0 is treated as 1).
+    pub fn per_hour(per_hour: u32) -> Self {
+        let quota = Quota::per_hour(NonZeroU32::new(per_hour).unwrap_or(NonZeroU32::MIN));
         Self {
-            hits: Cache::builder()
-                .max_capacity(100_000)
-                .time_to_live(window)
-                .build(),
+            inner: Arc::new(DefaultKeyedRateLimiter::keyed(quota)),
         }
     }
 
-    /// Records a hit for `key`; errors once more than `limit` hits land in the window.
-    pub fn check(&self, key: &str, limit: u32) -> Result<(), ApiError> {
-        let counter = self
-            .hits
-            .get_with(key.to_owned(), || Arc::new(AtomicU32::new(0)));
-        if counter.fetch_add(1, Ordering::Relaxed) >= limit {
-            return Err(ApiError::RateLimited);
+    /// Records a hit for `key`; errors once the key has exhausted its quota.
+    pub fn check(&self, key: &str) -> Result<(), ApiError> {
+        if self.inner.len() > SWEEP_ABOVE {
+            self.inner.retain_recent();
         }
-        Ok(())
+        self.inner
+            .check_key(&key.to_owned())
+            .map_err(|_| ApiError::RateLimited)
     }
 }
 
@@ -53,10 +48,10 @@ mod tests {
 
     #[test]
     fn limits_per_key() {
-        let rl = RateLimiter::new(Duration::from_secs(60));
-        rl.check("a", 2).unwrap();
-        rl.check("a", 2).unwrap();
-        assert!(rl.check("a", 2).is_err());
-        rl.check("b", 2).unwrap();
+        let rl = RateLimiter::per_hour(2);
+        rl.check("a").unwrap();
+        rl.check("a").unwrap();
+        assert!(rl.check("a").is_err());
+        rl.check("b").unwrap();
     }
 }

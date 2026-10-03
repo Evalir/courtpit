@@ -31,7 +31,7 @@ pub struct AppState {
     pub tenants: TenantCache,
     /// Outbound email.
     pub mailer: Arc<dyn Mailer>,
-    /// Per-IP / per-key auth rate limits (hourly windows).
+    /// Per-IP / per-key auth rate limits (`auth_ip_limit_per_hour`).
     pub limiter: RateLimiter,
 }
 
@@ -39,12 +39,13 @@ impl AppState {
     /// Builds state with an explicit mailer (tests pass a shared [`LogMailer`]).
     pub fn new(config: Config, db: PgPool, mailer: Arc<dyn Mailer>) -> Self {
         let tenants = TenantCache::new(Duration::from_secs(config.tenant_cache_ttl_secs));
+        let limiter = RateLimiter::per_hour(config.auth_ip_limit_per_hour);
         Self {
             config: Arc::new(config),
             db,
             tenants,
             mailer,
-            limiter: RateLimiter::new(Duration::from_secs(3600)),
+            limiter,
         }
     }
 
