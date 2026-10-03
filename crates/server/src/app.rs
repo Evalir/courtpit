@@ -91,6 +91,10 @@ impl AppState {
 struct ApiDoc;
 
 /// All API routes plus the OpenAPI document describing them.
+#[expect(
+    clippy::cognitive_complexity,
+    reason = "a flat list of route registrations; the `routes!` expansion inflates the score"
+)]
 pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(api::health::healthz))
@@ -124,6 +128,11 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::proposals::propose))
         .routes(routes!(api::proposals::accept_proposal))
         .routes(routes!(api::proposals::decline_proposal))
+        .routes(routes!(api::match_results::report_score))
+        .routes(routes!(api::match_results::confirm_score))
+        .routes(routes!(api::match_results::dispute_score))
+        .routes(routes!(api::match_results::resolve_match))
+        .routes(routes!(api::match_results::walkover_match))
         .split_for_parts()
 }
 

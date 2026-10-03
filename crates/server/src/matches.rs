@@ -15,6 +15,8 @@ use uuid::Uuid;
 
 use crate::{ApiError, TenantTx, auth::CurrentPlayer};
 
+pub mod results;
+
 /// Postgres `discipline`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "discipline", rename_all = "lowercase")]
@@ -132,8 +134,8 @@ impl From<DbSide> for Side {
 /// Columns for [`MatchRow`].
 pub const MATCH_COLUMNS: &str = "id, discipline, league_id, division_id, tournament_id, round, \
     side_a_players, side_b_players, status, scheduled_at, location, match_format, score, \
-    winner_side, reported_by, reported_at, confirm_deadline_at, resolved_by, resolution_note, \
-    created_by, created_at";
+    winner_side, reported_by, reported_at, confirm_deadline_at, disputed_by, dispute_note, \
+    resolved_by, resolution_note, created_by, created_at";
 
 /// A `matches` row.
 #[derive(Debug, Clone, FromRow)]
@@ -172,6 +174,10 @@ pub struct MatchRow {
     pub reported_at: Option<DateTime<Utc>>,
     /// When the report auto-confirms if left unanswered.
     pub confirm_deadline_at: Option<DateTime<Utc>>,
+    /// Player who disputed the reported score.
+    pub disputed_by: Option<Uuid>,
+    /// Why the reported score was disputed.
+    pub dispute_note: Option<String>,
     /// Player who resolved or cancelled the match.
     pub resolved_by: Option<Uuid>,
     /// Note left by the resolver.
@@ -419,8 +425,12 @@ pub struct MatchView {
     pub reported_by: Option<Uuid>,
     /// When the score was reported.
     pub reported_at: Option<DateTime<Utc>>,
-    /// When the report auto-confirms if left unanswered.
+    /// Unanswered reports auto-confirm at this time.
     pub confirm_deadline_at: Option<DateTime<Utc>>,
+    /// Player who disputed the reported score.
+    pub disputed_by: Option<Uuid>,
+    /// Why the reported score was disputed.
+    pub dispute_note: Option<String>,
     /// Player who resolved or cancelled the match.
     pub resolved_by: Option<Uuid>,
     /// Note left by the resolver.
@@ -452,6 +462,8 @@ impl From<MatchRow> for MatchView {
             reported_by: row.reported_by,
             reported_at: row.reported_at,
             confirm_deadline_at: row.confirm_deadline_at,
+            disputed_by: row.disputed_by,
+            dispute_note: row.dispute_note,
             resolved_by: row.resolved_by,
             resolution_note: row.resolution_note,
             created_at: row.created_at,

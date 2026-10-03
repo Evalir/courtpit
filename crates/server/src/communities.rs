@@ -27,6 +27,36 @@ pub struct Branding {
     pub feature_flags: BTreeMap<String, bool>,
 }
 
+/// Tunables stored in `communities.settings`. Missing keys take their defaults; unknown keys
+/// are ignored so newer settings don't break older instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct CommunitySettings {
+    /// Days the other side has to confirm or dispute a reported score (spec default: 3).
+    pub confirm_window_days: u32,
+}
+
+impl Default for CommunitySettings {
+    fn default() -> Self {
+        Self {
+            confirm_window_days: 3,
+        }
+    }
+}
+
+impl CommunitySettings {
+    /// Settings of `community`, falling back to defaults (with a warning) if malformed.
+    pub fn of(community: &Community) -> Self {
+        let mut settings: Self =
+            serde_json::from_value(community.settings.0.clone()).unwrap_or_else(|err| {
+                tracing::warn!(community = %community.id, %err, "malformed settings, using defaults");
+                Self::default()
+            });
+        settings.confirm_window_days = settings.confirm_window_days.clamp(1, 30);
+        settings
+    }
+}
+
 /// Input for [`create_community`].
 #[derive(Debug, Clone)]
 pub struct NewCommunity {
@@ -110,6 +140,8 @@ pub async fn create_community(db: &PgPool, new: NewCommunity) -> anyhow::Result<
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::*;
 
     #[test]
@@ -128,5 +160,39 @@ mod tests {
         assert_eq!(branding.colors["primary"], "#0a7");
         assert!(branding.feature_flags["doubles"]);
         assert_eq!(branding.logo_url, None);
+    }
+
+    fn with_settings(settings: Value) -> CommunitySettings {
+        CommunitySettings::of(&Community {
+            id: Uuid::nil(),
+            slug: "demo".into(),
+            name: "Demo".into(),
+            custom_domain: None,
+            branding: Json(Branding::default()),
+            settings: Json(settings),
+            scoring_config: Json(serde_json::json!({})),
+            default_match_format: Json(serde_json::json!({})),
+            created_at: chrono::Utc::now(),
+        })
+    }
+
+    #[test]
+    fn settings_default_clamp_and_tolerate_junk() {
+        use serde_json::json;
+        assert_eq!(with_settings(json!({})).confirm_window_days, 3);
+        let settings = with_settings(json!({ "confirm_window_days": 7, "future_key": true }));
+        assert_eq!(settings.confirm_window_days, 7);
+        assert_eq!(
+            with_settings(json!({ "confirm_window_days": 0 })).confirm_window_days,
+            1
+        );
+        assert_eq!(
+            with_settings(json!({ "confirm_window_days": 99 })).confirm_window_days,
+            30
+        );
+        assert_eq!(
+            with_settings(json!({ "confirm_window_days": "x" })),
+            CommunitySettings::default()
+        );
     }
 }
