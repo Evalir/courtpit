@@ -155,6 +155,8 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::league_entries::decline_invite))
         .routes(routes!(api::league_entries::withdraw))
         .routes(routes!(api::league_entries::pair_entries))
+        .routes(routes!(api::rankings::list_rankings))
+        .routes(routes!(api::rankings::ledger))
         .split_for_parts()
 }
 

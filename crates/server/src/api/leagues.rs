@@ -58,7 +58,7 @@ impl Settings {
             if !overrides.is_object() {
                 return Err(ApiError::validation("scoring_overrides must be an object"));
             }
-            let _ = leagues::scoring_with(tenant, Some(overrides))
+            let _ = leagues::scoring_with(&tenant.scoring_config.0, Some(overrides))
                 .map_err(|err| ApiError::validation(format!("scoring_overrides: {err}")))?;
         }
         if !(2 <= self.box_min_size

@@ -15,7 +15,14 @@ use crate::{
     communities::CommunitySettings,
     extract::{ApiJson, ApiPath},
     matches::{self, DbMatchStatus, DbSide, MatchView, results},
+    rankings,
 };
+
+/// Writes ledger events if the match now has a result (league matches only).
+async fn record_result(state: &AppState, tx: &mut TenantTx, id: Uuid) -> ApiResult<()> {
+    let row = matches::load(tx, id, false).await?;
+    rankings::on_match_result(tx, &row, state.clock.now()).await
+}
 
 async fn respond(tx: &mut TenantTx, id: Uuid) -> ApiResult<Json<MatchView>> {
     let found = matches::load(tx, id, false).await?;
@@ -75,6 +82,7 @@ pub async fn confirm_score(
     let actor = matches::player_actor(&found, &player)?;
     let status = found.transition(actor, Event::Confirm)?;
     matches::set_status(&mut tx, id, status).await?;
+    record_result(&state, &mut tx, id).await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)
@@ -181,6 +189,7 @@ pub async fn resolve_match(
     .bind(note)
     .execute(&mut *tx)
     .await?;
+    record_result(&state, &mut tx, id).await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)
@@ -225,6 +234,7 @@ pub async fn walkover_match(
     .bind(note)
     .execute(&mut *tx)
     .await?;
+    record_result(&state, &mut tx, id).await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)

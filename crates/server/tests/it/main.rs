@@ -21,5 +21,6 @@ mod matches;
 mod oidc;
 mod profiles;
 mod proposals;
+mod rankings;
 mod schema;
 mod tenancy;

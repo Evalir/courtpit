@@ -38,6 +38,11 @@ pub enum Job {
         /// The reported match to confirm.
         match_id: Uuid,
     },
+    /// Rebuilds a community's 52-week rankings from the ledger (then reschedules itself daily).
+    RefreshRankings {
+        /// The community whose rankings to rebuild.
+        community_id: Uuid,
+    },
 }
 
 impl Job {
@@ -46,6 +51,9 @@ impl Job {
         match self {
             Self::Noop {} => None,
             Self::AutoConfirmMatch { match_id, .. } => Some(format!("auto_confirm:{match_id}")),
+            Self::RefreshRankings { community_id } => {
+                Some(format!("refresh_rankings:{community_id}"))
+            }
         }
     }
 
@@ -144,6 +152,9 @@ async fn execute(state: &AppState, job: Job) -> anyhow::Result<()> {
             community_id,
             match_id,
         } => crate::matches::results::auto_confirm(state, community_id, match_id).await,
+        Job::RefreshRankings { community_id } => {
+            crate::rankings::refresh_job(state, community_id).await
+        }
     }
 }
 
