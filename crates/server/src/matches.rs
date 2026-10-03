@@ -5,8 +5,8 @@
 
 use chrono::{DateTime, Utc};
 use courtpit_domain::{
-    Actor, Discipline, Event, MatchCtx, MatchFormat, MatchKind, MatchStatus, Score, Side,
-    TransitionError, side_of, transition,
+    Actor, Discipline, Event, MatchFormat, MatchKind, MatchState, MatchStatus, Score, Side,
+    TransitionError, side_of,
 };
 use serde::Serialize;
 use sqlx::{FromRow, types::Json};
@@ -215,18 +215,23 @@ impl MatchRow {
         self.side_of(player).is_some()
     }
 
-    /// The facts the state machine needs.
-    pub fn ctx(&self) -> MatchCtx {
-        MatchCtx {
-            status: self.status(),
-            kind: self.kind(),
-            reported_by: self.reported_by.and_then(|reporter| self.side_of(reporter)),
-        }
+    /// The domain state machine's view of this row.
+    pub fn state(&self) -> Result<MatchState, ApiError> {
+        let reported_by = self.reported_by.and_then(|reporter| self.side_of(reporter));
+        MatchState::from_parts(self.status(), reported_by).ok_or_else(|| {
+            ApiError::Internal(anyhow::anyhow!(
+                "match {} is reported but its reporter plays on neither side",
+                self.id
+            ))
+        })
     }
 
-    /// Applies `event` by `actor` through the domain state machine.
+    /// Steps the domain state machine with `event` by `actor` and returns the new status.
     pub fn transition(&self, actor: Actor, event: Event) -> Result<MatchStatus, ApiError> {
-        transition(&self.ctx(), actor, event).map_err(transition_error)
+        self.state()?
+            .step(self.kind(), actor, event)
+            .map(MatchState::status)
+            .map_err(transition_error)
     }
 }
 
