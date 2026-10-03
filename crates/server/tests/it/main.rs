@@ -10,6 +10,7 @@ mod auth;
     reason = "helpers are shared; not every module uses every one"
 )]
 mod common;
+mod directory;
 mod health;
 mod oidc;
 mod profiles;

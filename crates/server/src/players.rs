@@ -134,3 +134,55 @@ impl From<PlayerRow> for PlayerProfile {
         }
     }
 }
+
+/// What other members see. Gender is never included; phone and socials only when the player
+/// opted in *and* the viewer is a verified member.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PlayerPublic {
+    /// Player id.
+    pub id: Uuid,
+    /// Name shown to other members.
+    pub display_name: String,
+    #[schema(value_type = Option<f64>)]
+    /// Universal Tennis Rating, if set.
+    pub utr: Option<Decimal>,
+    /// Preferred match format.
+    pub play_pref: PlayPref,
+    /// Places the player likes to play.
+    pub preferred_locations: Vec<String>,
+    /// Racket model, if shared.
+    pub racket: Option<String>,
+    /// String setup, if shared.
+    pub strings: Option<String>,
+    #[schema(value_type = Option<f64>)]
+    /// String tension in kilograms.
+    pub tension_kg: Option<Decimal>,
+    /// Phone number; only when the player opted in and the viewer is verified.
+    pub phone: Option<String>,
+    #[schema(value_type = Option<Object>)]
+    /// Social handles; only when the player opted in and the viewer is verified.
+    pub socials: Option<Value>,
+    /// Role within the community.
+    pub role: PlayerRole,
+}
+
+impl PlayerPublic {
+    /// Redacts `p` for a viewer; `viewer_verified` gates contact details.
+    pub fn redacted(row: PlayerRow, viewer_verified: bool) -> Self {
+        let show_phone = viewer_verified && row.phone_visible;
+        let show_socials = viewer_verified && row.socials_visible;
+        Self {
+            id: row.id,
+            display_name: row.display_name,
+            utr: row.utr,
+            play_pref: row.play_pref,
+            preferred_locations: row.preferred_locations.0,
+            racket: row.racket,
+            strings: row.strings,
+            tension_kg: row.tension_kg,
+            phone: row.phone.filter(|_| show_phone),
+            socials: show_socials.then_some(row.socials.0),
+            role: row.role,
+        }
+    }
+}

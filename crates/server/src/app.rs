@@ -100,6 +100,10 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         ))
         .routes(routes!(api::me::join))
         .routes(routes!(api::me::export))
+        .routes(routes!(api::players::list_players))
+        .routes(routes!(api::players::get_player))
+        .routes(routes!(api::players::ban_player))
+        .routes(routes!(api::players::unban_player))
         .split_for_parts()
 }
 
