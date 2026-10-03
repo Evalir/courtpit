@@ -7,8 +7,10 @@ use serde_json::{Value, json};
 
 use crate::{
     common::{Session, TestApp},
+    leagues::open_league,
     matches::players,
-    proposals::{in_days, open_proposal},
+    proposals::{in_days, open_proposal, proposed_singles},
+    rankings::{insert_league_match, ledger},
 };
 
 /// A scheduled match between `side_a` and `side_b` (one or two players each).
@@ -116,12 +118,81 @@ async fn report_then_confirm() {
 }
 
 #[tokio::test]
-async fn unscheduled_matches_cannot_be_reported() {
+async fn reporting_from_proposed_supersedes_the_open_proposal() {
+    let app = TestApp::spawn().await;
+    let _ = app.community("demo").await;
+    let [ana, bo] = <[Session; 2]>::try_from(players(&app, "demo", &["ana", "bo"]).await).unwrap();
+    let created = proposed_singles(&app, &ana, &bo).await;
+    assert_eq!(created["status"], "proposed");
+    let id = created["id"].as_str().unwrap();
+    let pid = open_proposal(&created);
+
+    let view = report(&app, &ana, id, straight_sets_a()).await;
+    assert_eq!(view["status"], "reported");
+    assert_eq!(view["reported_by"], json!(ana.player_id));
+    assert_eq!(view["winner_side"], "a");
+    assert!(view["confirm_deadline_at"].is_string());
+    assert!(
+        view["scheduled_at"].is_null() && view["location"].is_null(),
+        "never scheduled: {view}"
+    );
+    assert_eq!(view["proposals"][0]["status"], "superseded");
+
+    let body = app
+        .post(&format!("/api/v1/matches/{id}/proposals/{pid}/accept"))
+        .as_(&bo)
+        .send()
+        .await
+        .expect(StatusCode::CONFLICT);
+    assert_eq!(body["error"]["code"], "conflict");
+
+    let view = app
+        .post(&format!("/api/v1/matches/{id}/confirm"))
+        .as_(&bo)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(view["status"], "confirmed");
+    assert!(view["scheduled_at"].is_null() && view["location"].is_null());
+}
+
+#[tokio::test]
+async fn a_proposed_match_without_proposals_reports_and_auto_confirms() {
     let app = TestApp::spawn().await;
     let _ = app.community("demo").await;
     let [ana, bo] = <[Session; 2]>::try_from(players(&app, "demo", &["ana", "bo"]).await).unwrap();
     let created = crate::matches::singles(&app, &ana, &bo).await;
     let id = created["id"].as_str().unwrap();
+    assert!(created["proposals"].as_array().unwrap().is_empty());
+
+    let view = report(&app, &bo, id, straight_sets_a()).await;
+    assert_eq!(view["status"], "reported");
+    assert_eq!(view["winner_side"], "a");
+    app.clock.advance(Duration::days(3) + Duration::minutes(1));
+    assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 1);
+    let view = app
+        .get(&format!("/api/v1/matches/{id}"))
+        .as_(&ana)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(view["status"], "confirmed");
+}
+
+#[tokio::test]
+async fn cancelled_matches_cannot_be_reported() {
+    let app = TestApp::spawn().await;
+    let _ = app.community("demo").await;
+    let [ana, bo] = <[Session; 2]>::try_from(players(&app, "demo", &["ana", "bo"]).await).unwrap();
+    let created = proposed_singles(&app, &ana, &bo).await;
+    let id = created["id"].as_str().unwrap();
+    let _ = app
+        .post(&format!("/api/v1/matches/{id}/cancel"))
+        .as_(&bo)
+        .json(json!({}))
+        .send()
+        .await
+        .expect(StatusCode::OK);
     let body = app
         .post(&format!("/api/v1/matches/{id}/score"))
         .as_(&ana)
@@ -130,6 +201,70 @@ async fn unscheduled_matches_cannot_be_reported() {
         .await
         .expect(StatusCode::CONFLICT);
     assert_eq!(body["error"]["code"], "conflict");
+}
+
+#[tokio::test]
+async fn league_matches_reported_from_proposed_confirm_and_dispute_as_usual() {
+    let app = TestApp::spawn().await;
+    let _ = app.community("demo").await;
+    let admin = app.login("admin@example.test", "demo").await;
+    app.make_admin(&admin).await;
+    let [ana, bo, cy] =
+        <[Session; 3]>::try_from(players(&app, "demo", &["ana", "bo", "cy"]).await).unwrap();
+    let league = open_league(&app, &admin, "singles").await;
+
+    // League matches start `proposed` at activation; nobody schedules this one.
+    let played = insert_league_match(&app, &league, "singles", &[&ana], &[&bo]).await;
+    let view = report(&app, &ana, &played, straight_sets_a()).await;
+    assert_eq!(view["status"], "reported");
+    assert!(ledger(&app, &cy, &ana).await.as_array().unwrap().is_empty());
+    let view = app
+        .post(&format!("/api/v1/matches/{played}/confirm"))
+        .as_(&bo)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(view["status"], "confirmed");
+    let events = ledger(&app, &cy, &ana).await;
+    assert_eq!(events.as_array().unwrap().len(), 1);
+    assert_eq!(events[0]["source"], "league_match");
+    assert_eq!(events[0]["source_id"], json!(played));
+    assert_eq!(events[0]["points"], 3);
+
+    // A dispute from the same path waits for an admin, who then settles it and scores it.
+    let contested = insert_league_match(&app, &league, "singles", &[&bo], &[&cy]).await;
+    let _ = report(
+        &app,
+        &cy,
+        &contested,
+        json!({ "sets": [{ "a": 4, "b": 6 }, { "a": 3, "b": 6 }] }),
+    )
+    .await;
+    let view = app
+        .post(&format!("/api/v1/matches/{contested}/dispute"))
+        .as_(&bo)
+        .json(json!({ "note": "we never played" }))
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(view["status"], "disputed");
+    assert_eq!(ledger(&app, &cy, &bo).await.as_array().unwrap().len(), 1);
+    let view = app
+        .post(&format!("/api/v1/admin/matches/{contested}/resolve"))
+        .as_(&admin)
+        .json(json!({ "resolution": "score", "score": straight_sets_a() }))
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(view["status"], "resolved");
+    let events = ledger(&app, &cy, &bo).await;
+    let resolved = events
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["source_id"] == json!(contested))
+        .expect("the resolved match is in the ledger");
+    assert_eq!(resolved["points"], 3);
 }
 
 #[tokio::test]

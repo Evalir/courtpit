@@ -267,14 +267,7 @@ pub async fn cancel_match(
     .bind(short_text("note", body.note, MAX_NOTE_LEN)?)
     .execute(&mut *tx)
     .await?;
-    let _ = sqlx::query(
-        "UPDATE match_proposals SET status = 'superseded', updated_at = now()
-         WHERE community_id = $1 AND match_id = $2 AND status = 'open'",
-    )
-    .bind(tx.community_id())
-    .bind(id)
-    .execute(&mut *tx)
-    .await?;
+    matches::supersede_open_proposals(&mut tx, id).await?;
     let found = matches::load(&mut tx, id, false).await?;
     let view = matches::view_with_proposals(&mut tx, found).await?;
     tx.commit().await?;

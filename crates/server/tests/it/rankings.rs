@@ -14,8 +14,8 @@ use crate::{
     proposals::{in_days, open_proposal},
 };
 
-/// Inserts a league match (as the lifecycle job would) and schedules it via a proposal.
-async fn league_match(
+/// Inserts a `proposed` league match, as the lifecycle job would; nothing is scheduled yet.
+pub(crate) async fn insert_league_match(
     app: &TestApp,
     league: &str,
     discipline: &str,
@@ -43,6 +43,18 @@ async fn league_match(
     .execute(&app.db)
     .await
     .unwrap();
+    id.to_string()
+}
+
+/// Inserts a league match and schedules it via a proposal.
+async fn league_match(
+    app: &TestApp,
+    league: &str,
+    discipline: &str,
+    side_a: &[&Session],
+    side_b: &[&Session],
+) -> String {
+    let id = insert_league_match(app, league, discipline, side_a, side_b).await;
     let match_view = app
         .post(&format!("/api/v1/matches/{id}/proposals"))
         .as_(side_a[0])
@@ -57,7 +69,7 @@ async fn league_match(
         .send()
         .await
         .expect(StatusCode::OK);
-    id.to_string()
+    id
 }
 
 async fn confirm(app: &TestApp, session: &Session, id: &str) {
@@ -90,7 +102,7 @@ async fn rankings(app: &TestApp, session: &Session, discipline: &str) -> Vec<(Uu
         .collect()
 }
 
-async fn ledger(app: &TestApp, viewer: &Session, player: &Session) -> Value {
+pub(crate) async fn ledger(app: &TestApp, viewer: &Session, player: &Session) -> Value {
     app.get(&format!(
         "/api/v1/rankings/events?player_id={}",
         player.player_id

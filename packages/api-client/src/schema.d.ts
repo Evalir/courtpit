@@ -716,8 +716,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reports the score of a scheduled match. The other side then has the community's
-         *     confirmation window (default 3 days) to confirm or dispute; silence confirms.
+         * Reports the score of a match that was played, whether or not a time was ever agreed
+         *     (`proposed` or `scheduled`); any open proposal is superseded. The other side then has the
+         *     community's confirmation window (default 3 days) to confirm or dispute; silence confirms.
          */
         post: operations["report_score"];
         delete?: never;

@@ -1,12 +1,17 @@
 //! The match state machine and who may drive it.
 //!
 //! ```text
+//!    ┌───────────────── report ─────────────────┐
+//!    │                                          ▼
 //! proposed ──accept──▶ scheduled ──report──▶ reported ──confirm / timeout──▶ confirmed
 //!    │                     │                    │
 //!    │                     │                    └──dispute──▶ disputed ──admin──▶ resolved
 //!    │                     └──no-show / admin──▶ walkover
 //!    └──decline all / admin──▶ cancelled
 //! ```
+//!
+//! Reporting a score implies the match was played, so a player may report straight from
+//! `proposed` without agreeing a time first.
 //!
 //! [`MatchState`] is the machine: [`MatchState::step`] applies an [`Event`] by an [`Actor`] and
 //! returns the next state. Any player on a side acts for that side. League and tournament
@@ -147,7 +152,7 @@ impl MatchState {
             (Self::Proposed | Self::Scheduled, Event::Cancel) => {
                 actor.may_cancel(kind).map(|()| Self::Cancelled)
             }
-            (Self::Scheduled, Event::Report) => actor
+            (Self::Proposed | Self::Scheduled, Event::Report) => actor
                 .player("only players report scores")
                 .map(|by| Self::Reported { by }),
             (Self::Reported { by }, Event::Confirm) => {
@@ -398,7 +403,7 @@ mod tests {
             {
                 Some(state)
             }
-            Event::Report if state == State::Scheduled => match actor {
+            Event::Report if open => match actor {
                 Actor::Player(by) => Some(State::Reported { by }),
                 Actor::Admin | Actor::System => None,
             },
@@ -464,6 +469,24 @@ mod tests {
             state.step(kind, PLAYER_B, Event::Confirm),
             Ok(State::Confirmed)
         );
+    }
+
+    #[test]
+    fn a_score_can_be_reported_straight_from_proposed() {
+        for kind in [MatchKind::Friendly, MatchKind::Competitive] {
+            for side in [Side::A, Side::B] {
+                assert_eq!(
+                    State::Proposed.step(kind, Actor::Player(side), Event::Report),
+                    Ok(State::Reported { by: side })
+                );
+            }
+            for actor in [Actor::Admin, Actor::System] {
+                assert!(matches!(
+                    State::Proposed.step(kind, actor, Event::Report),
+                    Err(TransitionError::Forbidden(_))
+                ));
+            }
+        }
     }
 
     #[test]

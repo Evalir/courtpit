@@ -29,8 +29,9 @@ async fn respond(tx: &mut TenantTx, id: Uuid) -> ApiResult<Json<MatchView>> {
     Ok(Json(matches::view_with_proposals(tx, found).await?))
 }
 
-/// Reports the score of a scheduled match. The other side then has the community's
-/// confirmation window (default 3 days) to confirm or dispute; silence confirms.
+/// Reports the score of a match that was played, whether or not a time was ever agreed
+/// (`proposed` or `scheduled`); any open proposal is superseded. The other side then has the
+/// community's confirmation window (default 3 days) to confirm or dispute; silence confirms.
 #[utoipa::path(post, path = "/api/v1/matches/{id}/score", tag = "matches",
     params(("id" = Uuid, Path)), request_body = Score, security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),

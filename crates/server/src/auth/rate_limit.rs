@@ -42,6 +42,18 @@ impl RateLimiter {
     }
 }
 
+/// The startup warning that per-IP auth rate limits live in each instance's memory, or `None`
+/// when there is nothing to warn about. `fly_machine_id` is the `FLY_MACHINE_ID` environment
+/// variable, set inside every Fly Machine. Whether more Machines run alongside this one is not
+/// knowable from the inside, so being on Fly is the whole signal.
+pub fn rate_limit_notice(fly_machine_id: Option<&str>) -> Option<String> {
+    let machine = fly_machine_id.map(str::trim).filter(|id| !id.is_empty())?;
+    Some(format!(
+        "running on Fly Machine {machine}: auth rate limits are per instance, so N Machines allow \
+         N times COURTPIT_AUTH_IP_LIMIT_PER_HOUR; keep one Machine or move the limits to Postgres"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -53,5 +65,19 @@ mod tests {
         rl.check("a").unwrap();
         assert!(rl.check("a").is_err());
         rl.check("b").unwrap();
+    }
+
+    #[test]
+    fn warns_only_on_fly() {
+        assert_eq!(rate_limit_notice(None), None);
+        assert_eq!(rate_limit_notice(Some("")), None);
+        assert_eq!(rate_limit_notice(Some("  ")), None);
+        let notice = rate_limit_notice(Some("148e21d3a9e418")).unwrap();
+        assert!(notice.contains("148e21d3a9e418"), "{notice}");
+        assert!(notice.contains("per instance"), "{notice}");
+        assert!(
+            notice.contains("COURTPIT_AUTH_IP_LIMIT_PER_HOUR"),
+            "{notice}"
+        );
     }
 }

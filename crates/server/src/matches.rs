@@ -410,14 +410,11 @@ pub async fn proposals(tx: &mut TenantTx, match_id: Uuid) -> Result<Vec<Proposal
     .await
 }
 
-/// Records a new open proposal, superseding any other open one.
-pub async fn insert_proposal(
+/// Marks the match's open proposal, if any, `superseded`.
+pub async fn supersede_open_proposals(
     tx: &mut TenantTx,
     match_id: Uuid,
-    proposed_by: Uuid,
-    time: DateTime<Utc>,
-    location: Option<&str>,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<(), sqlx::Error> {
     let _ = sqlx::query(
         "UPDATE match_proposals SET status = 'superseded', updated_at = now()
          WHERE community_id = $1 AND match_id = $2 AND status = 'open'",
@@ -426,6 +423,18 @@ pub async fn insert_proposal(
     .bind(match_id)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+/// Records a new open proposal, superseding any other open one.
+pub async fn insert_proposal(
+    tx: &mut TenantTx,
+    match_id: Uuid,
+    proposed_by: Uuid,
+    time: DateTime<Utc>,
+    location: Option<&str>,
+) -> Result<Uuid, sqlx::Error> {
+    supersede_open_proposals(tx, match_id).await?;
     let id = Uuid::now_v7();
     let _ = sqlx::query(
         "INSERT INTO match_proposals (id, community_id, match_id, proposed_by, proposed_time, location)
