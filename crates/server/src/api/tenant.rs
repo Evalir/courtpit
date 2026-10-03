@@ -2,19 +2,19 @@
 
 use axum::Json;
 use serde::Serialize;
-use serde_json::Value;
 use utoipa::ToSchema;
 
-use crate::tenancy::Tenant;
+use crate::{communities::Branding, tenancy::Tenant};
 
 /// Public description of the community the request resolved to.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TenantInfo {
+    /// URL-safe community identifier.
     pub slug: String,
+    /// Display name.
     pub name: String,
-    /// Display name, logo URL, color tokens, typography, feature flags.
-    #[schema(value_type = Object)]
-    pub branding: Value,
+    /// Client theme.
+    pub branding: Branding,
 }
 
 /// Returns the current community's branding.

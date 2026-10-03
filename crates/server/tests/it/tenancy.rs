@@ -9,7 +9,7 @@ use crate::common::TestApp;
 #[tokio::test]
 async fn tenant_resolves_from_header() {
     let app = TestApp::spawn().await;
-    app.community("demo").await;
+    let _ = app.community("demo").await;
     let body = app
         .get("/api/v1/tenant")
         .community("demo")
@@ -18,12 +18,14 @@ async fn tenant_resolves_from_header() {
         .expect(StatusCode::OK);
     assert_eq!(body["slug"], "demo");
     assert_eq!(body["branding"]["display_name"], "demo club");
+    assert_eq!(body["branding"]["colors"], serde_json::json!({}));
+    assert_eq!(body["branding"]["logo_url"], serde_json::Value::Null);
 }
 
 #[tokio::test]
 async fn tenant_resolves_from_host() {
     let app = TestApp::spawn().await;
-    app.community("madrid").await;
+    let _ = app.community("madrid").await;
     let body = app
         .get("/api/v1/tenant")
         .header("host", "madrid.courtpit.app")
@@ -36,12 +38,13 @@ async fn tenant_resolves_from_host() {
 #[tokio::test]
 async fn tenant_resolves_from_custom_domain() {
     let app = TestApp::spawn().await;
-    let c = app.community("club").await;
-    sqlx::query("UPDATE communities SET custom_domain = 'tennis.example.org' WHERE id = $1")
-        .bind(c.id)
-        .execute(&app.db)
-        .await
-        .unwrap();
+    let community = app.community("club").await;
+    let _ =
+        sqlx::query("UPDATE communities SET custom_domain = 'tennis.example.org' WHERE id = $1")
+            .bind(community.id)
+            .execute(&app.db)
+            .await
+            .unwrap();
     let body = app
         .get("/api/v1/tenant")
         .header("host", "tennis.example.org")
@@ -116,20 +119,20 @@ async fn add_player(app: &TestApp, community: Uuid, email: &str) -> Uuid {
 #[tokio::test]
 async fn rls_isolates_communities() {
     let app = TestApp::spawn().await;
-    let a = app.community("alpha").await.id;
-    let b = app.community("beta").await.id;
-    let pa = add_player(&app, a, "a@example.test").await;
-    let pb = add_player(&app, b, "b@example.test").await;
+    let alpha = app.community("alpha").await.id;
+    let beta = app.community("beta").await.id;
+    let alpha_player = add_player(&app, alpha, "a@example.test").await;
+    let beta_player = add_player(&app, beta, "b@example.test").await;
 
-    let mut tx = TenantTx::begin(&app.db, a).await.unwrap();
+    let mut tx = TenantTx::begin(&app.db, alpha).await.unwrap();
     let visible: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM players")
         .fetch_all(&mut *tx)
         .await
         .unwrap();
-    assert_eq!(visible, vec![pa]);
+    assert_eq!(visible, vec![alpha_player]);
 
     let updated = sqlx::query("UPDATE players SET display_name = 'pwned' WHERE id = $1")
-        .bind(pb)
+        .bind(beta_player)
         .execute(&mut *tx)
         .await
         .unwrap()
@@ -137,7 +140,7 @@ async fn rls_isolates_communities() {
     assert_eq!(updated, 0, "cannot touch another community's row");
 
     let user: Uuid = sqlx::query_scalar("SELECT user_id FROM players WHERE id = $1")
-        .bind(pa)
+        .bind(alpha_player)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -145,7 +148,7 @@ async fn rls_isolates_communities() {
         "INSERT INTO players (id, community_id, user_id, display_name) VALUES ($1, $2, $3, 'x')",
     )
     .bind(Uuid::now_v7())
-    .bind(b)
+    .bind(beta)
     .bind(user)
     .execute(&mut *tx)
     .await;
@@ -153,9 +156,9 @@ async fn rls_isolates_communities() {
     assert!(err.contains("row-level security"), "{err}");
     drop(tx);
 
-    let mut tx = TenantTx::begin(&app.db, b).await.unwrap();
+    let mut tx = TenantTx::begin(&app.db, beta).await.unwrap();
     let name: String = sqlx::query_scalar("SELECT display_name FROM players WHERE id = $1")
-        .bind(pb)
+        .bind(beta_player)
         .fetch_one(&mut *tx)
         .await
         .unwrap();

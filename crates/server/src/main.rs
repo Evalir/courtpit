@@ -92,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
                 created.community.id,
                 created
                     .owner_player_id
-                    .map(|p| format!(", owner player {p}"))
+                    .map(|player| format!(", owner player {player}"))
                     .unwrap_or_default()
             );
             Ok(())

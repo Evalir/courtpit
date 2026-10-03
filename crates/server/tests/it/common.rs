@@ -14,7 +14,7 @@ use axum::{
 };
 use courtpit_server::{
     AppState, Config,
-    communities::{CreatedCommunity, NewCommunity, create_community},
+    communities::{Branding, CreatedCommunity, NewCommunity, create_community},
     db,
     tenancy::Community,
 };
@@ -167,28 +167,35 @@ impl TestApp {
         self.req(Method::POST, path)
     }
 
-    pub fn patch(&self, path: &str) -> Req<'_> {
+    pub(crate) fn patch(&self, path: &str) -> Req<'_> {
         self.req(Method::PATCH, path)
     }
 
-    pub fn delete(&self, path: &str) -> Req<'_> {
+    pub(crate) fn delete(&self, path: &str) -> Req<'_> {
         self.req(Method::DELETE, path)
     }
 
     /// Creates a community with the given slug (name derived from it), no owner.
-    pub async fn community(&self, slug: &str) -> Community {
+    pub(crate) async fn community(&self, slug: &str) -> Community {
         self.community_with_owner(slug, None).await.community
     }
 
     /// Creates a community, optionally with an owner (verified user + `owner` player).
-    pub async fn community_with_owner(&self, slug: &str, owner: Option<&str>) -> CreatedCommunity {
+    pub(crate) async fn community_with_owner(
+        &self,
+        slug: &str,
+        owner: Option<&str>,
+    ) -> CreatedCommunity {
         create_community(
             &self.db,
             NewCommunity {
                 slug: slug.to_owned(),
                 name: format!("{slug} club"),
                 custom_domain: None,
-                branding: serde_json::json!({ "display_name": format!("{slug} club") }),
+                branding: Branding {
+                    display_name: Some(format!("{slug} club")),
+                    ..Branding::default()
+                },
                 owner_email: owner.map(str::to_owned),
             },
         )
@@ -208,11 +215,11 @@ pub(crate) struct Req<'a> {
 
 impl Req<'_> {
     /// Scopes the request to a community via the tenant header.
-    pub fn community(self, slug: &str) -> Self {
+    pub(crate) fn community(self, slug: &str) -> Self {
         self.header("x-courtpit-community", slug)
     }
 
-    pub fn header(mut self, name: &str, value: &str) -> Self {
+    pub(crate) fn header(mut self, name: &str, value: &str) -> Self {
         self.headers.push((name.to_owned(), value.to_owned()));
         self
     }
