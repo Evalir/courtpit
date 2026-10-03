@@ -175,7 +175,9 @@ pub struct CreateRequest {
 /// Opens a call for players: others in the UTR band join until every slot is taken.
 #[utoipa::path(post, path = "/api/v1/match-requests", tag = "match-requests",
     request_body = CreateRequest, security(("bearer" = [])),
-    responses((status = 201, body = MatchRequestView), (status = 422, body = crate::error::ErrorBody)))]
+    responses((status = 201, body = MatchRequestView),
+        (status = 403, body = crate::error::ErrorBody),
+        (status = 422, body = crate::error::ErrorBody)))]
 pub async fn create_request(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -238,6 +240,7 @@ pub async fn create_request(
 
 /// Filters for `GET /match-requests`.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct RequestQuery {
     /// Only requests of this discipline.
     pub discipline: Option<Discipline>,
@@ -330,7 +333,8 @@ pub async fn list_requests(
 /// One match request.
 #[utoipa::path(get, path = "/api/v1/match-requests/{id}", tag = "match-requests",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = MatchRequestView), (status = 404, body = crate::error::ErrorBody)))]
+    responses((status = 200, body = MatchRequestView),
+        (status = 404, body = crate::error::ErrorBody)))]
 pub async fn get_request(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -346,7 +350,10 @@ pub async fn get_request(
 /// `proposed`, with the creator proposing the start of the window when it is still ahead).
 #[utoipa::path(post, path = "/api/v1/match-requests/{id}/join", tag = "match-requests",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = MatchRequestView), (status = 409, body = crate::error::ErrorBody),
+    responses((status = 200, body = MatchRequestView),
+        (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
         (status = 422, body = crate::error::ErrorBody)))]
 pub async fn join_request(
     State(state): State<AppState>,
@@ -455,7 +462,9 @@ async fn fill(
 /// Gives a slot back while the request is still open.
 #[utoipa::path(post, path = "/api/v1/match-requests/{id}/leave", tag = "match-requests",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = MatchRequestView), (status = 409, body = crate::error::ErrorBody)))]
+    responses((status = 200, body = MatchRequestView),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody)))]
 pub async fn leave_request(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -496,7 +505,9 @@ pub async fn leave_request(
 /// Withdraws an open request (its creator or an admin).
 #[utoipa::path(post, path = "/api/v1/match-requests/{id}/cancel", tag = "match-requests",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = MatchRequestView), (status = 403, body = crate::error::ErrorBody),
+    responses((status = 200, body = MatchRequestView),
+        (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn cancel_request(
     State(state): State<AppState>,

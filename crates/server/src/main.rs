@@ -1,10 +1,14 @@
-//! `courtpit-server` binary: `serve`, `tick`, `migrate`, `create-community`.
+//! `courtpit-server` binary: `serve`, `tick`, `migrate`, `create-community`, `openapi`.
 #![deny(unsafe_code)]
+
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use courtpit_server::{
-    AppState, Config, backup,
+    AppState, Config,
+    app::openapi,
+    backup,
     communities::{NewCommunity, create_community},
     db, jobs, router, telemetry,
 };
@@ -39,6 +43,12 @@ enum Command {
     Migrate(db::DbConfig),
     /// Create a community (tenant), optionally with its owner.
     CreateCommunity(CreateCommunityArgs),
+    /// Print the OpenAPI document as JSON (needs no database or configuration).
+    Openapi {
+        /// Write the document to this file instead of stdout.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, clap::Args)]
@@ -84,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("migrations applied");
             Ok(())
         }
+        Command::Openapi { out } => print_openapi(out.as_deref()),
         Command::CreateCommunity(args) => {
             let pool = db::connect(&args.db).await?;
             let branding = serde_json::from_str(&args.branding).context("parsing --branding")?;
@@ -109,6 +120,18 @@ async fn main() -> anyhow::Result<()> {
             );
             Ok(())
         }
+    }
+}
+
+/// Prints the OpenAPI document (pretty JSON, trailing newline) to stdout or `out`.
+fn print_openapi(out: Option<&Path>) -> anyhow::Result<()> {
+    let mut json = serde_json::to_string_pretty(&openapi())?;
+    json.push('\n');
+    if let Some(path) = out {
+        std::fs::write(path, json).with_context(|| format!("writing {}", path.display()))
+    } else {
+        print!("{json}");
+        Ok(())
     }
 }
 

@@ -8,7 +8,7 @@ use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
 };
-use utoipa::OpenApi;
+use utoipa::{Modify, OpenApi};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
@@ -17,8 +17,8 @@ use crate::{
     backup::Backup,
     clock::{Clock, SystemClock},
     config::{Config, MailerKind},
-    error::ErrorBody,
     mailer::{LogMailer, Mailer, ResendMailer},
+    openapi::{ApiConventions, ApiDoc},
     tenancy::TenantCache,
 };
 
@@ -91,24 +91,13 @@ impl AppState {
     }
 }
 
-#[derive(OpenApi)]
-#[openapi(
-    info(
-        title = "Courtpit API",
-        version = "0.1.0",
-        description = "Courtpit REST API."
-    ),
-    components(schemas(ErrorBody))
-)]
-struct ApiDoc;
-
 /// All API routes plus the OpenAPI document describing them.
 #[expect(
     clippy::cognitive_complexity,
     reason = "a flat list of route registrations; the `routes!` expansion inflates the score"
 )]
 pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
-    OpenApiRouter::with_openapi(ApiDoc::openapi())
+    let (router, mut doc) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(api::health::healthz))
         .routes(routes!(api::health::readyz))
         .routes(routes!(api::tenant::get_tenant))
@@ -170,7 +159,15 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::league_entries::pair_entries))
         .routes(routes!(api::rankings::list_rankings))
         .routes(routes!(api::rankings::ledger))
-        .split_for_parts()
+        .split_for_parts();
+    ApiConventions.modify(&mut doc);
+    (router, doc)
+}
+
+/// The OpenAPI document of [`api_router`]. Served at `/api/v1/openapi.json` and printed by
+/// `courtpit-server openapi`, so the committed client and the live API cannot disagree.
+pub fn openapi() -> utoipa::openapi::OpenApi {
+    api_router().1
 }
 
 /// The complete application router, ready to serve.

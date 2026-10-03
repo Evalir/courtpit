@@ -66,7 +66,9 @@ pub struct Register {
 /// entries wait for the invited partner (or a pairing) as `pending_partner`.
 #[utoipa::path(post, path = "/api/v1/leagues/{id}/entries", tag = "leagues",
     params(("id" = Uuid, Path)), request_body = Register, security(("bearer" = [])),
-    responses((status = 201, body = EntryView), (status = 409, body = crate::error::ErrorBody),
+    responses((status = 201, body = EntryView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
         (status = 422, body = crate::error::ErrorBody)))]
 pub async fn register(
     State(state): State<AppState>,
@@ -126,6 +128,7 @@ pub async fn register(
 
 /// Filters for `GET /leagues/{id}/entries`.
 #[derive(Debug, Clone, Copy, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct EntryQuery {
     /// Defaults to every status except `withdrawn`.
     pub status: Option<EntryStatus>,
@@ -210,7 +213,9 @@ async fn withdraw_solo(tx: &mut TenantTx, league: Uuid, player: Uuid) -> ApiResu
 #[utoipa::path(post, path = "/api/v1/leagues/{id}/entries/{entry_id}/accept", tag = "leagues",
     params(("id" = Uuid, Path), ("entry_id" = Uuid, Path)), security(("bearer" = [])),
     responses((status = 200, body = EntryView), (status = 403, body = crate::error::ErrorBody),
-        (status = 409, body = crate::error::ErrorBody), (status = 422, body = crate::error::ErrorBody)))]
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
+        (status = 422, body = crate::error::ErrorBody)))]
 pub async fn accept_invite(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -241,7 +246,8 @@ pub async fn accept_invite(
 /// Declines a partner invitation. The entry stays pending for its creator.
 #[utoipa::path(post, path = "/api/v1/leagues/{id}/entries/{entry_id}/decline", tag = "leagues",
     params(("id" = Uuid, Path), ("entry_id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = EntryView), (status = 403, body = crate::error::ErrorBody)))]
+    responses((status = 200, body = EntryView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody)))]
 pub async fn decline_invite(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -271,6 +277,7 @@ pub async fn decline_invite(
 #[utoipa::path(post, path = "/api/v1/leagues/{id}/entries/{entry_id}/withdraw", tag = "leagues",
     params(("id" = Uuid, Path), ("entry_id" = Uuid, Path)), security(("bearer" = [])),
     responses((status = 200, body = EntryView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn withdraw(
     State(state): State<AppState>,
@@ -326,7 +333,9 @@ pub struct PairBody {
 /// Pairs two solo doubles/mixed entries into one confirmed entry (admin, before the draw).
 #[utoipa::path(post, path = "/api/v1/admin/leagues/{id}/pair", tag = "admin",
     params(("id" = Uuid, Path)), request_body = PairBody, security(("bearer" = [])),
-    responses((status = 200, body = EntryView), (status = 409, body = crate::error::ErrorBody),
+    responses((status = 200, body = EntryView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
         (status = 422, body = crate::error::ErrorBody)))]
 pub async fn pair_entries(
     State(state): State<AppState>,

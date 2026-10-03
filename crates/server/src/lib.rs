@@ -20,6 +20,7 @@ pub mod leagues;
 pub mod mailer;
 pub mod matches;
 pub mod models;
+mod openapi;
 pub mod players;
 pub mod rankings;
 pub mod telemetry;

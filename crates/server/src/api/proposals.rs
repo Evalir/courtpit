@@ -53,6 +53,7 @@ pub struct ProposeTime {
 #[utoipa::path(post, path = "/api/v1/matches/{id}/proposals", tag = "matches",
     params(("id" = Uuid, Path)), request_body = ProposeTime, security(("bearer" = [])),
     responses((status = 201, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn propose(
     State(state): State<AppState>,
@@ -115,6 +116,7 @@ async fn close_proposal(tx: &mut TenantTx, id: Uuid, status: ProposalStatus) -> 
 #[utoipa::path(post, path = "/api/v1/matches/{id}/proposals/{proposal_id}/accept", tag = "matches",
     params(("id" = Uuid, Path), ("proposal_id" = Uuid, Path)), security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn accept_proposal(
     State(state): State<AppState>,
@@ -154,6 +156,7 @@ pub async fn accept_proposal(
 #[utoipa::path(post, path = "/api/v1/matches/{id}/proposals/{proposal_id}/decline", tag = "matches",
     params(("id" = Uuid, Path), ("proposal_id" = Uuid, Path)), security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn decline_proposal(
     State(state): State<AppState>,

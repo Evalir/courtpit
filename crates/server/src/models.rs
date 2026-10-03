@@ -79,6 +79,7 @@ pub struct Page<T> {
 
 /// Standard `?cursor=&limit=` query parameters.
 #[derive(Debug, Clone, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct PageParams {
     /// Opaque cursor from a previous page.
     pub cursor: Option<String>,

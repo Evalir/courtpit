@@ -18,6 +18,7 @@ use crate::{
 
 /// Query for `GET /rankings`.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct RankingQuery {
     /// Discipline whose leaderboard to list.
     pub discipline: Discipline,
@@ -96,6 +97,7 @@ pub async fn list_rankings(
 
 /// Query for `GET /rankings/events`.
 #[derive(Debug, Clone, Copy, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct EventQuery {
     /// Player whose ledger to list.
     pub player_id: Uuid,

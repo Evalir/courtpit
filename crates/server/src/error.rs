@@ -115,7 +115,9 @@ pub struct ErrorBody {
 /// Machine-readable code plus a human-readable message.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorDetail {
-    /// Stable machine-readable code (`not_found`, `validation_failed`, ...).
+    /// Stable machine-readable code; clients switch on it. One of `bad_request` (400),
+    /// `validation_failed` (422), `unauthorized` and `invalid_credentials` (401), `forbidden`
+    /// (403), `not_found` (404), `conflict` (409), `rate_limited` (429) or `internal` (500).
     pub code: String,
     /// Human-readable explanation; never contains internal details.
     pub message: String,

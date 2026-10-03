@@ -34,7 +34,9 @@ async fn respond(tx: &mut TenantTx, id: Uuid) -> ApiResult<Json<MatchView>> {
 #[utoipa::path(post, path = "/api/v1/matches/{id}/score", tag = "matches",
     params(("id" = Uuid, Path)), request_body = Score, security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
-        (status = 409, body = crate::error::ErrorBody), (status = 422, body = crate::error::ErrorBody)))]
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
+        (status = 422, body = crate::error::ErrorBody)))]
 pub async fn report_score(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -71,6 +73,7 @@ pub async fn report_score(
 #[utoipa::path(post, path = "/api/v1/matches/{id}/confirm", tag = "matches",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn confirm_score(
     State(state): State<AppState>,
@@ -100,6 +103,7 @@ pub struct DisputeBody {
 #[utoipa::path(post, path = "/api/v1/matches/{id}/dispute", tag = "matches",
     params(("id" = Uuid, Path)), request_body = DisputeBody, security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn dispute_score(
     State(state): State<AppState>,
@@ -144,7 +148,9 @@ pub struct ResolveBody {
 #[utoipa::path(post, path = "/api/v1/admin/matches/{id}/resolve", tag = "admin",
     params(("id" = Uuid, Path)), request_body = ResolveBody, security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
-        (status = 409, body = crate::error::ErrorBody), (status = 422, body = crate::error::ErrorBody)))]
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
+        (status = 422, body = crate::error::ErrorBody)))]
 pub async fn resolve_match(
     State(state): State<AppState>,
     admin: CurrentPlayer,
@@ -209,6 +215,7 @@ pub struct WalkoverBody {
 #[utoipa::path(post, path = "/api/v1/admin/matches/{id}/walkover", tag = "admin",
     params(("id" = Uuid, Path)), request_body = WalkoverBody, security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn walkover_match(
     State(state): State<AppState>,
