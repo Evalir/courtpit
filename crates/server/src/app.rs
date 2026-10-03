@@ -81,6 +81,12 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::health::healthz))
         .routes(routes!(api::health::readyz))
         .routes(routes!(api::tenant::get_tenant))
+        .routes(routes!(api::auth::request_otp))
+        .routes(routes!(api::auth::verify_otp))
+        .routes(routes!(api::auth::password_login))
+        .routes(routes!(api::auth::set_password))
+        .routes(routes!(api::auth::logout))
+        .routes(routes!(api::auth::session))
         .split_for_parts()
 }
 

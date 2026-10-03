@@ -13,6 +13,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod mailer;
+pub mod models;
 pub mod telemetry;
 pub mod tenancy;
 

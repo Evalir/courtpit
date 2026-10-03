@@ -4,6 +4,7 @@
     reason = "a failed harness step should abort the test"
 )]
 
+mod auth;
 #[expect(
     dead_code,
     reason = "helpers are shared; not every module uses every one"
