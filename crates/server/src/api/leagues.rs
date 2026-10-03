@@ -14,7 +14,10 @@ use crate::{
     auth::CurrentPlayer,
     extract::{ApiJson, ApiPath, ApiQuery},
     jobs::{self, Job},
-    leagues::{self, LEAGUE_COLUMNS, LeagueRow, LeagueStatus, LeagueView},
+    leagues::{
+        self, LEAGUE_COLUMNS, LeagueRow, LeagueStatus, LeagueView,
+        standings::{self, DivisionStanding},
+    },
     matches::DbDiscipline,
     models::{Page, PageParams, double_option, paginate},
 };
@@ -443,4 +446,25 @@ pub async fn get_league(
         return Err(ApiError::NotFound("league"));
     }
     Ok(Json(LeagueView::new(league, &player.tenant)?))
+}
+
+/// Box tables computed from the league's confirmed, resolved and walkover matches (league
+/// match points, then wins, set and game difference).
+#[utoipa::path(get, path = "/api/v1/leagues/{id}/standings", tag = "leagues",
+    params(("id" = Uuid, Path)), security(("bearer" = [])),
+    responses((status = 200, body = Vec<DivisionStanding>), (status = 404, body = crate::error::ErrorBody)))]
+pub async fn league_standings(
+    State(state): State<AppState>,
+    player: CurrentPlayer,
+    ApiPath(id): ApiPath<Uuid>,
+) -> ApiResult<Json<Vec<DivisionStanding>>> {
+    let mut tx = player.tenant.begin(&state.db).await?;
+    let league = leagues::load(&mut tx, id, false).await?;
+    if !visible(&league, &player) {
+        return Err(ApiError::NotFound("league"));
+    }
+    let config = league.scoring(&player.tenant.scoring_config.0)?;
+    let table = standings::compute(&mut tx, &league, &config.league_match).await?;
+    tx.commit().await?;
+    Ok(Json(table))
 }
