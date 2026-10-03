@@ -114,6 +114,7 @@ pub async fn create_match(
             side_b: &body.opponent_ids,
             format,
             created_by: Some(player.id),
+            league: None,
         },
     )
     .await?;

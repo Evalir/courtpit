@@ -426,6 +426,7 @@ async fn fill(
             side_b,
             format: community_format(&player.tenant)?,
             created_by: Some(request.created_by),
+            league: None,
         },
     )
     .await?;

@@ -305,6 +305,19 @@ pub struct NewMatch<'a> {
     pub format: MatchFormat,
     /// Player who created the match, if any.
     pub created_by: Option<Uuid>,
+    /// Set for league matches; `None` makes a friendly.
+    pub league: Option<LeagueSlot>,
+}
+
+/// Where a league match sits in its league's schedule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LeagueSlot {
+    /// The league the match belongs to.
+    pub league_id: Uuid,
+    /// The division (box) within the league.
+    pub division_id: Uuid,
+    /// The 1-based round of the schedule.
+    pub round: i32,
 }
 
 /// Inserts a `proposed` match into the transaction's community; returns its id. Callers
@@ -313,8 +326,8 @@ pub async fn insert(tx: &mut TenantTx, new: &NewMatch<'_>) -> Result<Uuid, sqlx:
     let id = Uuid::now_v7();
     let _ = sqlx::query(
         "INSERT INTO matches (id, community_id, discipline, side_a_players, side_b_players,
-                              match_format, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                              match_format, created_by, league_id, division_id, round)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
     )
     .bind(id)
     .bind(tx.community_id())
@@ -323,6 +336,9 @@ pub async fn insert(tx: &mut TenantTx, new: &NewMatch<'_>) -> Result<Uuid, sqlx:
     .bind(new.side_b)
     .bind(Json(new.format))
     .bind(new.created_by)
+    .bind(new.league.map(|slot| slot.league_id))
+    .bind(new.league.map(|slot| slot.division_id))
+    .bind(new.league.map(|slot| slot.round))
     .execute(&mut **tx)
     .await?;
     Ok(id)

@@ -13,6 +13,7 @@ use crate::{
     ApiError, ApiResult, AppState, Tenant, TenantTx,
     auth::CurrentPlayer,
     extract::{ApiJson, ApiPath, ApiQuery},
+    jobs::{self, Job},
     leagues::{self, LEAGUE_COLUMNS, LeagueRow, LeagueStatus, LeagueView},
     matches::DbDiscipline,
     models::{Page, PageParams, double_option, paginate},
@@ -311,6 +312,12 @@ pub async fn publish_league(
     .bind(status)
     .execute(&mut *tx)
     .await?;
+    // From here the dates drive the league; the job reschedules itself for each step.
+    let job = Job::AdvanceLeague {
+        community_id: tx.community_id(),
+        league_id: id,
+    };
+    jobs::enqueue(&mut *tx, job, now).await?;
     let league = leagues::load(&mut tx, id, false).await?;
     tx.commit().await?;
     Ok(Json(LeagueView::new(league, &admin.tenant)?))

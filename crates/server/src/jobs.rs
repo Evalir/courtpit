@@ -43,6 +43,14 @@ pub enum Job {
         /// The community whose rankings to rebuild.
         community_id: Uuid,
     },
+    /// Applies whatever lifecycle step of a league is due (registration, activation, ...) and
+    /// schedules itself for the next date.
+    AdvanceLeague {
+        /// The community that owns the league.
+        community_id: Uuid,
+        /// The league to advance.
+        league_id: Uuid,
+    },
 }
 
 impl Job {
@@ -54,6 +62,7 @@ impl Job {
             Self::RefreshRankings { community_id } => {
                 Some(format!("refresh_rankings:{community_id}"))
             }
+            Self::AdvanceLeague { league_id, .. } => Some(format!("league:{league_id}")),
         }
     }
 
@@ -155,6 +164,10 @@ async fn execute(state: &AppState, job: Job) -> anyhow::Result<()> {
         Job::RefreshRankings { community_id } => {
             crate::rankings::refresh_job(state, community_id).await
         }
+        Job::AdvanceLeague {
+            community_id,
+            league_id,
+        } => crate::leagues::lifecycle::advance(state, community_id, league_id).await,
     }
 }
 

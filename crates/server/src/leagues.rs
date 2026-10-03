@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::{ApiError, Tenant, TenantTx, matches::DbDiscipline};
 
 pub mod entries;
+pub mod lifecycle;
 
 /// Lifecycle of a league season.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
