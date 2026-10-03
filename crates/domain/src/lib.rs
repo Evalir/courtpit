@@ -9,5 +9,5 @@
 pub mod score;
 
 pub use score::{
-    FinalSet, MatchFormat, Score, ScoreError, ScoreSummary, SetScore, Side, validate_score,
+    Deuce, FinalSet, MatchFormat, Score, ScoreError, ScoreSummary, SetScore, Side, validate_score,
 };

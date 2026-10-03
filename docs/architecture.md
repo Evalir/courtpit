@@ -167,7 +167,7 @@ Score format and validation:
 { "sets": [ {"a": 6, "b": 4}, {"a": 3, "b": 6}, {"a": 10, "b": 7, "match_tiebreak": true} ] }
 ```
 
-`match_format` controls what is legal, e.g. `{"sets_to_win": 2, "games_per_set": 6, "tiebreak_at": 6, "final_set": "match_tiebreak_10"}` (alternatives: `"full_set"`, `"pro_set_8"`). The domain crate checks each set (win by two, 7–5, 7–6 when a tiebreak applies, 10-point match tiebreak when configured) and derives `winner_side`. Communities set a default format; leagues and tournaments can override it.
+`match_format` controls what is legal, e.g. `{"sets_to_win": 2, "games_per_set": 6, "tiebreak_at": 6, "final_set": "match_tiebreak_10"}` (alternatives: `"full_set"`, `"pro_set_8"`). An optional `"deuce"` is `"advantage"` (default) or `"golden_point"` (no-ad: the point at 40–40 decides the game); since scores are reported per set it is informational and does not change which scores are legal. The domain crate checks each set (win by two, 7–5, 7–6 when a tiebreak applies, 10-point match tiebreak when configured) and derives `winner_side`. Communities set a default format; leagues and tournaments can override it.
 
 ## 9. Leagues
 

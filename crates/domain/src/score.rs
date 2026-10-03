@@ -47,6 +47,18 @@ pub enum FinalSet {
     ProSet8,
 }
 
+/// How a game is decided at 40–40.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum Deuce {
+    /// Win the game by two points (advantage).
+    #[default]
+    Advantage,
+    /// The next point wins the game (no-ad). Tiebreaks stay win-by-two.
+    GoldenPoint,
+}
+
 /// The rules of a match. Stored as JSON on communities, leagues and matches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -61,6 +73,10 @@ pub struct MatchFormat {
     pub tiebreak_at: Option<u8>,
     /// How the deciding set is played.
     pub final_set: FinalSet,
+    /// How games are decided at deuce. Scores are reported per set, so this does not change
+    /// which scores are legal.
+    #[serde(default)]
+    pub deuce: Deuce,
 }
 
 impl Default for MatchFormat {
@@ -71,6 +87,7 @@ impl Default for MatchFormat {
             games_per_set: 6,
             tiebreak_at: Some(6),
             final_set: FinalSet::MatchTiebreak10,
+            deuce: Deuce::Advantage,
         }
     }
 }
@@ -612,5 +629,62 @@ mod tests {
             "flag omitted when false"
         );
         let _ = serde_json::from_str::<MatchFormat>(r#"{"sets_to_win":2}"#).unwrap_err();
+    }
+
+    #[test]
+    fn deuce_defaults_to_advantage_and_round_trips() {
+        let format: MatchFormat = serde_json::from_str(
+            r#"{"sets_to_win": 2, "games_per_set": 6, "tiebreak_at": 6, "final_set": "full_set"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            format.deuce,
+            Deuce::Advantage,
+            "stored formats without the key"
+        );
+        let golden = MatchFormat {
+            deuce: Deuce::GoldenPoint,
+            ..format
+        };
+        let json = serde_json::to_value(golden).unwrap();
+        assert_eq!(json["deuce"], "golden_point");
+        assert_eq!(serde_json::from_value::<MatchFormat>(json).unwrap(), golden);
+        let _ = serde_json::from_str::<MatchFormat>(
+            r#"{"sets_to_win": 2, "games_per_set": 6, "final_set": "full_set", "deuce": "sudden"}"#,
+        )
+        .unwrap_err();
+    }
+
+    #[test]
+    fn golden_point_does_not_change_legal_scores() {
+        let golden = |format: MatchFormat| MatchFormat {
+            deuce: Deuce::GoldenPoint,
+            ..format
+        };
+        let adv_sets = MatchFormat {
+            tiebreak_at: None,
+            ..best_of_3_full()
+        };
+        let cases: [(MatchFormat, &[SetScore]); 6] = [
+            (
+                MatchFormat::default(),
+                &[games(6, 4), games(3, 6), tb(10, 8)],
+            ),
+            (
+                MatchFormat::default(),
+                &[games(6, 4), games(3, 6), tb(10, 9)],
+            ),
+            (best_of_3_full(), &[games(7, 6), games(7, 5)]),
+            (best_of_3_full(), &[games(6, 5), games(6, 0)]),
+            (adv_sets, &[games(12, 10), games(6, 4)]),
+            (adv_sets, &[games(7, 6), games(6, 4)]),
+        ];
+        for (format, sets) in cases {
+            assert_eq!(
+                check(&format, sets),
+                check(&golden(format), sets),
+                "{sets:?}"
+            );
+        }
     }
 }
