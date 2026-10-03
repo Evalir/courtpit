@@ -7,9 +7,15 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 pub mod discipline;
+pub mod ids;
+pub mod pairing;
+pub mod placement;
 pub mod score;
 
 pub use discipline::Discipline;
+pub use ids::{CommunityId, DivisionId, EntryId, LeagueId, MatchId, PlayerId};
+pub use pairing::{Pairing, round_robin, single_elimination};
+pub use placement::{BoxSize, Placed, PlacementError, Previous, Seed, box_sizes, place};
 
 pub use score::{
     Deuce, FinalSet, MatchFormat, Score, ScoreError, ScoreSummary, SetScore, Side, validate_score,
