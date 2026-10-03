@@ -11,3 +11,9 @@ pub mod score;
 pub use score::{
     Deuce, FinalSet, MatchFormat, Score, ScoreError, ScoreSummary, SetScore, Side, validate_score,
 };
+
+pub mod match_state;
+
+pub use match_state::{
+    Actor, Event, MatchKind, MatchState, MatchStatus, Resolution, TransitionError, side_of,
+};
