@@ -292,6 +292,42 @@ pub fn admin_actor(found: &MatchRow, player: &CurrentPlayer) -> Result<Actor, Ap
     Ok(Actor::Admin)
 }
 
+/// A match to insert.
+#[derive(Debug, Clone)]
+pub struct NewMatch<'a> {
+    /// Singles or doubles.
+    pub discipline: Discipline,
+    /// Players on side A.
+    pub side_a: &'a [Uuid],
+    /// Players on side B.
+    pub side_b: &'a [Uuid],
+    /// Scoring format of the match.
+    pub format: MatchFormat,
+    /// Player who created the match, if any.
+    pub created_by: Option<Uuid>,
+}
+
+/// Inserts a `proposed` match into the transaction's community; returns its id. Callers
+/// validate the players first.
+pub async fn insert(tx: &mut TenantTx, new: &NewMatch<'_>) -> Result<Uuid, sqlx::Error> {
+    let id = Uuid::now_v7();
+    let _ = sqlx::query(
+        "INSERT INTO matches (id, community_id, discipline, side_a_players, side_b_players,
+                              match_format, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(id)
+    .bind(tx.community_id())
+    .bind(DbDiscipline::from(new.discipline))
+    .bind(new.side_a)
+    .bind(new.side_b)
+    .bind(Json(new.format))
+    .bind(new.created_by)
+    .execute(&mut **tx)
+    .await?;
+    Ok(id)
+}
+
 /// Members can see matches they play in and every competitive match; admins see all.
 pub fn visible_to(found: &MatchRow, player: &CurrentPlayer) -> bool {
     player.role.is_admin() || found.involves(player.id) || found.kind() == MatchKind::Competitive

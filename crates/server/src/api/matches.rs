@@ -9,7 +9,7 @@ use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Utc};
 use courtpit_domain::{Discipline, Event, MatchFormat, MatchStatus};
 use serde::Deserialize;
-use sqlx::{Postgres, QueryBuilder, types::Json as SqlJson};
+use sqlx::{Postgres, QueryBuilder};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -17,7 +17,7 @@ use crate::{
     ApiError, ApiResult, AppState, Tenant, TenantTx,
     auth::CurrentPlayer,
     extract::{ApiJson, ApiPath, ApiQuery},
-    matches::{self, DbDiscipline, DbMatchStatus, MATCH_COLUMNS, MatchRow, MatchView},
+    matches::{self, DbMatchStatus, MATCH_COLUMNS, MatchRow, MatchView, NewMatch},
     models::{Page, PageParams, paginate},
     players,
 };
@@ -106,20 +106,16 @@ pub async fn create_match(
 
     let mut tx = player.tenant.begin(&state.db).await?;
     players::require_active_members(&mut tx, &everyone).await?;
-    let id = Uuid::now_v7();
-    let _ = sqlx::query(
-        "INSERT INTO matches (id, community_id, discipline, side_a_players, side_b_players,
-                              match_format, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    let id = matches::insert(
+        &mut tx,
+        &NewMatch {
+            discipline: body.discipline,
+            side_a: &side_a,
+            side_b: &body.opponent_ids,
+            format,
+            created_by: Some(player.id),
+        },
     )
-    .bind(id)
-    .bind(tx.community_id())
-    .bind(DbDiscipline::from(body.discipline))
-    .bind(&side_a)
-    .bind(&body.opponent_ids)
-    .bind(SqlJson(format))
-    .bind(player.id)
-    .execute(&mut *tx)
     .await?;
     if let Some(time) = body.proposed_time {
         let _ = matches::insert_proposal(&mut tx, id, player.id, time, location.as_deref()).await?;
