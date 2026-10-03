@@ -155,6 +155,26 @@ pub fn place<T: Ord + Copy + Hash>(
     Ok(cut(&ordered, &sizes))
 }
 
+/// Promotion and relegation for a finished box, per finishing position (index 0 = 1st):
+/// `-1` promoted (to a lower tier number), `+1` relegated, `0` stays. The top `up` entries go
+/// up unless this is the top tier, the bottom `down` go down unless it is the bottom tier;
+/// in small boxes both are capped at half the box so nobody is moved both ways.
+#[must_use]
+pub fn movements(box_len: usize, tier: u32, tiers: u32, up: usize, down: usize) -> Vec<i8> {
+    let half = box_len / 2;
+    let up = if tier > 1 { up.min(half) } else { 0 };
+    let down = if tier < tiers { down.min(half) } else { 0 };
+    (0..box_len)
+        .map(|i| {
+            if i < up {
+                -1
+            } else {
+                i8::from(i >= box_len - down)
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,5 +294,21 @@ mod tests {
                 (1..=u32::try_from(boxes.len()).unwrap()).collect::<Vec<_>>()
             );
         }
+    }
+
+    #[test]
+    fn promotion_and_relegation_by_position() {
+        // Middle box of three: top two up, bottom two down.
+        assert_eq!(movements(6, 2, 3, 2, 2), vec![-1, -1, 0, 0, 1, 1]);
+        // Top box: nobody goes up.
+        assert_eq!(movements(6, 1, 3, 2, 2), vec![0, 0, 0, 0, 1, 1]);
+        // Bottom box: nobody goes down.
+        assert_eq!(movements(7, 3, 3, 2, 2), vec![-1, -1, 0, 0, 0, 0, 0]);
+        // A single box: everyone stays.
+        assert_eq!(movements(8, 1, 1, 2, 2), vec![0; 8]);
+        // Tiny boxes never move a player both ways.
+        assert_eq!(movements(3, 2, 3, 2, 2), vec![-1, 0, 1]);
+        assert_eq!(movements(1, 2, 3, 2, 2), vec![0]);
+        assert!(movements(0, 2, 3, 2, 2).is_empty());
     }
 }

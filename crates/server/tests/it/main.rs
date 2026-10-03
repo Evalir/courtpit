@@ -15,6 +15,7 @@ mod health;
 mod jobs;
 mod league_entries;
 mod league_lifecycle;
+mod league_season;
 mod leagues;
 mod match_requests;
 mod match_results;

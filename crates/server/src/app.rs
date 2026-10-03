@@ -147,6 +147,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::leagues::cancel_league))
         .routes(routes!(api::leagues::list_leagues))
         .routes(routes!(api::leagues::get_league))
+        .routes(routes!(api::leagues::league_standings))
         .routes(routes!(
             api::league_entries::register,
             api::league_entries::list_entries

@@ -12,6 +12,7 @@ use crate::{ApiError, Tenant, TenantTx, matches::DbDiscipline};
 
 pub mod entries;
 pub mod lifecycle;
+pub mod standings;
 
 /// Lifecycle of a league season.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]

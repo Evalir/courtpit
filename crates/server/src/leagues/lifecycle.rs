@@ -5,18 +5,27 @@
 //! then re-enqueues itself for the next date. Steps are idempotent per status, so retries and
 //! duplicate deliveries are harmless.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
-use courtpit_domain::{EntryId, Seed, place, round_robin};
+use courtpit_domain::{
+    EntryId, PlayerId, Previous, RankingEvent, RankingSource, Seed, movements, place, round_robin,
+};
 use rust_decimal::Decimal;
 use sqlx::FromRow;
 use uuid::Uuid;
 
-use super::{LeagueRow, LeagueStatus, load};
+use super::{LeagueRow, LeagueStatus, load, standings};
 use crate::{
     ApiError, AppState, Tenant, TenantTx,
     jobs::{self, Job},
     matches::{self, LeagueSlot, NewMatch},
+    rankings,
 };
+
+/// Entries promoted / relegated per box at season end (spec default: top two, bottom two).
+const PROMOTED: usize = 2;
+const RELEGATED: usize = 2;
 
 /// The job handler.
 pub async fn advance(state: &AppState, community_id: Uuid, league_id: Uuid) -> anyhow::Result<()> {
@@ -63,6 +72,10 @@ async fn step(
             LeagueStatus::Registration if now >= league.starts_at => {
                 activate(tx, tenant, league).await?;
                 LeagueStatus::Active
+            }
+            LeagueStatus::Active if now >= league.ends_at => {
+                finish(tx, tenant, league, now).await?;
+                LeagueStatus::Finished
             }
             _ => return Ok(status),
         };
@@ -129,12 +142,13 @@ async fn activate(tx: &mut TenantTx, tenant: &Tenant, league: &LeagueRow) -> Res
     .bind(league.id)
     .fetch_all(&mut **tx)
     .await?;
+    let previous = previous_results(tx, league).await?;
     let seeds: Vec<Seed<EntryId>> = entries
         .iter()
         .map(|entry| Seed {
             id: EntryId(entry.id),
             utr: entry.utr,
-            previous: None,
+            previous: previous.get(&sorted(&entry.player_ids)).copied(),
         })
         .collect();
     let boxes = place(&seeds, league.box_size()).map_err(|err| ApiError::Internal(err.into()))?;
@@ -196,5 +210,107 @@ async fn activate(tx: &mut TenantTx, tenant: &Tenant, league: &LeagueRow) -> Res
     }
     set_status(tx, league.id, LeagueStatus::Active).await?;
     tracing::info!(league = %league.id, entries = entries.len(), "league activated");
+    Ok(())
+}
+
+fn sorted(ids: &[Uuid]) -> Vec<Uuid> {
+    let mut sorted_ids = ids.to_vec();
+    sorted_ids.sort_unstable();
+    sorted_ids
+}
+
+#[derive(FromRow)]
+struct PreviousResult {
+    player_ids: Vec<Uuid>,
+    tier: i32,
+    movement: i16,
+}
+
+/// Last season's tier and movement by (sorted) player set: a returning singles player or an
+/// unchanged doubles pair. New pairs count as newcomers.
+async fn previous_results(
+    tx: &mut TenantTx,
+    league: &LeagueRow,
+) -> Result<HashMap<Vec<Uuid>, Previous>, ApiError> {
+    let Some(previous) = league.previous_league_id else {
+        return Ok(HashMap::new());
+    };
+    let rows: Vec<PreviousResult> = sqlx::query_as(
+        "SELECT player_ids, tier, movement FROM league_results
+         WHERE community_id = $1 AND league_id = $2",
+    )
+    .bind(tx.community_id())
+    .bind(previous)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|result| {
+            let prev = Previous {
+                tier: u32::try_from(result.tier).unwrap_or(1),
+                movement: i8::try_from(result.movement).unwrap_or(0),
+            };
+            (sorted(&result.player_ids), prev)
+        })
+        .collect())
+}
+
+/// `active → finished`: closes unplayed matches, records final standings with promotion and
+/// relegation, and writes season points to the ranking ledger (each partner in full).
+async fn finish(
+    tx: &mut TenantTx,
+    tenant: &Tenant,
+    league: &LeagueRow,
+    now: DateTime<Utc>,
+) -> Result<(), ApiError> {
+    let _ = sqlx::query(
+        "UPDATE matches SET status = 'cancelled', resolution_note = 'season ended',
+            updated_at = now()
+         WHERE community_id = $1 AND league_id = $2 AND status IN ('proposed', 'scheduled')",
+    )
+    .bind(tx.community_id())
+    .bind(league.id)
+    .execute(&mut **tx)
+    .await?;
+    let config = league.scoring(&tenant.scoring_config.0)?;
+    let boxes = standings::compute(tx, league, &config.league_match).await?;
+    let tiers = u32::try_from(boxes.len()).unwrap_or(u32::MAX);
+    let discipline = league.discipline();
+    let mut events = Vec::new();
+    for division in &boxes {
+        let tier = u32::try_from(division.tier).unwrap_or(u32::MAX);
+        let moves = movements(division.table.len(), tier, tiers, PROMOTED, RELEGATED);
+        for (line, movement) in division.table.iter().zip(moves) {
+            let position = usize::try_from(line.position).unwrap_or(usize::MAX);
+            let season_points = config.league_season.points(position, tier);
+            let _ = sqlx::query(
+                "INSERT INTO league_results (community_id, league_id, entry_id, division_id,
+                    player_ids, tier, position, points, season_points, movement)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 ON CONFLICT (league_id, entry_id) DO NOTHING",
+            )
+            .bind(tx.community_id())
+            .bind(league.id)
+            .bind(line.entry_id)
+            .bind(division.division_id)
+            .bind(&line.player_ids)
+            .bind(division.tier)
+            .bind(i32::try_from(line.position).unwrap_or(i32::MAX))
+            .bind(i32::try_from(line.points).unwrap_or(i32::MAX))
+            .bind(i32::try_from(season_points).unwrap_or(i32::MAX))
+            .bind(i16::from(movement))
+            .execute(&mut **tx)
+            .await?;
+            events.extend(line.player_ids.iter().map(|&player| RankingEvent {
+                player: PlayerId(player),
+                discipline,
+                source: RankingSource::LeagueSeason,
+                points: season_points,
+            }));
+        }
+    }
+    rankings::append(tx, league.id, &events, now).await?;
+    set_status(tx, league.id, LeagueStatus::Finished).await?;
+    tracing::info!(league = %league.id, boxes = boxes.len(), "league finished");
     Ok(())
 }
