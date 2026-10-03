@@ -1,8 +1,7 @@
 //! `POST /api/v1/auth/oidc/{provider}` (sign in) and `.../link` (attach to current user).
 
 use axum::{
-    Json,
-    extract::{Path, State},
+    extract::State,
     http::{HeaderMap, StatusCode},
     response::Response,
 };
@@ -10,6 +9,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::extract::{ApiJson, ApiPath};
 use crate::{
     ApiError, ApiResult, AppState, Tenant,
     api::auth::finish_login,
@@ -61,9 +61,9 @@ pub async fn oidc_login(
     State(state): State<AppState>,
     tenant: Tenant,
     ClientIp(ip): ClientIp,
-    Path(provider): Path<String>,
+    ApiPath(provider): ApiPath<String>,
     headers: HeaderMap,
-    Json(body): Json<OidcLogin>,
+    ApiJson(body): ApiJson<OidcLogin>,
 ) -> ApiResult<Response> {
     state.limiter.check(&format!("login-ip:{ip}"))?;
     let (provider, claims) = verified_claims(&state, &provider, &body).await?;
@@ -188,8 +188,8 @@ async fn insert_identity(
 pub async fn oidc_link(
     State(state): State<AppState>,
     user: CurrentUser,
-    Path(provider): Path<String>,
-    Json(body): Json<OidcLogin>,
+    ApiPath(provider): ApiPath<String>,
+    ApiJson(body): ApiJson<OidcLogin>,
 ) -> ApiResult<StatusCode> {
     let (provider, claims) = verified_claims(&state, &provider, &body).await?;
     let mut tx = state.db.begin().await?;

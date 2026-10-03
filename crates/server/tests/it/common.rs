@@ -222,6 +222,16 @@ impl TestApp {
         }
     }
 
+    /// `PATCH /api/v1/me` expecting 200; returns the body.
+    pub(crate) async fn patch_me(&self, session: &Session, body: Value) -> Value {
+        self.patch("/api/v1/me")
+            .as_(session)
+            .json(body)
+            .send()
+            .await
+            .expect(StatusCode::OK)
+    }
+
     /// Promotes a player to community admin.
     pub(crate) async fn make_admin(&self, session: &Session) {
         let _ = sqlx::query("UPDATE players SET role = 'admin' WHERE id = $1")

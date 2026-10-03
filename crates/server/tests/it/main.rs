@@ -12,5 +12,6 @@ mod auth;
 mod common;
 mod health;
 mod oidc;
+mod profiles;
 mod schema;
 mod tenancy;
