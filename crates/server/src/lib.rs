@@ -12,8 +12,14 @@ pub mod communities;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod extract;
 pub mod mailer;
+#[expect(
+    clippy::option_if_let_else,
+    reason = "fires on the generic `Page<T>` inside the utoipa `ToSchema` derive expansion"
+)]
 pub mod models;
+pub mod players;
 pub mod telemetry;
 pub mod tenancy;
 

@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use subtle::ConstantTimeEq;
 
+use crate::extract::ApiJson;
 use crate::{
     ApiError, ApiResult, AppState, Tenant,
     auth::{
@@ -77,7 +78,7 @@ pub async fn request_otp(
     State(state): State<AppState>,
     tenant: Tenant,
     ClientIp(ip): ClientIp,
-    Json(body): Json<OtpRequest>,
+    ApiJson(body): ApiJson<OtpRequest>,
 ) -> ApiResult<(StatusCode, Json<Accepted>)> {
     let email = normalize_email(&body.email)?;
     state.limiter.check(&format!("otp-ip:{ip}"))?;
@@ -193,7 +194,7 @@ pub async fn verify_otp(
     tenant: Tenant,
     ClientIp(ip): ClientIp,
     headers: HeaderMap,
-    Json(body): Json<OtpVerify>,
+    ApiJson(body): ApiJson<OtpVerify>,
 ) -> ApiResult<Response> {
     state.limiter.check(&format!("verify-ip:{ip}"))?;
     let email = normalize_email(&body.email)?;
@@ -326,7 +327,7 @@ pub async fn password_login(
     tenant: Tenant,
     ClientIp(ip): ClientIp,
     headers: HeaderMap,
-    Json(body): Json<PasswordLogin>,
+    ApiJson(body): ApiJson<PasswordLogin>,
 ) -> ApiResult<Response> {
     let email = normalize_email(&body.email)?;
     state.limiter.check(&format!("login-ip:{ip}"))?;
@@ -384,7 +385,7 @@ pub struct SetPassword {
 pub async fn set_password(
     State(state): State<AppState>,
     user: CurrentUser,
-    Json(body): Json<SetPassword>,
+    ApiJson(body): ApiJson<SetPassword>,
 ) -> ApiResult<StatusCode> {
     let len = body.password.chars().count();
     if !(MIN_PASSWORD_LEN..=MAX_PASSWORD_LEN).contains(&len) {
