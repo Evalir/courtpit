@@ -61,3 +61,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+
+  api-client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/api-client/package-lock.json
+      - run: npm ci
+        working-directory: packages/api-client
+      - run: npm run gen
+        working-directory: packages/api-client
+      - name: Committed client matches the server's OpenAPI document
+        run: |
+          if ! git diff --exit-code -- packages/api-client; then
+            echo "::error::packages/api-client is out of date. Run 'npm run gen' in packages/api-client and commit the result."
+            exit 1
+          fi
+      - run: npm run typecheck
+        working-directory: packages/api-client

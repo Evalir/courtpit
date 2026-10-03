@@ -39,7 +39,12 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   Global tables (`users`, `sessions`, `email_codes`, `auth_identities`, `communities`, `jobs`)
   are queried on the pool directly.
 - **OpenAPI**: every handler has `#[utoipa::path]` and is registered with `routes!` in
-  `app::api_router`, so `/api/v1/openapi.json` stays complete.
+  `app::api_router`, so `/api/v1/openapi.json` stays complete. Authenticated handlers declare
+  `security(("bearer" = []))`; query structs derive `IntoParams` with
+  `#[into_params(parameter_in = Query)]`; tags are declared on `openapi::ApiDoc`; unit tests
+  in `openapi.rs` check the generated document. Any PR that changes the API surface re-runs
+  `npm run gen` in `packages/api-client` and commits `openapi.json` + `src/schema.d.ts`
+  (the CI `api-client` job fails on drift).
 - **Lists** use cursor pagination (`?cursor=&limit=`, response `{ items, next_cursor }`).
 - **Money**: no payment logic in steps 1–3. The spec's payment columns exist as an unused
   seam (`communities.currency/stripe_*/platform_fee_*`, `leagues.entry_fee_minor`).

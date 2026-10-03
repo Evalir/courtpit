@@ -26,4 +26,5 @@ Requires Rust (edition 2024) and Postgres 16. Local default:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace          # integration tests need DATABASE_URL
+(cd packages/api-client && npm ci && npm run check && npm run typecheck)   # TS client vs OpenAPI
 ```
