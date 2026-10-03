@@ -10,13 +10,13 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 /// An in-process application under test.
-pub struct TestApp {
-    pub router: Router,
+pub(crate) struct TestApp {
+    pub(crate) router: Router,
 }
 
 impl TestApp {
     /// Builds the app with default configuration.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let state = courtpit_server::AppState::new(courtpit_server::Config::default());
         Self {
             router: courtpit_server::router(state),
@@ -24,7 +24,7 @@ impl TestApp {
     }
 
     /// Sends a request and returns status plus parsed JSON body (`Null` when empty).
-    pub async fn send(&self, method: Method, uri: &str) -> (StatusCode, Value) {
+    pub(crate) async fn send(&self, method: Method, uri: &str) -> (StatusCode, Value) {
         let req = Request::builder()
             .method(method)
             .uri(uri)

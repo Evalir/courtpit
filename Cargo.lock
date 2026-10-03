@@ -198,12 +198,6 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 [[package]]
 name = "courtpit-domain"
 version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "utoipa",
-]
 
 [[package]]
 name = "courtpit-server"
@@ -212,7 +206,6 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
- "courtpit-domain",
  "http-body-util",
  "serde",
  "serde_json",

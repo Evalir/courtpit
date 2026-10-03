@@ -3,7 +3,7 @@
 use std::net::SocketAddr;
 
 /// Configuration for `courtpit-server serve`. Every field has an env var; see `.env.example`.
-#[derive(Debug, Clone, clap::Args)]
+#[derive(Debug, Clone, Copy, clap::Args)]
 pub struct Config {
     /// Address the HTTP server binds to.
     #[arg(long, env = "COURTPIT_BIND", default_value = "0.0.0.0:8080")]

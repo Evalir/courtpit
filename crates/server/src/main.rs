@@ -68,7 +68,7 @@ async fn shutdown_signal() {
     let terminate = async {
         match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
             Ok(mut sig) => {
-                sig.recv().await;
+                let _ = sig.recv().await;
             }
             Err(err) => tracing::warn!(%err, "failed to listen for SIGTERM"),
         }
