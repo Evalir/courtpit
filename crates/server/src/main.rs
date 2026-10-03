@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use courtpit_server::{
     AppState, Config,
     communities::{NewCommunity, create_community},
-    db, router, telemetry,
+    db, jobs, router, telemetry,
 };
 
 #[derive(Debug, Parser)]
@@ -106,14 +106,25 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .with_context(|| format!("binding {}", config.bind))?;
     let pool = db::connect(&config.db).await?;
     tracing::info!(addr = %config.bind, "listening");
-    let app = router(AppState::from_config(config, pool)?);
-    axum::serve(
+    let state = AppState::from_config(config, pool)?;
+    let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
+    let job_loop = state.config.jobs_enabled.then(|| {
+        let every = std::time::Duration::from_millis(state.config.job_poll_ms);
+        jobs::spawn_loop(state.clone(), every, stop_rx)
+    });
+    let app = router(state);
+    let served = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown_signal())
     .await
-    .context("serving HTTP")
+    .context("serving HTTP");
+    let _ = stop_tx.send(true);
+    if let Some(handle) = job_loop {
+        let _ = handle.await;
+    }
+    served
 }
 
 async fn shutdown_signal() {

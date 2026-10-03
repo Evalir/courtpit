@@ -14,6 +14,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{
     api,
     auth::{oidc::OidcVerifier, rate_limit::RateLimiter},
+    clock::{Clock, SystemClock},
     config::{Config, MailerKind},
     error::ErrorBody,
     mailer::{LogMailer, Mailer, ResendMailer},
@@ -35,6 +36,8 @@ pub struct AppState {
     pub limiter: RateLimiter,
     /// Apple / Google ID-token verification.
     pub oidc: OidcVerifier,
+    /// Source of "now" for deadlines, schedules and jobs (tests move it).
+    pub clock: Arc<dyn Clock>,
 }
 
 impl AppState {
@@ -50,7 +53,15 @@ impl AppState {
             tenants,
             mailer,
             limiter,
+            clock: Arc::new(SystemClock),
         }
+    }
+
+    /// Replaces the clock (tests use [`crate::clock::OffsetClock`]).
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
+        self.clock = clock;
+        self
     }
 
     /// Builds state, choosing the mailer from configuration.

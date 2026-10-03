@@ -12,6 +12,7 @@ mod auth;
 mod common;
 mod directory;
 mod health;
+mod jobs;
 mod oidc;
 mod profiles;
 mod schema;

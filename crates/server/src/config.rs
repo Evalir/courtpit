@@ -64,6 +64,12 @@ pub struct Config {
         default_value = "https://www.googleapis.com/oauth2/v3/certs"
     )]
     pub google_jwks_url: String,
+    /// Run the background job loop in this process.
+    #[arg(long, env = "COURTPIT_JOBS_ENABLED", default_value_t = true, action = clap::ArgAction::Set)]
+    pub jobs_enabled: bool,
+    /// Job loop poll interval in milliseconds.
+    #[arg(long, env = "COURTPIT_JOB_POLL_MS", default_value_t = 1000)]
+    pub job_poll_ms: u64,
     /// Database settings.
     #[command(flatten)]
     pub db: DbConfig,
@@ -92,6 +98,8 @@ impl Default for Config {
             mailer: MailerKind::Log,
             resend_api_key: None,
             email_from: "Courtpit <no-reply@courtpit.app>".to_owned(),
+            jobs_enabled: true,
+            job_poll_ms: 1000,
             apple_client_ids: Vec::new(),
             google_client_ids: Vec::new(),
             apple_jwks_url: "https://appleid.apple.com/auth/keys".to_owned(),

@@ -20,7 +20,10 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
 - **Enums** are Postgres `CREATE TYPE … AS ENUM` types mapped with `#[derive(sqlx::Type)]`
   (`rename_all = "snake_case"`/`"lowercase"`), not text + CHECK. Adding a value is
   `ALTER TYPE … ADD VALUE` in a new migration. Exception: `jobs.kind` is free text (an open set).
-- **Time**: `chrono::DateTime<Utc>` / `timestamptz` everywhere.
+- **Time**: `chrono::DateTime<Utc>` / `timestamptz` everywhere. Business logic reads the
+  current time from `state.clock.now()` (an injectable `Clock`) and binds it into SQL, never
+  Postgres `now()`, so tests can move time with `app.clock.advance(..)`. Audit columns
+  (`created_at`, `updated_at`) and auth expiry may keep using `now()`.
 - **Errors**: return `ApiError`; every error renders as
   `{ "error": { "code": "<stable_code>", "message": "<human text>" } }` with the matching HTTP
   status. Clients switch on `code`. Never leak internal error text (`Internal` logs, then says
@@ -31,6 +34,8 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   `nullif(current_setting('app.community_id', true), '')::uuid`. Handlers take `Tenant`; all
   tenant-scoped queries run inside `TenantTx`, which does `SET LOCAL app.community_id` and
   `SET LOCAL ROLE courtpit_app` (a NOBYPASSRLS, non-owner role) so RLS actually applies.
+  RLS is the backstop, not the filter: every query on a scoped table still says
+  `WHERE community_id = $n` explicitly (bind `tenant.id()` / `tx.community_id()`).
   Global tables (`users`, `sessions`, `email_codes`, `auth_identities`, `communities`, `jobs`)
   are queried on the pool directly.
 - **OpenAPI**: every handler has `#[utoipa::path]` and is registered with `routes!` in
