@@ -13,6 +13,7 @@ mod common;
 mod directory;
 mod health;
 mod jobs;
+mod leagues;
 mod match_requests;
 mod match_results;
 mod matches;
