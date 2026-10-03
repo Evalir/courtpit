@@ -8,6 +8,7 @@ use tokio as _;
 pub mod api;
 pub mod app;
 pub mod config;
+pub mod db;
 pub mod error;
 pub mod telemetry;
 

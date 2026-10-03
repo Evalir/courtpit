@@ -20,6 +20,7 @@ anyhow.workspace = true
 axum.workspace = true
 clap.workspace = true
 serde.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -30,6 +31,7 @@ tower-http.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+uuid.workspace = true
 http-body-util.workspace = true
 tower.workspace = true
 
