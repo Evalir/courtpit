@@ -11,11 +11,18 @@ pub mod ids;
 pub mod pairing;
 pub mod placement;
 pub mod score;
+pub mod scoring;
+pub mod standings;
 
 pub use discipline::Discipline;
 pub use ids::{CommunityId, DivisionId, EntryId, LeagueId, MatchId, PlayerId};
 pub use pairing::{Pairing, round_robin, single_elimination};
 pub use placement::{BoxSize, Placed, PlacementError, Previous, Seed, box_sizes, place};
+pub use scoring::{
+    LeagueMatchPoints, MixedPooling, Outcome, RankingEvent, RankingSource, RoundReached,
+    ScoringConfig, SeasonPoints, TournamentPoints, league_match_events,
+};
+pub use standings::{BoxResult, StandingRow, standings};
 
 pub use score::{
     Deuce, FinalSet, MatchFormat, Score, ScoreError, ScoreSummary, SetScore, Side, validate_score,
