@@ -154,6 +154,13 @@ impl TenantCache {
 pub struct Tenant(pub Arc<Community>);
 
 impl Tenant {
+    /// Loads a tenant by id, for work that runs outside a request (jobs).
+    pub async fn load(db: &PgPool, id: Uuid) -> Result<Option<Self>, sqlx::Error> {
+        let sql = format!("SELECT {COMMUNITY_COLUMNS} FROM communities WHERE id = $1");
+        let found: Option<Community> = sqlx::query_as(&sql).bind(id).fetch_optional(db).await?;
+        Ok(found.map(|community| Self(Arc::new(community))))
+    }
+
     /// The community id.
     pub fn id(&self) -> Uuid {
         self.0.id
