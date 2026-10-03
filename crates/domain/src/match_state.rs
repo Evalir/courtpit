@@ -8,14 +8,16 @@
 //!    └──decline all / admin──▶ cancelled
 //! ```
 //!
-//! Any player on a side acts for that side. League and tournament ("competitive") matches can
-//! only be cancelled by an admin; friendly matches by either side too.
+//! [`MatchState`] is the machine: [`MatchState::step`] applies an [`Event`] by an [`Actor`] and
+//! returns the next state. Any player on a side acts for that side. League and tournament
+//! ("competitive") matches can only be cancelled by an admin; friendly matches by either side
+//! too.
 
 use serde::{Deserialize, Serialize};
 
 use crate::score::Side;
 
-/// Lifecycle status of a match.
+/// Lifecycle status of a match: the flat tag of a [`MatchState`], as stored and serialized.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -65,6 +67,111 @@ impl MatchStatus {
     }
 }
 
+/// Where a match is in its lifecycle, carrying the facts later steps depend on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchState {
+    /// Time and place are still being negotiated.
+    Proposed,
+    /// A proposal was accepted; the match is waiting to be played.
+    Scheduled,
+    /// A score was reported; only the other side may answer it.
+    Reported {
+        /// Side that reported the score.
+        by: Side,
+    },
+    /// The reported score was confirmed, or the confirmation window lapsed.
+    Confirmed,
+    /// The reported score was disputed; an admin must decide.
+    Disputed,
+    /// An admin settled the dispute with a final score.
+    Resolved,
+    /// Awarded without play.
+    Walkover,
+    /// Called off; no result.
+    Cancelled,
+}
+
+impl MatchState {
+    /// Rebuilds the state from its stored parts. `None` if the match is reported but the
+    /// reporter's side is unknown.
+    pub const fn from_parts(status: MatchStatus, reported_by: Option<Side>) -> Option<Self> {
+        Some(match status {
+            MatchStatus::Proposed => Self::Proposed,
+            MatchStatus::Scheduled => Self::Scheduled,
+            MatchStatus::Reported => match reported_by {
+                Some(by) => Self::Reported { by },
+                None => return None,
+            },
+            MatchStatus::Confirmed => Self::Confirmed,
+            MatchStatus::Disputed => Self::Disputed,
+            MatchStatus::Resolved => Self::Resolved,
+            MatchStatus::Walkover => Self::Walkover,
+            MatchStatus::Cancelled => Self::Cancelled,
+        })
+    }
+
+    /// The stored status tag.
+    pub const fn status(self) -> MatchStatus {
+        match self {
+            Self::Proposed => MatchStatus::Proposed,
+            Self::Scheduled => MatchStatus::Scheduled,
+            Self::Reported { .. } => MatchStatus::Reported,
+            Self::Confirmed => MatchStatus::Confirmed,
+            Self::Disputed => MatchStatus::Disputed,
+            Self::Resolved => MatchStatus::Resolved,
+            Self::Walkover => MatchStatus::Walkover,
+            Self::Cancelled => MatchStatus::Cancelled,
+        }
+    }
+
+    /// Applies `event` by `actor` to a match of `kind` and returns the next state.
+    pub fn step(
+        self,
+        kind: MatchKind,
+        actor: Actor,
+        event: Event,
+    ) -> Result<Self, TransitionError> {
+        match (self, event) {
+            (Self::Proposed | Self::Scheduled, Event::Propose) => {
+                actor.player("only players propose times").map(|_| self)
+            }
+            (Self::Proposed | Self::Scheduled, Event::AcceptProposal { proposed_by }) => actor
+                .against(proposed_by, "only the other side can accept a proposal")
+                .map(|()| Self::Scheduled),
+            (Self::Proposed | Self::Scheduled, Event::DeclineProposal { proposed_by }) => actor
+                .against(proposed_by, "only the other side can decline a proposal")
+                .map(|()| self),
+            (Self::Proposed | Self::Scheduled, Event::Walkover) => actor
+                .officiating("only an admin awards walkovers")
+                .map(|()| Self::Walkover),
+            (Self::Proposed | Self::Scheduled, Event::Cancel) => {
+                actor.may_cancel(kind).map(|()| Self::Cancelled)
+            }
+            (Self::Scheduled, Event::Report) => actor
+                .player("only players report scores")
+                .map(|by| Self::Reported { by }),
+            (Self::Reported { by }, Event::Confirm) => {
+                actor.against(by, ANSWER_REPORT).map(|()| Self::Confirmed)
+            }
+            (Self::Reported { by }, Event::Dispute) => {
+                actor.against(by, ANSWER_REPORT).map(|()| Self::Disputed)
+            }
+            (Self::Reported { .. }, Event::ConfirmTimeout) => actor
+                .exactly(Actor::System, "only the system confirms on timeout")
+                .map(|()| Self::Confirmed),
+            (Self::Disputed, Event::Resolve(resolution)) => actor
+                .exactly(Actor::Admin, "only an admin resolves disputes")
+                .map(|()| resolution.outcome()),
+            _ => Err(TransitionError::InvalidState {
+                from: self.status(),
+                event: event.name(),
+            }),
+        }
+    }
+}
+
+const ANSWER_REPORT: &str = "only the other side can confirm or dispute a score";
+
 /// Friendly matches are informal; competitive ones belong to a league or tournament.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MatchKind {
@@ -85,6 +192,54 @@ pub enum Actor {
     System,
 }
 
+impl Actor {
+    /// The acting player's side; anyone else is refused with `msg`.
+    const fn player(self, msg: &'static str) -> Result<Side, TransitionError> {
+        match self {
+            Self::Player(side) => Ok(side),
+            Self::Admin | Self::System => Err(TransitionError::Forbidden(msg)),
+        }
+    }
+
+    /// Passes only for a player on the side opposite `side`.
+    fn against(self, side: Side, msg: &'static str) -> Result<(), TransitionError> {
+        match self {
+            Self::Player(own) if own != side => Ok(()),
+            _ => Err(TransitionError::Forbidden(msg)),
+        }
+    }
+
+    /// Passes only for `who`.
+    fn exactly(self, who: Self, msg: &'static str) -> Result<(), TransitionError> {
+        if self == who {
+            Ok(())
+        } else {
+            Err(TransitionError::Forbidden(msg))
+        }
+    }
+
+    /// Passes for an admin or the system, never a player.
+    const fn officiating(self, msg: &'static str) -> Result<(), TransitionError> {
+        match self {
+            Self::Admin | Self::System => Ok(()),
+            Self::Player(_) => Err(TransitionError::Forbidden(msg)),
+        }
+    }
+
+    /// Admins cancel any match; players only friendly ones.
+    const fn may_cancel(self, kind: MatchKind) -> Result<(), TransitionError> {
+        match (self, kind) {
+            (Self::Admin, _) | (Self::Player(_), MatchKind::Friendly) => Ok(()),
+            (Self::Player(_), MatchKind::Competitive) => Err(TransitionError::Forbidden(
+                "only an admin can cancel a league match",
+            )),
+            (Self::System, _) => Err(TransitionError::Forbidden(
+                "the system does not cancel matches",
+            )),
+        }
+    }
+}
+
 /// What an admin decides about a disputed result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -96,6 +251,17 @@ pub enum Resolution {
     Replay,
     /// The match is voided; `cancelled`.
     Void,
+}
+
+impl Resolution {
+    /// Where a disputed match goes after this decision.
+    const fn outcome(self) -> MatchState {
+        match self {
+            Self::Score => MatchState::Resolved,
+            Self::Replay => MatchState::Scheduled,
+            Self::Void => MatchState::Cancelled,
+        }
+    }
 }
 
 /// Something that happens to a match.
@@ -146,17 +312,6 @@ impl Event {
     }
 }
 
-/// The facts about a match the rules depend on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MatchCtx {
-    /// Current status.
-    pub status: MatchStatus,
-    /// Whether the match is friendly or competitive.
-    pub kind: MatchKind,
-    /// Side that reported the current score, if any.
-    pub reported_by: Option<Side>,
-}
-
 /// Why a transition is refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
@@ -174,88 +329,6 @@ pub enum TransitionError {
     Forbidden(&'static str),
 }
 
-/// Applies `event` by `actor` and returns the new status.
-pub fn transition(
-    ctx: &MatchCtx,
-    actor: Actor,
-    event: Event,
-) -> Result<MatchStatus, TransitionError> {
-    use MatchStatus as Status;
-    let invalid = || TransitionError::InvalidState {
-        from: ctx.status,
-        event: event.name(),
-    };
-    let player = match actor {
-        Actor::Player(side) => Some(side),
-        _ => None,
-    };
-    let opposite_of = |side: Side, msg| match player {
-        Some(actor_side) if actor_side != side => Ok(()),
-        _ => Err(TransitionError::Forbidden(msg)),
-    };
-
-    match (ctx.status, event) {
-        (Status::Proposed | Status::Scheduled, Event::Propose) => {
-            let _ = player.ok_or(TransitionError::Forbidden("only players propose times"))?;
-            Ok(ctx.status)
-        }
-        (Status::Proposed | Status::Scheduled, Event::AcceptProposal { proposed_by }) => {
-            opposite_of(proposed_by, "only the other side can accept a proposal")?;
-            Ok(Status::Scheduled)
-        }
-        (Status::Proposed | Status::Scheduled, Event::DeclineProposal { proposed_by }) => {
-            opposite_of(proposed_by, "only the other side can decline a proposal")?;
-            Ok(ctx.status)
-        }
-        (Status::Scheduled, Event::Report) => {
-            let _ = player.ok_or(TransitionError::Forbidden("only players report scores"))?;
-            Ok(Status::Reported)
-        }
-        (Status::Reported, Event::Confirm | Event::Dispute) => {
-            let reporter = ctx.reported_by.ok_or_else(invalid)?;
-            opposite_of(
-                reporter,
-                "only the other side can confirm or dispute a score",
-            )?;
-            Ok(if event == Event::Confirm {
-                Status::Confirmed
-            } else {
-                Status::Disputed
-            })
-        }
-        (Status::Reported, Event::ConfirmTimeout) => match actor {
-            Actor::System => Ok(Status::Confirmed),
-            _ => Err(TransitionError::Forbidden(
-                "only the system confirms on timeout",
-            )),
-        },
-        (Status::Disputed, Event::Resolve(resolution)) => match actor {
-            Actor::Admin => Ok(match resolution {
-                Resolution::Score => Status::Resolved,
-                Resolution::Replay => Status::Scheduled,
-                Resolution::Void => Status::Cancelled,
-            }),
-            _ => Err(TransitionError::Forbidden(
-                "only an admin resolves disputes",
-            )),
-        },
-        (Status::Proposed | Status::Scheduled, Event::Walkover) => match actor {
-            Actor::Admin | Actor::System => Ok(Status::Walkover),
-            Actor::Player(_) => Err(TransitionError::Forbidden("only an admin awards walkovers")),
-        },
-        (Status::Proposed | Status::Scheduled, Event::Cancel) => match (actor, ctx.kind) {
-            (Actor::Admin, _) | (Actor::Player(_), MatchKind::Friendly) => Ok(Status::Cancelled),
-            (Actor::Player(_), MatchKind::Competitive) => Err(TransitionError::Forbidden(
-                "only an admin can cancel a league match",
-            )),
-            (Actor::System, _) => Err(TransitionError::Forbidden(
-                "the system does not cancel matches",
-            )),
-        },
-        _ => Err(invalid()),
-    }
-}
-
 /// Which side `id` plays on, if any.
 pub fn side_of<T: PartialEq>(id: &T, side_a: &[T], side_b: &[T]) -> Option<Side> {
     if side_a.contains(id) {
@@ -270,11 +343,22 @@ pub fn side_of<T: PartialEq>(id: &T, side_a: &[T], side_b: &[T]) -> Option<Side>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use MatchStatus as Status;
+    use MatchState as State;
 
     const PLAYER_A: Actor = Actor::Player(Side::A);
     const PLAYER_B: Actor = Actor::Player(Side::B);
     const ACTORS: [Actor; 4] = [PLAYER_A, PLAYER_B, Actor::Admin, Actor::System];
+    /// Every state, with the score reported by side A.
+    const STATES: [State; 8] = [
+        State::Proposed,
+        State::Scheduled,
+        State::Reported { by: Side::A },
+        State::Confirmed,
+        State::Disputed,
+        State::Resolved,
+        State::Walkover,
+        State::Cancelled,
+    ];
 
     fn events() -> Vec<Event> {
         let mut list = vec![
@@ -296,57 +380,46 @@ mod tests {
         list
     }
 
-    fn ctx(status: MatchStatus, kind: MatchKind) -> MatchCtx {
-        let reported_by = matches!(status, Status::Reported | Status::Disputed).then_some(Side::A);
-        MatchCtx {
-            status,
-            kind,
-            reported_by,
-        }
-    }
-
-    /// The complete list of allowed (status, kind, actor, event) → status, with the score
+    /// The complete list of allowed (state, kind, actor, event) → state, with the score
     /// reported by side A. Everything not listed must be refused.
-    fn expected(status: Status, kind: MatchKind, actor: Actor, event: Event) -> Option<Status> {
-        let open = matches!(status, Status::Proposed | Status::Scheduled);
+    fn expected(state: State, kind: MatchKind, actor: Actor, event: Event) -> Option<State> {
+        let open = matches!(state, State::Proposed | State::Scheduled);
+        let reported = matches!(state, State::Reported { .. });
         let is_player = matches!(actor, Actor::Player(_));
         match event {
-            Event::Propose if open && is_player => Some(status),
+            Event::Propose if open && is_player => Some(state),
             Event::AcceptProposal { proposed_by }
                 if open && actor == Actor::Player(proposed_by.other()) =>
             {
-                Some(Status::Scheduled)
+                Some(State::Scheduled)
             }
             Event::DeclineProposal { proposed_by }
                 if open && actor == Actor::Player(proposed_by.other()) =>
             {
-                Some(status)
+                Some(state)
             }
-            Event::Report if status == Status::Scheduled && is_player => Some(Status::Reported),
-            Event::Confirm if status == Status::Reported && actor == PLAYER_B => {
-                Some(Status::Confirmed)
-            }
-            Event::Dispute if status == Status::Reported && actor == PLAYER_B => {
-                Some(Status::Disputed)
-            }
-            Event::ConfirmTimeout if status == Status::Reported && actor == Actor::System => {
-                Some(Status::Confirmed)
-            }
-            Event::Resolve(resolution) if status == Status::Disputed && actor == Actor::Admin => {
+            Event::Report if state == State::Scheduled => match actor {
+                Actor::Player(by) => Some(State::Reported { by }),
+                Actor::Admin | Actor::System => None,
+            },
+            Event::Confirm if reported && actor == PLAYER_B => Some(State::Confirmed),
+            Event::Dispute if reported && actor == PLAYER_B => Some(State::Disputed),
+            Event::ConfirmTimeout if reported && actor == Actor::System => Some(State::Confirmed),
+            Event::Resolve(resolution) if state == State::Disputed && actor == Actor::Admin => {
                 Some(match resolution {
-                    Resolution::Score => Status::Resolved,
-                    Resolution::Replay => Status::Scheduled,
-                    Resolution::Void => Status::Cancelled,
+                    Resolution::Score => State::Resolved,
+                    Resolution::Replay => State::Scheduled,
+                    Resolution::Void => State::Cancelled,
                 })
             }
             Event::Walkover if open && matches!(actor, Actor::Admin | Actor::System) => {
-                Some(Status::Walkover)
+                Some(State::Walkover)
             }
             Event::Cancel
                 if open
                     && (actor == Actor::Admin || (is_player && kind == MatchKind::Friendly)) =>
             {
-                Some(Status::Cancelled)
+                Some(State::Cancelled)
             }
             _ => None,
         }
@@ -355,13 +428,13 @@ mod tests {
     #[test]
     fn exhaustive_transition_matrix() {
         let mut allowed = 0;
-        for status in Status::ALL {
+        for state in STATES {
             for kind in [MatchKind::Friendly, MatchKind::Competitive] {
                 for actor in ACTORS {
                     for event in events() {
-                        let got = transition(&ctx(status, kind), actor, event).ok();
-                        let want = expected(status, kind, actor, event);
-                        assert_eq!(got, want, "{status:?} {kind:?} {actor:?} {event:?}");
+                        let got = state.step(kind, actor, event).ok();
+                        let want = expected(state, kind, actor, event);
+                        assert_eq!(got, want, "{state:?} {kind:?} {actor:?} {event:?}");
                         allowed += usize::from(got.is_some());
                     }
                 }
@@ -375,63 +448,65 @@ mod tests {
 
     #[test]
     fn happy_path() {
-        let mut match_ctx = ctx(Status::Proposed, MatchKind::Competitive);
-        match_ctx.status = transition(
-            &match_ctx,
-            PLAYER_B,
-            Event::AcceptProposal {
-                proposed_by: Side::A,
-            },
-        )
-        .unwrap();
-        assert_eq!(match_ctx.status, Status::Scheduled);
-        match_ctx.status = transition(&match_ctx, PLAYER_A, Event::Report).unwrap();
-        match_ctx.reported_by = Some(Side::A);
-        assert_eq!(match_ctx.status, Status::Reported);
+        let kind = MatchKind::Competitive;
+        let accept = Event::AcceptProposal {
+            proposed_by: Side::A,
+        };
+        let state = State::Proposed.step(kind, PLAYER_B, accept).unwrap();
+        assert_eq!(state, State::Scheduled);
+        let state = state.step(kind, PLAYER_A, Event::Report).unwrap();
+        assert_eq!(state, State::Reported { by: Side::A });
         assert_eq!(
-            transition(&match_ctx, PLAYER_A, Event::Confirm),
-            Err(TransitionError::Forbidden(
-                "only the other side can confirm or dispute a score"
-            ))
+            state.step(kind, PLAYER_A, Event::Confirm),
+            Err(TransitionError::Forbidden(ANSWER_REPORT))
         );
         assert_eq!(
-            transition(&match_ctx, PLAYER_B, Event::Confirm),
-            Ok(Status::Confirmed)
+            state.step(kind, PLAYER_B, Event::Confirm),
+            Ok(State::Confirmed)
         );
     }
 
     #[test]
     fn terminal_states_accept_nothing() {
-        for status in Status::ALL
+        for state in STATES
             .into_iter()
-            .filter(|status| status.is_terminal())
+            .filter(|state| state.status().is_terminal())
         {
             for actor in ACTORS {
                 for event in events() {
-                    let _ =
-                        transition(&ctx(status, MatchKind::Friendly), actor, event).unwrap_err();
+                    let _ = state.step(MatchKind::Friendly, actor, event).unwrap_err();
                 }
             }
         }
         assert!(
-            Status::Confirmed.has_result()
-                && Status::Walkover.has_result()
-                && !Status::Cancelled.has_result()
+            MatchStatus::Confirmed.has_result()
+                && MatchStatus::Walkover.has_result()
+                && !MatchStatus::Cancelled.has_result()
         );
     }
 
     #[test]
     fn invalid_state_vs_forbidden() {
-        let match_ctx = ctx(Status::Confirmed, MatchKind::Friendly);
         assert!(matches!(
-            transition(&match_ctx, PLAYER_A, Event::Report),
+            State::Confirmed.step(MatchKind::Friendly, PLAYER_A, Event::Report),
             Err(TransitionError::InvalidState { .. })
         ));
-        let match_ctx = ctx(Status::Scheduled, MatchKind::Competitive);
         assert!(matches!(
-            transition(&match_ctx, PLAYER_A, Event::Cancel),
+            State::Scheduled.step(MatchKind::Competitive, PLAYER_A, Event::Cancel),
             Err(TransitionError::Forbidden(_))
         ));
+    }
+
+    #[test]
+    fn stored_parts_round_trip() {
+        for state in STATES {
+            let reported_by = match state {
+                State::Reported { by } => Some(by),
+                _ => None,
+            };
+            assert_eq!(State::from_parts(state.status(), reported_by), Some(state));
+        }
+        assert_eq!(State::from_parts(MatchStatus::Reported, None), None);
     }
 
     #[test]
@@ -444,7 +519,7 @@ mod tests {
     #[test]
     fn status_json() {
         assert_eq!(
-            serde_json::to_string(&Status::Walkover).unwrap(),
+            serde_json::to_string(&MatchStatus::Walkover).unwrap(),
             "\"walkover\""
         );
         assert_eq!(

@@ -15,6 +15,5 @@ pub use score::{
 pub mod match_state;
 
 pub use match_state::{
-    Actor, Event, MatchCtx, MatchKind, MatchStatus, Resolution, TransitionError, side_of,
-    transition,
+    Actor, Event, MatchKind, MatchState, MatchStatus, Resolution, TransitionError, side_of,
 };
