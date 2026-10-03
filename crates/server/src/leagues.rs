@@ -93,10 +93,14 @@ impl LeagueRow {
         )
     }
 
-    /// The community's scoring config with this league's overrides merged in.
-    pub fn scoring(&self, tenant: &Tenant) -> Result<ScoringConfig, ApiError> {
-        scoring_with(tenant, self.scoring_overrides.as_ref().map(|json| &json.0))
-            .map_err(|err| ApiError::Internal(anyhow::anyhow!("league scoring config: {err}")))
+    /// The community's scoring config (`communities.scoring_config`) with this league's
+    /// overrides merged in.
+    pub fn scoring(&self, community_scoring: &Value) -> Result<ScoringConfig, ApiError> {
+        scoring_with(
+            community_scoring,
+            self.scoring_overrides.as_ref().map(|j| &j.0),
+        )
+        .map_err(|err| ApiError::Internal(anyhow::anyhow!("league scoring config: {err}")))
     }
 
     /// Box size limits for placement.
@@ -120,14 +124,14 @@ pub fn merge_json(base: &mut Value, over: &Value) {
     }
 }
 
-/// The community scoring config with optional overrides merged in.
+/// A community scoring config with optional overrides merged in.
 pub fn scoring_with(
-    tenant: &Tenant,
+    community_scoring: &Value,
     overrides: Option<&Value>,
 ) -> Result<ScoringConfig, serde_json::Error> {
-    let mut config = tenant.scoring_config.0.clone();
-    if let Some(overrides_value) = overrides {
-        merge_json(&mut config, overrides_value);
+    let mut config = community_scoring.clone();
+    if let Some(overrides) = overrides {
+        merge_json(&mut config, overrides);
     }
     serde_json::from_value(config)
 }

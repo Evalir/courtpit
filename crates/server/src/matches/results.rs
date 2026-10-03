@@ -83,6 +83,12 @@ pub async fn auto_confirm(
     .bind(DbMatchStatus::from(status))
     .execute(&mut *tx)
     .await?;
+    let row = load(&mut tx, match_id, false)
+        .await
+        .map_err(|err| anyhow::anyhow!("reloading match: {err}"))?;
+    crate::rankings::on_match_result(&mut tx, &row, state.clock.now())
+        .await
+        .map_err(|err| anyhow::anyhow!("ranking events: {err}"))?;
     tx.commit().await?;
     tracing::info!(%match_id, "score auto-confirmed");
     Ok(())
