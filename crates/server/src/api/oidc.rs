@@ -65,10 +65,7 @@ pub async fn oidc_login(
     headers: HeaderMap,
     Json(body): Json<OidcLogin>,
 ) -> ApiResult<Response> {
-    state.limiter.check(
-        &format!("login-ip:{ip}"),
-        state.config.auth_ip_limit_per_hour,
-    )?;
+    state.limiter.check(&format!("login-ip:{ip}"))?;
     let (provider, claims) = verified_claims(&state, &provider, &body).await?;
 
     let mut tx = state.db.begin().await?;
