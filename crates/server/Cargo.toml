@@ -25,6 +25,7 @@ chrono.workspace = true
 cookie.workspace = true
 email_address.workspace = true
 governor.workspace = true
+jsonwebtoken.workspace = true
 moka.workspace = true
 password-auth.workspace = true
 rand.workspace = true
