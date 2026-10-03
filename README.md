@@ -5,6 +5,7 @@ seasonal ranked leagues (and later tournaments), self-reported scores confirmed 
 
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
 - Decisions beyond the spec: [`docs/decisions.md`](docs/decisions.md)
+- Deploying (Fly.io + Neon + R2): [`docs/deploy.md`](docs/deploy.md)
 - Contributor/agent conventions: [`CLAUDE.md`](CLAUDE.md)
 
 ## Quick start

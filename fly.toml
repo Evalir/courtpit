@@ -1,0 +1,63 @@
+# Fly.io app config for the Courtpit API (docs/deploy.md has the full setup).
+#
+# Phase 1 (pre-payments): one Machine that Fly stops when idle and starts on the next request,
+# so it only bills while serving traffic. Nothing polls the jobs table while it is stopped,
+# so a scheduled "tick" Machine drains due jobs hourly (see docs/deploy.md; it is created
+# with `fly machine run`, not from this file, and the deploy workflow keeps its image current).
+# Secrets (DATABASE_URL, RESEND_API_KEY, BACKUP_*, ...) live in `fly secrets`, never here.
+
+# CHANGE ME: app names are global on Fly, so "courtpit" is probably taken.
+app = "courtpit"
+# CHANGE ME: pick the region closest to your Neon project (`fly platform regions`).
+primary_region = "ams"
+
+# `serve` handles SIGTERM and SIGINT with a graceful shutdown that waits for the job loop.
+kill_signal = "SIGTERM"
+kill_timeout = 15
+
+[deploy]
+# Runs in a temporary Machine with the app's secrets before new Machines roll out; a failed
+# migration aborts the deploy and leaves the running version untouched.
+release_command = "courtpit-server migrate"
+
+# Non-secret settings (names from crates/server/src/config.rs and db.rs). Anything sensitive or
+# specific to one deployment goes through `fly secrets set` instead (docs/deploy.md).
+# The deploy workflow copies the COURTPIT_* values below onto the tick Machine as well.
+[env]
+COURTPIT_BIND = "0.0.0.0:8080"
+COURTPIT_LOG_FORMAT = "json"
+# Fly's proxy sets `Fly-Client-IP`; trust only that header for per-IP auth rate limits.
+COURTPIT_CLIENT_IP_SOURCE = "FlyClientIp"
+COURTPIT_COOKIE_SECURE = "true"
+COURTPIT_MAILER = "resend"
+# `{slug}.{base domain}` hosts resolve to communities; change if you do not own courtpit.app.
+COURTPIT_BASE_DOMAIN = "courtpit.app"
+# Neon's pooled endpoint multiplexes client connections, so a small pool is plenty.
+COURTPIT_DB_MAX_CONNECTIONS = "5"
+# While awake the Machine drains jobs itself; poll gently (the hourly tick covers the rest).
+COURTPIT_JOB_POLL_MS = "5000"
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 0
+
+  [http_service.concurrency]
+  type = "requests"
+  soft_limit = 25
+  hard_limit = 50
+
+  # Liveness only. /readyz queries the database, which would wake Neon on every check.
+  [[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/healthz"
+
+[[vm]]
+size = "shared-cpu-1x"
+# argon2id password hashing uses ~19 MiB per concurrent hash; 256 MB is too tight for bursts.
+memory = "512mb"

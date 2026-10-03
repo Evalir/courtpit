@@ -1,0 +1,84 @@
+name: Deploy
+
+# Deploys main to Fly.io once CI has passed for that commit (docs/deploy.md has the setup).
+# Needs the `FLY_API_TOKEN` repository secret (`fly tokens create deploy`).
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. A deploy in flight is never cancelled (stopping `flyctl deploy`
+# half-way can strand a release); a newer run waits and replaces any older queued one.
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # `workflow_run` also fires for CI runs of pull requests whose branch happens to be called
+    # `main`, so insist on a push to this repository. Manual runs deploy only from main.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # The commit CI just validated (not whatever main is by the time this job starts).
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      # CI runs for two quick pushes can finish out of order; never deploy over a newer main.
+      - name: Check this is still the tip of main
+        id: tip
+        run: |
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$tip" = "$SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::main is now ${tip}; skipping the deploy of ${SHA}"
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: steps.tip.outputs.current == 'true'
+
+      # Builds the Dockerfile on Fly's remote builder, runs `release_command` (migrations) in a
+      # temporary Machine, then rolls the web Machine. `--ha=false` keeps it at one Machine.
+      - name: Deploy
+        if: steps.tip.outputs.current == 'true'
+        run: flyctl deploy --remote-only --ha=false
+
+      # `fly deploy` only updates Machines it manages. The hourly tick Machine is created with
+      # `fly machine run` (docs/deploy.md), so move it to the image that was just deployed and
+      # refresh the COURTPIT_* settings it does not inherit from fly.toml. It is found by its
+      # `courtpit_role=tick` metadata. `--skip-start` leaves it waiting for its schedule.
+      - name: Update the tick Machine
+        if: steps.tip.outputs.current == 'true'
+        run: |
+          set -euo pipefail
+          app=$(python3 -c 'import tomllib; print(tomllib.load(open("fly.toml", "rb"))["app"])')
+          machines=$(flyctl machines list --app "$app" --json)
+          image=$(jq -er '[.[] | select(.config.metadata.fly_process_group == "app")][0].config.image' <<<"$machines")
+          mapfile -t env_args < <(jq -r '
+            [.[] | select(.config.metadata.fly_process_group == "app")][0].config.env // {}
+            | to_entries[] | select(.key | startswith("COURTPIT_")) | "--env", "\(.key)=\(.value)"' <<<"$machines")
+          ids=$(jq -r '.[] | select(.config.metadata.courtpit_role == "tick") | .id' <<<"$machines")
+          if [ -z "$ids" ]; then
+            echo "::warning::No tick Machine (metadata courtpit_role=tick) in ${app}: due jobs only run while the web Machine is awake. Create it as described in docs/deploy.md."
+            exit 0
+          fi
+          for id in $ids; do
+            flyctl machine update "$id" --app "$app" --image "$image" "${env_args[@]}" --skip-start --yes
+          done
