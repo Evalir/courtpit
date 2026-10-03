@@ -18,6 +18,8 @@ path = "tests/it/main.rs"
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+chrono.workspace = true
+moka.workspace = true
 clap.workspace = true
 serde.workspace = true
 sqlx.workspace = true
