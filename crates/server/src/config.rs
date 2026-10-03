@@ -132,8 +132,9 @@ pub struct BackupConfig {
         value_parser = clap::value_parser!(u32).range(0..24)
     )]
     pub hour_utc: u32,
-    /// Direct (non-pooled) connection URL for `pg_dump`; defaults to `DATABASE_URL`. A pooler
-    /// in transaction mode (Neon's `-pooler` host) cannot be dumped.
+    /// Direct (non-pooled) connection URL for `pg_dump`; defaults to `DATABASE_DIRECT_URL`,
+    /// then `DATABASE_URL`. A pooler in transaction mode (Neon's `-pooler` host) cannot be
+    /// dumped.
     #[arg(
         long = "backup-database-url",
         env = "BACKUP_DATABASE_URL",
@@ -189,6 +190,8 @@ impl Default for Config {
             google_jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_owned(),
             db: DbConfig {
                 database_url: "postgres://courtpit:courtpit@127.0.0.1/courtpit".to_owned(),
+                database_direct_url: None,
+                db_pooled: false,
                 db_max_connections: 10,
             },
             backup: BackupConfig::default(),

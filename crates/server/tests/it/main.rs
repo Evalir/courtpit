@@ -22,6 +22,7 @@ mod match_requests;
 mod match_results;
 mod matches;
 mod oidc;
+mod pooling;
 mod profiles;
 mod proposals;
 mod rankings;

@@ -90,7 +90,8 @@ async fn create_community_with_owner() {
     assert_eq!(role, "owner");
 }
 
-async fn add_player(app: &TestApp, community: Uuid, email: &str) -> Uuid {
+/// Creates a user and a player in `community`; returns the player id.
+pub(crate) async fn add_player(app: &TestApp, community: Uuid, email: &str) -> Uuid {
     let user: Uuid =
         sqlx::query_scalar("INSERT INTO users (id, email) VALUES ($1, $2) RETURNING id")
             .bind(Uuid::now_v7())

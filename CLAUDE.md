@@ -66,6 +66,10 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   `CREATE DATABASE courtpit_test_<uuid> TEMPLATE ...` — fast and fully isolated. Leftover test
   databases from earlier runs are dropped at harness start. Needs `DATABASE_URL` pointing at a
   role allowed to create databases (default `postgres://courtpit:courtpit@127.0.0.1/courtpit`).
+- CI also runs the suite through pgbouncer (transaction pooling, `ci/pgbouncer/`) with
+  `DATABASE_DIRECT_URL` for the harness's admin work and `COURTPIT_DB_POOLED=true`; see
+  `docs/deploy.md`. Keep server code free of session state (session `SET`, advisory locks,
+  `LISTEN`, temp tables): `SET LOCAL` inside a transaction is fine.
 - Use the helpers in `tests/it/common.rs` (`TestApp::spawn`, `app.req(..)`, `app.login(..)`)
   rather than hand-rolling requests.
 

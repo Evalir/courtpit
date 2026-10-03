@@ -102,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Serve(config) => serve(config).await,
         Command::Tick(args) => tick(args).await,
         Command::Migrate(cfg) => {
-            let pool = db::connect(&cfg).await?;
+            let pool = db::connect_direct(&cfg).await?;
             db::migrate(&pool).await?;
             tracing::info!("migrations applied");
             Ok(())

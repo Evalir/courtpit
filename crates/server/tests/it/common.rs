@@ -36,9 +36,27 @@ const TEMPLATE_LOCK: i64 = 7_253_001;
 
 static TEMPLATE: OnceCell<String> = OnceCell::const_new();
 
+/// Reads the first of `names` that is set, falling back to the default URL.
+fn url_from_env(names: &[&str]) -> PgConnectOptions {
+    let url = names
+        .iter()
+        .find_map(|name| std::env::var(name).ok())
+        .unwrap_or_else(|| DEFAULT_URL.to_owned());
+    PgConnectOptions::from_str(&url).expect("database URL must be a valid Postgres URL")
+}
+
+/// Options for admin work that needs a real session (advisory lock, `CREATE`/`DROP DATABASE`,
+/// migrations): `DATABASE_DIRECT_URL`, else `DATABASE_URL`. Never goes through a pooler.
 fn admin_options() -> PgConnectOptions {
-    let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_URL.to_owned());
-    PgConnectOptions::from_str(&url).expect("DATABASE_URL must be a valid Postgres URL")
+    url_from_env(&["DATABASE_DIRECT_URL", "DATABASE_URL"])
+}
+
+/// Options for the application pool under test: `DATABASE_URL` (the pooler when testing
+/// pooled), with sqlx's statement cache off when `COURTPIT_DB_POOLED=true`.
+fn app_options() -> PgConnectOptions {
+    let pooled = std::env::var("COURTPIT_DB_POOLED")
+        .is_ok_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"));
+    db::pooled_options(url_from_env(&["DATABASE_URL"]), pooled)
 }
 
 fn template_name() -> String {
@@ -134,7 +152,7 @@ async fn fresh_database() -> PgConnectOptions {
             Err(err) => panic!("creating test database: {err}"),
         }
     }
-    admin_options().database(&name)
+    app_options().database(&name)
 }
 
 /// An application under test with its own database.

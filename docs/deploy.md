@@ -42,14 +42,20 @@ the repository and may rewrite the committed `fly.toml`.
 1. Create a Neon project in a region near Fly's. Any Postgres version from 14 to 18 works
    (new Neon projects default to 18). Note the default role `neondb_owner` and database
    `neondb`.
-2. In the console's **Connect** dialog turn **Connection pooling** on and copy the string. The
-   host contains `-pooler`. Keep `sslmode=require`; drop `channel_binding=require` if present
-   (sqlx ignores it and logs a warning on every connection).
-3. Store it, staged until the first deploy:
+2. In the console's **Connect** dialog copy the connection string twice: once with
+   **Connection pooling** on (the host contains `-pooler`) and once with it off (the direct
+   host). Keep `sslmode=require`; drop `channel_binding=require` if present (sqlx ignores it and
+   logs a warning on every connection).
+3. Store both, staged until the first deploy. The app runs on the pooled URL; `migrate` (the
+   release command) and backups need a session, so they use the direct one (see section 11):
 
 ```sh
-fly secrets set --stage 'DATABASE_URL=postgresql://neondb_owner:<password>@ep-xxxx-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require'
+fly secrets set --stage \
+  'DATABASE_URL=postgresql://neondb_owner:<password>@ep-xxxx-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require' \
+  'DATABASE_DIRECT_URL=postgresql://neondb_owner:<password>@ep-xxxx.eu-central-1.aws.neon.tech/neondb?sslmode=require'
 ```
+
+`COURTPIT_DB_POOLED=true` is already set in `fly.toml`.
 
 Things to know:
 
@@ -68,28 +74,18 @@ Things to know:
   ```
 
 - **Transaction pooling.** The app only uses transaction-scoped state (`SET LOCAL`,
-  `set_config(.., true)`) and protocol-level prepared statements, both of which work through
-  Neon's PgBouncer. If you ever see prepared-statement errors, append
-  `&statement-cache-capacity=0` to the URL.
-- **Migrations go through the pooler for now.** Neon recommends a direct connection for schema
-  migrations because sqlx's migrator takes a session-level advisory lock, which transaction
-  pooling does not honour. With one deploy at a time (the workflow serialises them) this is
-  fine in practice; a separate direct URL for `migrate` is planned. If a release ever hangs
-  waiting for the lock, run the migration once through the direct URL (needs the
-  `BACKUP_DATABASE_URL` from step 4):
-
-  ```sh
-  fly ssh console --machine "$(fly machines list --json | jq -r '.[] | select(.config.metadata.fly_process_group == "app") | .id')" \
-    -C 'sh -c "DATABASE_URL=$BACKUP_DATABASE_URL courtpit-server migrate"'
-  ```
-
+  `set_config(.., true)`) and protocol-level prepared statements, which Neon's PgBouncer
+  tracks. Migrations and `pg_dump` take session-level locks and snapshots, so they use the
+  direct URL; `migrate` refuses to run through the pooler when `COURTPIT_DB_POOLED=true` and
+  `DATABASE_DIRECT_URL` is missing. Details and the tested combinations are in section 11.
 - **Cold starts.** After 5 idle minutes Neon suspends the compute and the next query waits for
   it to wake (typically under a second; the pool waits up to 5 s for a connection).
 
 ## 4. Backups (Cloudflare R2)
 
 The nightly job dumps with `pg_dump`, which cannot use transaction pooling, so it needs
-Neon's **direct** URL (the same string without `-pooler`).
+Neon's **direct** URL: it uses `DATABASE_DIRECT_URL` from step 3 unless `BACKUP_DATABASE_URL`
+overrides it.
 
 1. R2 → **Create bucket** (e.g. `courtpit-backups`), private.
 2. R2 → **Manage API tokens** → create a token with **Object Read & Write**, scoped to that
@@ -102,8 +98,7 @@ fly secrets set --stage \
   BACKUP_S3_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com \
   BACKUP_S3_BUCKET=courtpit-backups \
   BACKUP_S3_ACCESS_KEY=<access key id> \
-  BACKUP_S3_SECRET_KEY=<secret access key> \
-  'BACKUP_DATABASE_URL=postgresql://neondb_owner:<password>@ep-xxxx.eu-central-1.aws.neon.tech/neondb?sslmode=require'
+  BACKUP_S3_SECRET_KEY=<secret access key>
 ```
 
 Optional overrides (set them with `fly secrets set` too, not in `fly.toml`: the tick Machine
@@ -190,12 +185,13 @@ fly machine run \
   --env COURTPIT_MAILER=resend \
   --env COURTPIT_BASE_DOMAIN=courtpit.app \
   --env COURTPIT_DB_MAX_CONNECTIONS=5 \
+  --env COURTPIT_DB_POOLED=true \
   "$IMAGE" courtpit-server tick
 ```
 
-- It inherits the app's secrets (`DATABASE_URL`, `RESEND_API_KEY`, `BACKUP_*`) automatically
-  but **not** `fly.toml`'s `[env]`, hence the `--env` flags; keep them equal to `fly.toml`.
-  The deploy workflow copies every `COURTPIT_*` value from the web Machine onto it after each
+- It inherits the app's secrets (`DATABASE_URL`, `DATABASE_DIRECT_URL`, `RESEND_API_KEY`,
+  `BACKUP_*`) automatically but **not** `fly.toml`'s `[env]`, hence the `--env` flags; keep
+  them equal to `fly.toml`. The deploy workflow copies every `COURTPIT_*` value from the web Machine onto it after each
   deploy.
 - `--restart no`: a failed run waits for the next hour instead of looping; interrupted jobs
   are re-claimed once their lease expires.
@@ -299,6 +295,109 @@ docker run --rm courtpit courtpit-server --help
 docker run --rm courtpit pg_dump --version
 ```
 
+## 11. Neon and transaction pooling
+
+Phase 1 runs on Neon Free. Every Neon endpoint has two hostnames: the direct one
+(`ep-cool-1234.<region>.aws.neon.tech`) and a pooled one with `-pooler` in the host
+(`ep-cool-1234-pooler.<region>.aws.neon.tech`), which is pgbouncer in **transaction** pooling
+mode. Use the pooled one for the running app (many short transactions, few real connections)
+and the direct one for anything that needs a session.
+
+| Variable | Value on Neon | Used by |
+| --- | --- | --- |
+| `DATABASE_URL` | pooled (`-pooler`) URL, `?sslmode=require` | `serve`, `tick`, `create-community`, `seed` |
+| `COURTPIT_DB_POOLED` | `true` | turns off sqlx's prepared-statement cache for `DATABASE_URL` |
+| `DATABASE_DIRECT_URL` | direct URL, `?sslmode=require` | `migrate` (Fly's `release_command`) |
+| `BACKUP_DATABASE_URL` | unset (defaults to `DATABASE_DIRECT_URL`) | `pg_dump` backups |
+
+Section 3 sets these; `COURTPIT_DB_POOLED` lives in `fly.toml`.
+
+`courtpit-server migrate` connects to `DATABASE_DIRECT_URL` and falls back to `DATABASE_URL`
+when it is unset. With `COURTPIT_DB_POOLED=true` and no direct URL it refuses to run, so a
+misconfigured `release_command` fails the deploy instead of migrating through the pooler.
+sqlx's connection options ignore unknown URL parameters (it logs a warning), so Neon's
+`channel_binding=require` can stay in the string.
+
+### What works under transaction pooling, and why
+
+pgbouncer hands a server connection to a client for the length of one transaction (or one
+statement outside a transaction) and takes it back at `COMMIT`/`ROLLBACK`. The server relies on
+exactly the things that survive that:
+
+- **`TenantTx`**: `set_config('app.community_id', $1, true)` and `SET LOCAL ROLE courtpit_app`
+  are transaction-local, so they live and die inside the one transaction pgbouncer pins to a
+  single server connection. The next client of that connection starts as the login role with no
+  tenant, and RLS yields no rows rather than another community's. The integration tests
+  `pooling::concurrent_tenant_transactions_never_cross_communities` and
+  `pooling::transaction_settings_do_not_leak_to_the_next_transaction` check both directions.
+- **Job claiming**: `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)` is one statement,
+  hence one short transaction; the lease (`locked_at`) is data, not session state, so a claim
+  never depends on which server connection runs the next poll.
+  `jobs::concurrent_pollers_never_double_claim` runs four pollers over the pool.
+- **Prepared statements**: sqlx prepares every query as a *named* protocol-level statement.
+  That only works if the pooler tracks them: pgbouncer 1.21+ with `max_prepared_statements > 0`
+  (Neon's pooler has this on). Tested against pgbouncer 1.22, whole integration suite:
+
+  | pgbouncer `max_prepared_statements` | `COURTPIT_DB_POOLED` | result |
+  | --- | --- | --- |
+  | 200 (Neon-like) | `true` | all pass (this is what CI runs) |
+  | 200 | `false` | all pass |
+  | 0 | `true` | 76 of 83 fail: `prepared statement "sqlx_s_1" already exists` |
+  | 0 | `false` | 76 of 83 fail: `prepared statement "sqlx_s_1" already exists` |
+
+  Without tracking nothing helps: even unnamed statements (`persistent(false)`) get mixed up
+  between clients (`insufficient data left in message`, wrong results), because sqlx sends the
+  `Parse` and the `Bind` in separate round trips. So a pooler without prepared-statement
+  support is unsupported, whatever the flag says.
+
+`COURTPIT_DB_POOLED=true` sets `statement_cache_capacity(0)`: no query is ever re-executed from
+a cached statement, so a migration can't invalidate a plan an older instance still holds and the
+app does not depend on the pooler's per-connection statement bookkeeping. The price is one more
+round trip per query and a few bytes of pgbouncer client-side state per statement until the
+connection is recycled (about 100 B in a 40k-query test). With the cache on (`false`) the
+suite also passes against a pooler that tracks statements; that is the better choice if the
+extra round trip ever shows up in latency.
+
+### What must not go through the pooler
+
+- **Migrations.** `sqlx::migrate!` takes a session-level `pg_advisory_lock` and releases it with
+  `pg_advisory_unlock`; under transaction pooling those can run on different server connections,
+  so the lock is not held while migrating (two migrators can overlap) or is left behind on a
+  connection another client reuses (the next migration hangs). Use `DATABASE_DIRECT_URL`.
+- **`pg_dump`** (a long, session-scoped snapshot): backups use `BACKUP_DATABASE_URL`, else
+  `DATABASE_DIRECT_URL`.
+- **Session state in general**: session-level `SET`, `LISTEN`/`NOTIFY`, temp tables, `WITH HOLD`
+  cursors, session advisory locks. The server uses none of them. If a feature needs one, open a
+  connection from `DATABASE_DIRECT_URL` for it; `SET LOCAL` inside a transaction is fine.
+- **The test harness's admin work** (template build under an advisory lock, `CREATE DATABASE …
+  TEMPLATE`, dropping stale databases): it reads `DATABASE_DIRECT_URL`, falling back to
+  `DATABASE_URL`.
+
+### Running the pooled test suite locally
+
+CI's `test-pooled` job runs the suite through pgbouncer with `ci/pgbouncer/` (transaction mode,
+Neon-like `max_prepared_statements`, a wildcard `* = host=… port=…` entry so the per-test
+databases are reachable, `courtpit/courtpit` credentials). Locally, run a copy of it with the
+ports of your own cluster (here Postgres on 5432, pgbouncer on 6433):
+
+```sh
+PG_PORT=5432 POOL_PORT=6433
+cp -r ci/pgbouncer /tmp/pgb
+sed -i "s/6432/$POOL_PORT/; s/port=5432/port=$PG_PORT/" /tmp/pgb/pgbouncer.ini
+# auth_file is relative, so start it from that directory (as a non-root user)
+(cd /tmp/pgb && ulimit -n 4096 && exec pgbouncer pgbouncer.ini > pgbouncer.log 2>&1) &
+
+export DATABASE_URL=postgres://courtpit:courtpit@127.0.0.1:$POOL_PORT/courtpit
+export DATABASE_DIRECT_URL=postgres://courtpit:courtpit@127.0.0.1:$PG_PORT/courtpit
+export COURTPIT_DB_POOLED=true
+cargo test --workspace
+```
+
+Set `max_prepared_statements = 0` in the copy to watch the suite fail without prepared-statement
+tracking. Stop the pooler with `pkill pgbouncer` (or `kill %1`) when done; idle server
+connections to the per-test databases linger for `server_idle_timeout` (2 s), so a stale test
+database may survive one run and is dropped by the next.
+
 ## Phase 2: payments
 
 When payments ship, move the database to an always-on Postgres on Fly, and keep the app
@@ -307,7 +406,8 @@ awake:
 - `fly.toml`: `min_machines_running = 1` (and `auto_stop_machines = "off"`); the job loop then
   runs continuously, so the tick Machine and its workflow step can go
   (`fly machine destroy <id>`).
-- `DATABASE_URL` becomes the Postgres app's internal address; PgBouncer stops mattering for
-  migrations and the pooled/direct split disappears. Keep `BACKUP_*` pointed at the new
+- `DATABASE_URL` becomes the Postgres app's internal address and the pooled/direct split
+  disappears: set `COURTPIT_DB_POOLED = "false"` in `fly.toml` and unset `DATABASE_DIRECT_URL`
+  (`migrate` falls back to `DATABASE_URL`). Keep `BACKUP_*` pointed at the new
   database: the nightly dump to R2 continues unchanged.
 - Nothing in the schema or the server changes between phases.
