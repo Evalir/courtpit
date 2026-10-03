@@ -6,4 +6,5 @@ pub mod matches;
 pub mod me;
 pub mod oidc;
 pub mod players;
+pub mod proposals;
 pub mod tenant;

@@ -308,6 +308,82 @@ pub async fn set_status(
     Ok(())
 }
 
+/// Postgres `proposal_status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema, sqlx::Type)]
+#[sqlx(type_name = "proposal_status", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ProposalStatus {
+    /// Awaiting a response from the other side.
+    Open,
+    /// Accepted; the match was scheduled at the proposed time.
+    Accepted,
+    /// Declined by the other side.
+    Declined,
+    /// Replaced by a newer proposal.
+    Superseded,
+}
+
+/// A time-and-place proposal for a match.
+#[derive(Debug, Clone, Serialize, FromRow, ToSchema)]
+pub struct Proposal {
+    /// Proposal id.
+    pub id: Uuid,
+    /// Player who made the proposal.
+    pub proposed_by: Uuid,
+    /// Proposed start time.
+    pub proposed_time: DateTime<Utc>,
+    /// Proposed place, if any.
+    pub location: Option<String>,
+    /// Where the proposal stands.
+    pub status: ProposalStatus,
+    /// When the proposal was made.
+    pub created_at: DateTime<Utc>,
+}
+
+/// All proposals of a match, oldest first.
+pub async fn proposals(tx: &mut TenantTx, match_id: Uuid) -> Result<Vec<Proposal>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT id, proposed_by, proposed_time, location, status, created_at
+         FROM match_proposals WHERE community_id = $1 AND match_id = $2 ORDER BY created_at, id",
+    )
+    .bind(tx.community_id())
+    .bind(match_id)
+    .fetch_all(&mut **tx)
+    .await
+}
+
+/// Records a new open proposal, superseding any other open one.
+pub async fn insert_proposal(
+    tx: &mut TenantTx,
+    match_id: Uuid,
+    proposed_by: Uuid,
+    time: DateTime<Utc>,
+    location: Option<&str>,
+) -> Result<Uuid, sqlx::Error> {
+    let _ = sqlx::query(
+        "UPDATE match_proposals SET status = 'superseded', updated_at = now()
+         WHERE community_id = $1 AND match_id = $2 AND status = 'open'",
+    )
+    .bind(tx.community_id())
+    .bind(match_id)
+    .execute(&mut **tx)
+    .await?;
+    let id = Uuid::now_v7();
+    let _ = sqlx::query(
+        "INSERT INTO match_proposals (id, community_id, match_id, proposed_by, proposed_time, location)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(id)
+    .bind(tx.community_id())
+    .bind(match_id)
+    .bind(proposed_by)
+    .bind(time)
+    .bind(location)
+    .execute(&mut **tx)
+    .await?;
+    Ok(id)
+}
+
 /// API view of a match.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MatchView {
@@ -351,6 +427,9 @@ pub struct MatchView {
     pub resolution_note: Option<String>,
     /// When the row was created.
     pub created_at: DateTime<Utc>,
+    /// Scheduling history; included on single-match responses only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proposals: Option<Vec<Proposal>>,
 }
 
 impl From<MatchRow> for MatchView {
@@ -376,6 +455,18 @@ impl From<MatchRow> for MatchView {
             resolved_by: row.resolved_by,
             resolution_note: row.resolution_note,
             created_at: row.created_at,
+            proposals: None,
         }
     }
+}
+
+/// A match with its proposals, for single-match responses.
+pub async fn view_with_proposals(
+    tx: &mut TenantTx,
+    match_row: MatchRow,
+) -> Result<MatchView, ApiError> {
+    let proposals = proposals(tx, match_row.id).await?;
+    let mut view = MatchView::from(match_row);
+    view.proposals = Some(proposals);
+    Ok(view)
 }

@@ -121,6 +121,9 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         ))
         .routes(routes!(api::matches::get_match))
         .routes(routes!(api::matches::cancel_match))
+        .routes(routes!(api::proposals::propose))
+        .routes(routes!(api::proposals::accept_proposal))
+        .routes(routes!(api::proposals::decline_proposal))
         .split_for_parts()
 }
 
