@@ -133,6 +133,14 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::match_results::dispute_score))
         .routes(routes!(api::match_results::resolve_match))
         .routes(routes!(api::match_results::walkover_match))
+        .routes(routes!(
+            api::match_requests::create_request,
+            api::match_requests::list_requests
+        ))
+        .routes(routes!(api::match_requests::get_request))
+        .routes(routes!(api::match_requests::join_request))
+        .routes(routes!(api::match_requests::leave_request))
+        .routes(routes!(api::match_requests::cancel_request))
         .split_for_parts()
 }
 
