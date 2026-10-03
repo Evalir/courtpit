@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    TenantTx,
+    ApiError, TenantTx,
     models::{Gender, PlayPref, PlayerRole, PlayerStatus},
 };
 
@@ -184,5 +184,26 @@ impl PlayerPublic {
             socials: show_socials.then_some(row.socials.0),
             role: row.role,
         }
+    }
+}
+
+/// Errors unless every id is an active, email-verified member of the transaction's community
+/// (the players a match or entry may name).
+pub async fn require_active_members(tx: &mut TenantTx, ids: &[Uuid]) -> Result<(), ApiError> {
+    let found: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM players p JOIN users u ON u.id = p.user_id
+         WHERE p.community_id = $1 AND p.id = ANY($2)
+           AND p.status = 'active' AND u.email_verified_at IS NOT NULL",
+    )
+    .bind(tx.community_id())
+    .bind(ids)
+    .fetch_one(&mut **tx)
+    .await?;
+    if usize::try_from(found).ok() == Some(ids.len()) {
+        Ok(())
+    } else {
+        Err(ApiError::validation(
+            "every player must be an active, verified member of this community",
+        ))
     }
 }

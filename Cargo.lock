@@ -468,6 +468,7 @@ dependencies = [
  "chrono",
  "clap",
  "cookie",
+ "courtpit-domain",
  "email_address",
  "governor",
  "http-body-util",

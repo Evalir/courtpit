@@ -16,6 +16,7 @@ name = "it"
 path = "tests/it/main.rs"
 
 [dependencies]
+courtpit-domain = { workspace = true, features = ["openapi"] }
 anyhow.workspace = true
 base64.workspace = true
 axum.workspace = true
