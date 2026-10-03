@@ -6,7 +6,10 @@
 #![deny(unsafe_code)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
+pub mod discipline;
 pub mod score;
+
+pub use discipline::Discipline;
 
 pub use score::{
     Deuce, FinalSet, MatchFormat, Score, ScoreError, ScoreSummary, SetScore, Side, validate_score,

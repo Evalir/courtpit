@@ -1,4 +1,8 @@
 //! Postgres enum types shared across handlers.
+#![expect(
+    clippy::option_if_let_else,
+    reason = "fires inside utoipa's `ToSchema` derive for the generic `Page<T>`"
+)]
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

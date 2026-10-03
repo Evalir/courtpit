@@ -115,6 +115,12 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::players::get_player))
         .routes(routes!(api::players::ban_player))
         .routes(routes!(api::players::unban_player))
+        .routes(routes!(
+            api::matches::create_match,
+            api::matches::list_matches
+        ))
+        .routes(routes!(api::matches::get_match))
+        .routes(routes!(api::matches::cancel_match))
         .split_for_parts()
 }
 
