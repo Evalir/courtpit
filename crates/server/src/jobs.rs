@@ -31,13 +31,21 @@ pub enum Job {
         reason = "keeps the `{}` payload shape stable on the wire and in stored rows"
     )]
     Noop {},
+    /// Confirms a reported score nobody answered once its confirmation window has passed.
+    AutoConfirmMatch {
+        /// Community the match belongs to.
+        community_id: Uuid,
+        /// The reported match to confirm.
+        match_id: Uuid,
+    },
 }
 
 impl Job {
     /// Key ensuring at most one pending job of this identity; re-enqueueing reschedules it.
-    pub const fn dedupe_key(&self) -> Option<String> {
+    pub fn dedupe_key(&self) -> Option<String> {
         match self {
             Self::Noop {} => None,
+            Self::AutoConfirmMatch { match_id, .. } => Some(format!("auto_confirm:{match_id}")),
         }
     }
 
@@ -129,16 +137,13 @@ pub async fn claim(
 }
 
 /// Runs one job's handler.
-#[expect(
-    clippy::unused_async,
-    reason = "handlers are async by contract; the only job today has nothing to await"
-)]
 async fn execute(state: &AppState, job: Job) -> anyhow::Result<()> {
     match job {
-        Job::Noop {} => {
-            let _ = state;
-            Ok(())
-        }
+        Job::Noop {} => Ok(()),
+        Job::AutoConfirmMatch {
+            community_id,
+            match_id,
+        } => crate::matches::results::auto_confirm(state, community_id, match_id).await,
     }
 }
 

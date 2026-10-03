@@ -13,6 +13,7 @@ mod common;
 mod directory;
 mod health;
 mod jobs;
+mod match_results;
 mod matches;
 mod oidc;
 mod profiles;
