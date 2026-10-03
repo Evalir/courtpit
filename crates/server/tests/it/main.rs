@@ -16,5 +16,6 @@ mod jobs;
 mod matches;
 mod oidc;
 mod profiles;
+mod proposals;
 mod schema;
 mod tenancy;

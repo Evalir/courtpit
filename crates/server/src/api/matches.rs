@@ -1,11 +1,12 @@
 //! `/api/v1/matches`: friendly match creation, listing and cancellation.
 //!
 //! Scheduling proposals live in `api::proposals`; scores and admin decisions in
-//! `api::match_results`.
+//! `api::match_results`. Creating a match may include the first proposal.
 
 use std::collections::HashSet;
 
 use axum::{Json, extract::State, http::StatusCode};
+use chrono::{DateTime, Utc};
 use courtpit_domain::{Discipline, Event, MatchFormat, MatchStatus};
 use serde::Deserialize;
 use sqlx::{Postgres, QueryBuilder, types::Json as SqlJson};
@@ -20,6 +21,8 @@ use crate::{
     models::{Page, PageParams, paginate},
     players,
 };
+
+use super::proposals;
 
 pub(crate) const MAX_NOTE_LEN: usize = 500;
 
@@ -60,6 +63,10 @@ pub struct CreateMatch {
     pub partner_id: Option<Uuid>,
     /// Side B: one player for singles, two for doubles and mixed.
     pub opponent_ids: Vec<Uuid>,
+    /// Optional first proposal of time and place.
+    pub proposed_time: Option<DateTime<Utc>>,
+    /// Optional place of the first proposal.
+    pub location: Option<String>,
 }
 
 /// Proposes a friendly match to other members. Friendly matches never count for rankings.
@@ -91,6 +98,10 @@ pub async fn create_match(
     if everyone.iter().collect::<HashSet<_>>().len() != everyone.len() {
         return Err(ApiError::validation("a player can only appear once"));
     }
+    if let Some(time) = body.proposed_time {
+        proposals::check_time(&state, time)?;
+    }
+    let location = proposals::location(body.location)?;
     let format = community_format(&player.tenant)?;
 
     let mut tx = player.tenant.begin(&state.db).await?;
@@ -110,9 +121,13 @@ pub async fn create_match(
     .bind(player.id)
     .execute(&mut *tx)
     .await?;
+    if let Some(time) = body.proposed_time {
+        let _ = matches::insert_proposal(&mut tx, id, player.id, time, location.as_deref()).await?;
+    }
     let found = matches::load(&mut tx, id, false).await?;
+    let view = matches::view_with_proposals(&mut tx, found).await?;
     tx.commit().await?;
-    Ok((StatusCode::CREATED, Json(found.into())))
+    Ok((StatusCode::CREATED, Json(view)))
 }
 
 /// Filters for `GET /matches`.
@@ -197,7 +212,7 @@ pub(crate) async fn load_visible(
     }
 }
 
-/// One match.
+/// One match with its scheduling proposals.
 #[utoipa::path(get, path = "/api/v1/matches/{id}", tag = "matches",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 404, body = crate::error::ErrorBody)))]
@@ -211,8 +226,9 @@ pub async fn get_match(
     if !matches::visible_to(&found, &player) {
         return Err(ApiError::NotFound("match"));
     }
+    let view = matches::view_with_proposals(&mut tx, found).await?;
     tx.commit().await?;
-    Ok(Json(found.into()))
+    Ok(Json(view))
 }
 
 /// Body of `POST /matches/{id}/cancel`.
@@ -250,7 +266,16 @@ pub async fn cancel_match(
     .bind(short_text("note", body.note, MAX_NOTE_LEN)?)
     .execute(&mut *tx)
     .await?;
+    let _ = sqlx::query(
+        "UPDATE match_proposals SET status = 'superseded', updated_at = now()
+         WHERE community_id = $1 AND match_id = $2 AND status = 'open'",
+    )
+    .bind(tx.community_id())
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
     let found = matches::load(&mut tx, id, false).await?;
+    let view = matches::view_with_proposals(&mut tx, found).await?;
     tx.commit().await?;
-    Ok(Json(found.into()))
+    Ok(Json(view))
 }
