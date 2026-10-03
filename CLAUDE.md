@@ -23,7 +23,7 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   status. Clients switch on `code`. Never leak internal error text (`Internal` logs, then says
   "internal error").
 - **No `unwrap()`/`expect()` in non-test server code** (clippy `unwrap_used` is denied via
-  `-D warnings`). `#![deny(unsafe_code)]` in every crate.
+  `-D warnings`). `unsafe_code` is denied workspace-wide.
 - **Tenancy**: every tenant-scoped table has `community_id` and RLS policies keyed on
   `nullif(current_setting('app.community_id', true), '')::uuid`. Handlers take `Tenant`; all
   tenant-scoped queries run inside `TenantTx`, which does `SET LOCAL app.community_id` and
@@ -59,7 +59,20 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 ```
+
+## Lints
+- The strict set lives in `[workspace.lints]` (root `Cargo.toml`, borrowed from init4's
+  spellbook/jay/signet-sdk) plus thresholds in `clippy.toml`. Highlights: `missing_docs` on
+  every public item, `unreachable_pub` (use `pub(crate)`, including in `tests/it`),
+  `unused_results` (bind ignored values with `let _ =`), `min_ident_chars` (no `|e|`/`|r|`),
+  `missing_const_for_fn`, `mod_module_files` (`foo.rs` + `foo/`, never `foo/mod.rs`),
+  `too_many_lines` (100), `rustdoc::all`.
+- Each library crate has `#![cfg_attr(not(test), warn(unused_crate_dependencies))]`: add a
+  dependency in the PR that first uses it.
+- Silence a lint at the narrowest scope with `#[expect(lint, reason = "...")]`; bare
+  `#[allow]` is itself a lint error.
 
 ## Stacked PRs
 - Linear stack `cp/01-…`, `cp/02-…`; each branch starts at the previous branch's tip; PR N

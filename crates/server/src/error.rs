@@ -43,7 +43,7 @@ pub enum ApiError {
 
 impl ApiError {
     /// HTTP status for this error.
-    pub fn status(&self) -> StatusCode {
+    pub const fn status(&self) -> StatusCode {
         match self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
@@ -57,7 +57,7 @@ impl ApiError {
     }
 
     /// Stable machine-readable code; clients switch on it.
-    pub fn code(&self) -> &'static str {
+    pub const fn code(&self) -> &'static str {
         match self {
             Self::BadRequest(_) => "bad_request",
             Self::Validation(_) => "validation_failed",
@@ -95,6 +95,7 @@ impl From<anyhow::Error> for ApiError {
 /// The JSON body of every error response.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorBody {
+    /// What went wrong.
     pub error: ErrorDetail,
 }
 

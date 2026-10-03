@@ -16,12 +16,10 @@ name = "it"
 path = "tests/it/main.rs"
 
 [dependencies]
-courtpit-domain = { workspace = true, features = ["openapi"] }
 anyhow.workspace = true
 axum.workspace = true
 clap.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -31,6 +29,7 @@ utoipa-axum.workspace = true
 tower-http.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 http-body-util.workspace = true
 tower.workspace = true
 

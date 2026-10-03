@@ -1,2 +1,14 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+
+# Flag values that are expensive to move on the stack: large error enums returned by value
+# fatten every `Result` in a call chain (`clippy::result_large_err` fires above this).
+large-error-threshold = 256
+too-large-for-stack = 128
+
+# Hard ceiling for `clippy::too_many_lines`; aim well below it.
+too-many-lines-threshold = 100
+
+# `sqlx` forces `tracing/log` on, so every `tracing` event macro expands to two paths and
+# costs several points; 30 keeps a handful of log lines from tripping the lint on its own.
+cognitive-complexity-threshold = 30

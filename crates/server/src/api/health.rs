@@ -5,7 +5,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 /// Health check response.
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct Health {
     /// Always `"ok"` when the process is serving.
     pub status: &'static str,
