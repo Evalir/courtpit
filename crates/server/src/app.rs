@@ -93,6 +93,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
 /// The complete application router, ready to serve.
 pub fn router(state: AppState) -> Router {
     let (api, openapi) = api_router();
+    let client_ip_source = state.config.client_ip_source.clone();
     let openapi = Arc::new(openapi);
     let request_id = HeaderName::from_static("x-request-id");
     api.route(
@@ -105,5 +106,6 @@ pub fn router(state: AppState) -> Router {
     .layer(PropagateRequestIdLayer::new(request_id.clone()))
     .layer(TraceLayer::new_for_http())
     .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
+    .layer(client_ip_source.into_extension())
     .with_state(state)
 }

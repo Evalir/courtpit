@@ -3,20 +3,24 @@
 use axum::{
     Json,
     extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use chrono::{DateTime, Duration, Utc};
+use email_address::{EmailAddress, Options};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use subtle::ConstantTimeEq;
+
 use crate::{
     ApiError, ApiResult, AppState, Tenant,
     auth::{
         ClientIp, CurrentPlayer, CurrentUser, SESSION_COOKIE, create_session, ensure_player,
-        secrets::{self, ct_eq, hash_code, new_code},
+        secrets::{hash_code, new_code},
         wants_cookie,
     },
     mailer::Email,
@@ -32,18 +36,15 @@ const CODES_PER_EMAIL_PER_HOUR: i64 = 5;
 const MIN_PASSWORD_LEN: usize = 10;
 const MAX_PASSWORD_LEN: usize = 256;
 
-/// Normalises and sanity-checks an email address.
+/// Trims and validates an email address (RFC 5322 addr-spec with a dotted domain).
 pub(crate) fn normalize_email(raw: &str) -> Result<String, ApiError> {
-    let email = raw.trim().to_owned();
-    let valid = email.len() <= 254
-        && email.split_once('@').is_some_and(|(local, domain)| {
-            !local.is_empty() && domain.contains('.') && !domain.contains('@')
-        });
-    if valid {
-        Ok(email)
-    } else {
-        Err(ApiError::validation("invalid email address"))
-    }
+    let options = Options::default()
+        .with_required_tld()
+        .without_display_text()
+        .without_domain_literal();
+    EmailAddress::parse_with_options(raw.trim(), options)
+        .map(|email| email.as_str().to_owned())
+        .map_err(|_| ApiError::validation("invalid email address"))
 }
 
 /// Body of `POST /auth/otp/request`.
@@ -79,9 +80,7 @@ pub async fn request_otp(
     Json(body): Json<OtpRequest>,
 ) -> ApiResult<(StatusCode, Json<Accepted>)> {
     let email = normalize_email(&body.email)?;
-    state
-        .limiter
-        .check(&format!("otp-ip:{ip}"), state.config.auth_ip_limit_per_hour)?;
+    state.limiter.check(&format!("otp-ip:{ip}"))?;
 
     let mut tx = state.db.begin().await?;
     let (user_id, verified_at): (Uuid, Option<DateTime<Utc>>) = sqlx::query_as(
@@ -196,10 +195,7 @@ pub async fn verify_otp(
     headers: HeaderMap,
     Json(body): Json<OtpVerify>,
 ) -> ApiResult<Response> {
-    state.limiter.check(
-        &format!("verify-ip:{ip}"),
-        state.config.auth_ip_limit_per_hour,
-    )?;
+    state.limiter.check(&format!("verify-ip:{ip}"))?;
     let email = normalize_email(&body.email)?;
     let mut tx = state.db.begin().await?;
     let user: Option<(Uuid, String)> = sqlx::query_as(
@@ -220,7 +216,10 @@ pub async fn verify_otp(
     if code_row.expires_at <= Utc::now() || code_row.attempts >= MAX_CODE_ATTEMPTS {
         return Err(ApiError::InvalidCredentials);
     }
-    if !ct_eq(&hash_code(code_row.id, &body.code), &code_row.code_hash) {
+    let matches: bool = hash_code(code_row.id, &body.code)
+        .ct_eq(&code_row.code_hash)
+        .into();
+    if !matches {
         let _ = sqlx::query(
             "UPDATE email_codes SET attempts = attempts + 1,
                 consumed_at = CASE WHEN attempts + 1 >= $2 THEN now() END
@@ -271,27 +270,24 @@ pub(crate) async fn finish_login(
     let ttl = Duration::days(state.config.session_ttl_days);
     let (token, expires_at) = create_session(&state.db, user_id, device_label, ttl).await?;
     let cookie = wants_cookie(headers);
-    let mut res = Json(AuthSession {
+    let body = Json(AuthSession {
         token: (!cookie).then(|| token.clone()),
         expires_at,
         user_id,
         player_id,
-    })
-    .into_response();
-    if cookie {
-        let secure = if state.config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let value = format!(
-            "{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{secure}",
-            ttl.num_seconds()
-        );
-        let value = HeaderValue::from_str(&value).map_err(|err| ApiError::Internal(err.into()))?;
-        let _ = res.headers_mut().insert(header::SET_COOKIE, value);
+    });
+    if !cookie {
+        return Ok(body.into_response());
     }
-    Ok(res)
+    let jar = CookieJar::new().add(
+        Cookie::build((SESSION_COOKIE, token))
+            .path("/")
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .max_age(cookie::time::Duration::seconds(ttl.num_seconds()))
+            .secure(state.config.cookie_secure),
+    );
+    Ok((jar, body).into_response())
 }
 
 /// Body of `POST /auth/password/login`.
@@ -333,14 +329,10 @@ pub async fn password_login(
     Json(body): Json<PasswordLogin>,
 ) -> ApiResult<Response> {
     let email = normalize_email(&body.email)?;
-    state.limiter.check(
-        &format!("login-ip:{ip}"),
-        state.config.auth_ip_limit_per_hour,
-    )?;
-    state.limiter.check(
-        &format!("login-email:{}", email.to_lowercase()),
-        state.config.auth_ip_limit_per_hour,
-    )?;
+    state.limiter.check(&format!("login-ip:{ip}"))?;
+    state
+        .limiter
+        .check(&format!("login-email:{}", email.to_lowercase()))?;
     let user: Option<LoginRow> = sqlx::query_as(
         "SELECT id, email, password_hash, email_verified_at FROM users
          WHERE lower(email) = lower($1) AND deleted_at IS NULL",
@@ -358,12 +350,10 @@ pub async fn password_login(
         return Err(ApiError::InvalidCredentials);
     };
     let password = body.password;
-    let ok = tokio::task::spawn_blocking(move || secrets::verify_password(&password, &phc))
+    tokio::task::spawn_blocking(move || password_auth::verify_password(password, &phc))
         .await
-        .map_err(|err| ApiError::Internal(err.into()))?;
-    if !ok {
-        return Err(ApiError::InvalidCredentials);
-    }
+        .map_err(|err| ApiError::Internal(err.into()))?
+        .map_err(|_| ApiError::InvalidCredentials)?;
     finish_login(
         &state,
         &tenant,
@@ -403,9 +393,9 @@ pub async fn set_password(
         )));
     }
     let password = body.password;
-    let phc = tokio::task::spawn_blocking(move || secrets::hash_password(&password))
+    let phc = tokio::task::spawn_blocking(move || password_auth::generate_hash(password))
         .await
-        .map_err(|err| ApiError::Internal(err.into()))??;
+        .map_err(|err| ApiError::Internal(err.into()))?;
     let _ = sqlx::query("UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1")
         .bind(user.user_id)
         .bind(phc)
@@ -422,17 +412,16 @@ pub async fn set_password(
     security(("bearer" = [])),
     responses((status = 204), (status = 401, body = crate::error::ErrorBody))
 )]
-pub async fn logout(State(state): State<AppState>, user: CurrentUser) -> ApiResult<Response> {
+pub async fn logout(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> ApiResult<(CookieJar, StatusCode)> {
     let _ = sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
         .bind(&user.session_hash)
         .execute(&state.db)
         .await?;
-    let mut res = StatusCode::NO_CONTENT.into_response();
-    let _ = res.headers_mut().insert(
-        header::SET_COOKIE,
-        HeaderValue::from_static("courtpit_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),
-    );
-    Ok(res)
+    let jar = CookieJar::new().remove(Cookie::build(SESSION_COOKIE).path("/"));
+    Ok((jar, StatusCode::NO_CONTENT))
 }
 
 /// Who the session belongs to in this community.

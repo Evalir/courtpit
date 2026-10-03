@@ -2,6 +2,8 @@
 
 use std::net::SocketAddr;
 
+use axum_client_ip::ClientIpSource;
+
 use crate::db::DbConfig;
 
 /// Configuration for `courtpit-server serve`. Every field has an env var; see `.env.example`.
@@ -16,9 +18,10 @@ pub struct Config {
     /// Seconds a resolved community stays cached.
     #[arg(long, env = "COURTPIT_TENANT_CACHE_TTL_SECS", default_value_t = 60)]
     pub tenant_cache_ttl_secs: u64,
-    /// Trust `X-Forwarded-For` for the client IP (only behind a proxy you control).
-    #[arg(long, env = "COURTPIT_TRUST_PROXY")]
-    pub trust_proxy: bool,
+    /// Where the client IP comes from: `ConnectInfo` (the socket peer) unless behind a proxy you
+    /// control, then e.g. `FlyClientIp` or `RightmostXForwardedFor`.
+    #[arg(long, env = "COURTPIT_CLIENT_IP_SOURCE", default_value = "ConnectInfo")]
+    pub client_ip_source: ClientIpSource,
     /// Session lifetime in days.
     #[arg(long, env = "COURTPIT_SESSION_TTL_DAYS", default_value_t = 30)]
     pub session_ttl_days: i64,
@@ -62,7 +65,7 @@ impl Default for Config {
             bind: SocketAddr::from(([0, 0, 0, 0], 8080)),
             base_domain: "courtpit.app".to_owned(),
             tenant_cache_ttl_secs: 60,
-            trust_proxy: false,
+            client_ip_source: ClientIpSource::ConnectInfo,
             session_ttl_days: 30,
             cookie_secure: true,
             auth_ip_limit_per_hour: 30,

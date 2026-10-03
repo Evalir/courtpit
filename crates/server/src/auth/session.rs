@@ -1,10 +1,14 @@
 //! Sessions and the `CurrentUser` / `CurrentPlayer` / `ClientIp` extractors.
 
-use std::net::SocketAddr;
+use std::net::IpAddr;
 
 use axum::{
-    extract::{ConnectInfo, FromRequestParts},
-    http::{HeaderMap, header, request::Parts},
+    extract::FromRequestParts,
+    http::{HeaderMap, request::Parts},
+};
+use axum_extra::{
+    extract::cookie::CookieJar,
+    headers::{Authorization, HeaderMapExt, authorization::Bearer},
 };
 use chrono::{DateTime, Duration, Utc};
 use sqlx::{FromRow, PgConnection, PgPool};
@@ -81,23 +85,12 @@ pub async fn ensure_player(
 }
 
 fn bearer_or_cookie(headers: &HeaderMap) -> Option<String> {
-    if let Some(auth) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        && let Some(token) = auth
-            .strip_prefix("Bearer ")
-            .or_else(|| auth.strip_prefix("bearer "))
-    {
-        return Some(token.trim().to_owned());
+    if let Some(Authorization(bearer)) = headers.typed_get::<Authorization<Bearer>>() {
+        return Some(bearer.token().to_owned());
     }
-    headers
-        .get_all(header::COOKIE)
-        .iter()
-        .filter_map(|value| value.to_str().ok())
-        .flat_map(|value| value.split(';'))
-        .filter_map(|pair| pair.trim().split_once('='))
-        .find(|(name, _)| *name == SESSION_COOKIE)
-        .map(|(_, value)| value.to_owned())
+    CookieJar::from_headers(headers)
+        .get(SESSION_COOKIE)
+        .map(|cookie| cookie.value().to_owned())
 }
 
 /// The authenticated user (global identity), from a bearer token or the session cookie.
@@ -221,28 +214,19 @@ impl FromRequestParts<AppState> for CurrentPlayer {
     }
 }
 
-/// Best-effort client IP for rate limiting: `X-Forwarded-For` when behind a trusted proxy,
-/// otherwise the socket peer, otherwise `"unknown"`.
-#[derive(Debug, Clone)]
-pub struct ClientIp(pub String);
+/// Client IP for rate limiting, from the source configured by `COURTPIT_CLIENT_IP_SOURCE`
+/// (see [`axum_client_ip::ClientIpSource`]). Rejections render as our usual error body.
+#[derive(Debug, Clone, Copy)]
+pub struct ClientIp(pub IpAddr);
 
 impl FromRequestParts<AppState> for ClientIp {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        if state.config.trust_proxy
-            && let Some(ip) = parts
-                .headers
-                .get("x-forwarded-for")
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.split(',').next())
-        {
-            return Ok(Self(ip.trim().to_owned()));
-        }
-        let peer = parts
-            .extensions
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|ci| ci.0.ip().to_string());
-        Ok(Self(peer.unwrap_or_else(|| "unknown".to_owned())))
+        let axum_client_ip::ClientIp(ip) =
+            axum_client_ip::ClientIp::from_request_parts(parts, state)
+                .await
+                .map_err(|err| ApiError::Internal(err.into()))?;
+        Ok(Self(ip))
     }
 }

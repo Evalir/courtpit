@@ -3,14 +3,16 @@
 
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
+    net::SocketAddr,
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
 use axum::{
-    Router,
+    Extension, Router,
     body::Body,
+    extract::ConnectInfo,
     http::{HeaderMap, Method, Request, StatusCode, header},
 };
 use courtpit_server::{
@@ -173,7 +175,9 @@ impl TestApp {
         let db = db::connect_with(options, 5).await.unwrap();
         let mailer = Arc::new(LogMailer::default());
         let state = AppState::new(config, db.clone(), mailer.clone());
-        let router = courtpit_server::router(state.clone());
+        // `oneshot` has no socket peer; stand in for the `ConnectInfo` that `serve` provides.
+        let peer = ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0)));
+        let router = courtpit_server::router(state.clone()).layer(Extension(peer));
         Self {
             state,
             router,
