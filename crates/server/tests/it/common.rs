@@ -3,14 +3,16 @@
 
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
+    net::SocketAddr,
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
 use axum::{
-    Router,
+    Extension, Router,
     body::Body,
+    extract::ConnectInfo,
     http::{HeaderMap, Method, Request, StatusCode, header},
 };
 use courtpit_server::{
@@ -21,10 +23,11 @@ use courtpit_server::{
     tenancy::Community,
 };
 use http_body_util::BodyExt;
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::{Connection, Executor, PgConnection, PgPool, postgres::PgConnectOptions};
 use tokio::sync::OnceCell;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 const DEFAULT_URL: &str = "postgres://courtpit:courtpit@127.0.0.1/courtpit";
 /// Advisory lock key serialising template creation across test processes.
@@ -114,7 +117,7 @@ async fn template() -> &'static str {
 /// Creates a fresh database for one test, cloned from the migrated template.
 async fn fresh_database() -> PgConnectOptions {
     let template = template().await;
-    let name = format!("courtpit_test_{}", uuid::Uuid::now_v7().simple());
+    let name = format!("courtpit_test_{}", Uuid::now_v7().simple());
     let mut conn = PgConnection::connect_with(&admin_options()).await.unwrap();
     let sql = format!(r#"CREATE DATABASE "{name}" TEMPLATE "{template}""#);
     let mut attempts = 0;
@@ -141,6 +144,16 @@ pub(crate) struct TestApp {
     pub mailer: Arc<LogMailer>,
 }
 
+/// A signed-in test user.
+#[derive(Debug, Clone)]
+pub(crate) struct Session {
+    pub token: String,
+    pub user_id: Uuid,
+    pub player_id: Uuid,
+    pub email: String,
+    pub community: String,
+}
+
 /// Test defaults: generous rate limits, plain-HTTP cookies.
 pub(crate) fn test_config() -> Config {
     Config {
@@ -162,13 +175,60 @@ impl TestApp {
         let db = db::connect_with(options, 5).await.unwrap();
         let mailer = Arc::new(LogMailer::default());
         let state = AppState::new(config, db.clone(), mailer.clone());
-        let router = courtpit_server::router(state.clone());
+        // `oneshot` has no socket peer; stand in for the `ConnectInfo` that `serve` provides.
+        let peer = ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0)));
+        let router = courtpit_server::router(state.clone()).layer(Extension(peer));
         Self {
             state,
             router,
             db,
             mailer,
         }
+    }
+
+    /// The 6-digit code in the last email sent to `email`.
+    pub(crate) fn last_code(&self, email: &str) -> String {
+        let mail = self.mailer.last_to(email).expect("no email sent");
+        mail.text
+            .split(|ch: char| !ch.is_ascii_digit())
+            .find(|w| w.len() == 6)
+            .expect("no code in email")
+            .to_owned()
+    }
+
+    /// Signs `email` in to `community` through the OTP flow.
+    pub(crate) async fn login(&self, email: &str, community: &str) -> Session {
+        let _ = self
+            .post("/api/v1/auth/otp/request")
+            .community(community)
+            .json(json!({ "email": email }))
+            .send()
+            .await
+            .expect(StatusCode::ACCEPTED);
+        let code = self.last_code(email);
+        let body = self
+            .post("/api/v1/auth/otp/verify")
+            .community(community)
+            .json(json!({ "email": email, "code": code }))
+            .send()
+            .await
+            .expect(StatusCode::OK);
+        Session {
+            token: body["token"].as_str().unwrap().to_owned(),
+            user_id: body["user_id"].as_str().unwrap().parse().unwrap(),
+            player_id: body["player_id"].as_str().unwrap().parse().unwrap(),
+            email: email.to_owned(),
+            community: community.to_owned(),
+        }
+    }
+
+    /// Promotes a player to community admin.
+    pub(crate) async fn make_admin(&self, session: &Session) {
+        let _ = sqlx::query("UPDATE players SET role = 'admin' WHERE id = $1")
+            .bind(session.player_id)
+            .execute(&self.db)
+            .await
+            .unwrap();
     }
 
     /// Starts building a request.
@@ -237,6 +297,16 @@ pub(crate) struct Req<'a> {
 }
 
 impl Req<'_> {
+    /// Authenticates as `session` and scopes to its community.
+    pub(crate) fn as_(self, session: &Session) -> Self {
+        let community = session.community.clone();
+        self.bearer(&session.token).community(&community)
+    }
+
+    pub(crate) fn bearer(self, token: &str) -> Self {
+        self.header("authorization", &format!("Bearer {token}"))
+    }
+
     /// Scopes the request to a community via the tenant header.
     pub(crate) fn community(self, slug: &str) -> Self {
         self.header("x-courtpit-community", slug)

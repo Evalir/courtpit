@@ -24,6 +24,9 @@ pub enum ApiError {
     /// Missing or invalid credentials.
     #[error("authentication required")]
     Unauthorized,
+    /// Wrong or expired code, or wrong email/password.
+    #[error("invalid or expired credentials")]
+    InvalidCredentials,
     /// Authenticated but not allowed.
     #[error("{0}")]
     Forbidden(String),
@@ -47,7 +50,7 @@ impl ApiError {
         match self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Unauthorized | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
@@ -62,6 +65,7 @@ impl ApiError {
             Self::BadRequest(_) => "bad_request",
             Self::Validation(_) => "validation_failed",
             Self::Unauthorized => "unauthorized",
+            Self::InvalidCredentials => "invalid_credentials",
             Self::Forbidden(_) => "forbidden",
             Self::NotFound(_) => "not_found",
             Self::Conflict(_) => "conflict",

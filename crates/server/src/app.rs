@@ -81,12 +81,19 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::health::healthz))
         .routes(routes!(api::health::readyz))
         .routes(routes!(api::tenant::get_tenant))
+        .routes(routes!(api::auth::request_otp))
+        .routes(routes!(api::auth::verify_otp))
+        .routes(routes!(api::auth::password_login))
+        .routes(routes!(api::auth::set_password))
+        .routes(routes!(api::auth::logout))
+        .routes(routes!(api::auth::session))
         .split_for_parts()
 }
 
 /// The complete application router, ready to serve.
 pub fn router(state: AppState) -> Router {
     let (api, openapi) = api_router();
+    let client_ip_source = state.config.client_ip_source.clone();
     let openapi = Arc::new(openapi);
     let request_id = HeaderName::from_static("x-request-id");
     api.route(
@@ -99,5 +106,6 @@ pub fn router(state: AppState) -> Router {
     .layer(PropagateRequestIdLayer::new(request_id.clone()))
     .layer(TraceLayer::new_for_http())
     .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
+    .layer(client_ip_source.into_extension())
     .with_state(state)
 }
