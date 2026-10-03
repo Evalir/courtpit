@@ -11,7 +11,14 @@ use tower_http::{
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::{api, config::Config, error::ErrorBody, tenancy::TenantCache};
+use crate::{
+    api,
+    auth::rate_limit::RateLimiter,
+    config::{Config, MailerKind},
+    error::ErrorBody,
+    mailer::{LogMailer, Mailer, ResendMailer},
+    tenancy::TenantCache,
+};
 
 /// State shared by every handler. Cheap to clone.
 #[derive(Debug, Clone)]
@@ -22,17 +29,38 @@ pub struct AppState {
     pub db: PgPool,
     /// Communities by slug / custom domain.
     pub tenants: TenantCache,
+    /// Outbound email.
+    pub mailer: Arc<dyn Mailer>,
+    /// Per-IP / per-key auth rate limits (`auth_ip_limit_per_hour`).
+    pub limiter: RateLimiter,
 }
 
 impl AppState {
-    /// Builds state from configuration and a connected pool.
-    pub fn new(config: Config, db: PgPool) -> Self {
+    /// Builds state with an explicit mailer (tests pass a shared [`LogMailer`]).
+    pub fn new(config: Config, db: PgPool, mailer: Arc<dyn Mailer>) -> Self {
         let tenants = TenantCache::new(Duration::from_secs(config.tenant_cache_ttl_secs));
+        let limiter = RateLimiter::per_hour(config.auth_ip_limit_per_hour);
         Self {
             config: Arc::new(config),
             db,
             tenants,
+            mailer,
+            limiter,
         }
+    }
+
+    /// Builds state, choosing the mailer from configuration.
+    pub fn from_config(config: Config, db: PgPool) -> anyhow::Result<Self> {
+        let mailer: Arc<dyn Mailer> = match config.mailer {
+            MailerKind::Log => Arc::new(LogMailer::default()),
+            MailerKind::Resend => {
+                let key = config.resend_api_key.clone().ok_or_else(|| {
+                    anyhow::anyhow!("RESEND_API_KEY is required with --mailer resend")
+                })?;
+                Arc::new(ResendMailer::new(key, config.email_from.clone()))
+            }
+        };
+        Ok(Self::new(config, db, mailer))
     }
 }
 

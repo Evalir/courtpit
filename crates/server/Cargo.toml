@@ -17,9 +17,14 @@ path = "tests/it/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
 axum.workspace = true
 chrono.workspace = true
+governor.workspace = true
 moka.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+sha2.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
