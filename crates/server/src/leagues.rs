@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 use crate::{ApiError, Tenant, TenantTx, matches::DbDiscipline};
 
+pub mod entries;
+
 /// Lifecycle of a league season.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
 #[sqlx(type_name = "league_status", rename_all = "lowercase")]
