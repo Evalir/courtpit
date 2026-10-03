@@ -106,11 +106,14 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .with_context(|| format!("binding {}", config.bind))?;
     let pool = db::connect(&config.db).await?;
     tracing::info!(addr = %config.bind, "listening");
-    let app = router(AppState::new(config, pool));
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("serving HTTP")
+    let app = router(AppState::from_config(config, pool)?);
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("serving HTTP")
 }
 
 async fn shutdown_signal() {

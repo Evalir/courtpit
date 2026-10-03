@@ -4,6 +4,7 @@
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
@@ -16,6 +17,7 @@ use courtpit_server::{
     AppState, Config,
     communities::{Branding, CreatedCommunity, NewCommunity, create_community},
     db,
+    mailer::LogMailer,
     tenancy::Community,
 };
 use http_body_util::BodyExt;
@@ -136,16 +138,37 @@ pub(crate) struct TestApp {
     pub state: AppState,
     pub router: Router,
     pub db: PgPool,
+    pub mailer: Arc<LogMailer>,
+}
+
+/// Test defaults: generous rate limits, plain-HTTP cookies.
+pub(crate) fn test_config() -> Config {
+    Config {
+        auth_ip_limit_per_hour: 10_000,
+        cookie_secure: false,
+        ..Config::default()
+    }
 }
 
 impl TestApp {
     /// Spawns the app against a fresh, migrated database.
     pub(crate) async fn spawn() -> Self {
+        Self::spawn_with(test_config()).await
+    }
+
+    /// Spawns with a custom configuration.
+    pub(crate) async fn spawn_with(config: Config) -> Self {
         let options = fresh_database().await;
         let db = db::connect_with(options, 5).await.unwrap();
-        let state = AppState::new(Config::default(), db.clone());
+        let mailer = Arc::new(LogMailer::default());
+        let state = AppState::new(config, db.clone(), mailer.clone());
         let router = courtpit_server::router(state.clone());
-        Self { state, router, db }
+        Self {
+            state,
+            router,
+            db,
+            mailer,
+        }
     }
 
     /// Starts building a request.
