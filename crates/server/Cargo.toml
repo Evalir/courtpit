@@ -18,8 +18,11 @@ path = "tests/it/main.rs"
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+chrono.workspace = true
+moka.workspace = true
 clap.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -27,11 +30,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 utoipa.workspace = true
 utoipa-axum.workspace = true
+uuid.workspace = true
 tower-http.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
-uuid.workspace = true
 http-body-util.workspace = true
 tower.workspace = true
 

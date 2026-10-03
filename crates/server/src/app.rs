@@ -1,6 +1,6 @@
 //! Router assembly and shared application state.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use axum::{Json, Router, http::HeaderName, routing::get};
 use sqlx::PgPool;
@@ -11,7 +11,7 @@ use tower_http::{
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::{api, config::Config, error::ErrorBody};
+use crate::{api, config::Config, error::ErrorBody, tenancy::TenantCache};
 
 /// State shared by every handler. Cheap to clone.
 #[derive(Debug, Clone)]
@@ -20,14 +20,18 @@ pub struct AppState {
     pub config: Arc<Config>,
     /// Postgres pool. Tenant-scoped queries must go through `TenantTx`.
     pub db: PgPool,
+    /// Communities by slug / custom domain.
+    pub tenants: TenantCache,
 }
 
 impl AppState {
     /// Builds state from configuration and a connected pool.
     pub fn new(config: Config, db: PgPool) -> Self {
+        let tenants = TenantCache::new(Duration::from_secs(config.tenant_cache_ttl_secs));
         Self {
             config: Arc::new(config),
             db,
+            tenants,
         }
     }
 }
@@ -48,6 +52,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(api::health::healthz))
         .routes(routes!(api::health::readyz))
+        .routes(routes!(api::tenant::get_tenant))
         .split_for_parts()
 }
 

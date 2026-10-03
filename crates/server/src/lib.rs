@@ -7,11 +7,14 @@ use tokio as _;
 
 pub mod api;
 pub mod app;
+pub mod communities;
 pub mod config;
 pub mod db;
 pub mod error;
 pub mod telemetry;
+pub mod tenancy;
 
 pub use app::{AppState, router};
 pub use config::Config;
 pub use error::{ApiError, ApiResult};
+pub use tenancy::{Tenant, TenantTx};

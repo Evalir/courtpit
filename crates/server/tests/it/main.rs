@@ -11,3 +11,4 @@
 mod common;
 mod health;
 mod schema;
+mod tenancy;
