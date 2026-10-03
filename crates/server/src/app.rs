@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use axum::{Json, Router, http::HeaderName, routing::get};
+use sqlx::PgPool;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
@@ -17,13 +18,16 @@ use crate::{api, config::Config, error::ErrorBody};
 pub struct AppState {
     /// Runtime configuration.
     pub config: Arc<Config>,
+    /// Postgres pool. Tenant-scoped queries must go through `TenantTx`.
+    pub db: PgPool,
 }
 
 impl AppState {
-    /// Builds state from configuration.
-    pub fn new(config: Config) -> Self {
+    /// Builds state from configuration and a connected pool.
+    pub fn new(config: Config, db: PgPool) -> Self {
         Self {
             config: Arc::new(config),
+            db,
         }
     }
 }
@@ -43,6 +47,7 @@ struct ApiDoc;
 pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(api::health::healthz))
+        .routes(routes!(api::health::readyz))
         .split_for_parts()
 }
 

@@ -1,26 +1,36 @@
-use axum::http::{Method, StatusCode};
+use axum::http::StatusCode;
 
 use crate::common::TestApp;
 
 #[tokio::test]
 async fn healthz_ok() {
-    let app = TestApp::new();
-    let (status, body) = app.send(Method::GET, "/healthz").await;
-    assert_eq!(status, StatusCode::OK);
+    let app = TestApp::spawn().await;
+    let body = app.get("/healthz").send().await.expect(StatusCode::OK);
     assert_eq!(body["status"], "ok");
 }
 
 #[tokio::test]
-async fn openapi_lists_healthz() {
-    let app = TestApp::new();
-    let (status, body) = app.send(Method::GET, "/api/v1/openapi.json").await;
-    assert_eq!(status, StatusCode::OK);
+async fn readyz_checks_database() {
+    let app = TestApp::spawn().await;
+    let body = app.get("/readyz").send().await.expect(StatusCode::OK);
+    assert_eq!(body["status"], "ok");
+}
+
+#[tokio::test]
+async fn openapi_lists_health_endpoints() {
+    let app = TestApp::spawn().await;
+    let body = app
+        .get("/api/v1/openapi.json")
+        .send()
+        .await
+        .expect(StatusCode::OK);
     assert!(body["paths"]["/healthz"]["get"].is_object());
+    assert!(body["paths"]["/readyz"]["get"].is_object());
 }
 
 #[tokio::test]
 async fn unknown_route_is_404() {
-    let app = TestApp::new();
-    let (status, _) = app.send(Method::GET, "/nope").await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    let app = TestApp::spawn().await;
+    let res = app.get("/nope").send().await;
+    assert_eq!(res.status, StatusCode::NOT_FOUND);
 }

@@ -17,6 +17,9 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   `#[derive(FromRow)]`. Do **not** use `query!`/`query_as!` macros (their `.sqlx` offline data
   churns on every stacked PR). Correctness comes from integration tests against real Postgres.
 - **IDs are UUID v7**, generated in Rust (`Uuid::now_v7()`); Postgres 16 has no `uuidv7()`.
+- **Enums** are Postgres `CREATE TYPE … AS ENUM` types mapped with `#[derive(sqlx::Type)]`
+  (`rename_all = "snake_case"`/`"lowercase"`), not text + CHECK. Adding a value is
+  `ALTER TYPE … ADD VALUE` in a new migration. Exception: `jobs.kind` is free text (an open set).
 - **Time**: `chrono::DateTime<Utc>` / `timestamptz` everywhere.
 - **Errors**: return `ApiError`; every error renders as
   `{ "error": { "code": "<stable_code>", "message": "<human text>" } }` with the matching HTTP
@@ -33,7 +36,8 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
 - **OpenAPI**: every handler has `#[utoipa::path]` and is registered with `routes!` in
   `app::api_router`, so `/api/v1/openapi.json` stays complete.
 - **Lists** use cursor pagination (`?cursor=&limit=`, response `{ items, next_cursor }`).
-- **Money**: no money columns in steps 1–3 (only the nullable `leagues.entry_fee_minor` seam).
+- **Money**: no payment logic in steps 1–3. The spec's payment columns exist as an unused
+  seam (`communities.currency/stripe_*/platform_fee_*`, `leagues.entry_fee_minor`).
 
 ## Local environment
 - Postgres 16: `DATABASE_URL=postgres://courtpit:courtpit@127.0.0.1/courtpit` (see `.env.example`;

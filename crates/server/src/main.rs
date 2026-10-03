@@ -3,7 +3,7 @@
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use courtpit_server::{AppState, Config, router, telemetry};
+use courtpit_server::{AppState, Config, db, router, telemetry};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -30,7 +30,7 @@ enum Command {
     /// Run the HTTP API (and, later, the background job loop).
     Serve(Config),
     /// Apply pending database migrations.
-    Migrate,
+    Migrate(db::DbConfig),
     /// Create a community (tenant).
     CreateCommunity,
 }
@@ -41,7 +41,12 @@ async fn main() -> anyhow::Result<()> {
     telemetry::init(cli.log_format);
     match cli.command {
         Command::Serve(config) => serve(config).await,
-        Command::Migrate => anyhow::bail!("`migrate` is not implemented yet"),
+        Command::Migrate(cfg) => {
+            let pool = db::connect(&cfg).await?;
+            db::migrate(&pool).await?;
+            tracing::info!("migrations applied");
+            Ok(())
+        }
         Command::CreateCommunity => anyhow::bail!("`create-community` is not implemented yet"),
     }
 }
@@ -50,8 +55,9 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(config.bind)
         .await
         .with_context(|| format!("binding {}", config.bind))?;
+    let pool = db::connect(&config.db).await?;
     tracing::info!(addr = %config.bind, "listening");
-    let app = router(AppState::new(config));
+    let app = router(AppState::new(config, pool));
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await

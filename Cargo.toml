@@ -102,16 +102,20 @@ all = "warn"
 [workspace.dependencies]
 courtpit-domain = { path = "crates/domain" }
 anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 axum = "0.8"
 clap = { version = "4", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rust_decimal = { version = "1", features = ["serde-str"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "rust_decimal", "macros", "migrate", "derive"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-utoipa = { version = "5", features = ["uuid", "chrono"] }
+utoipa = { version = "5", features = ["uuid", "chrono", "decimal"] }
+uuid = { version = "1", features = ["v7", "serde"] }
 utoipa-axum = "0.2"
 tower-http = { version = "0.6", features = ["trace", "request-id", "util"] }
