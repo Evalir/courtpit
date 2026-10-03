@@ -23,6 +23,7 @@ pub mod models;
 mod openapi;
 pub mod players;
 pub mod rankings;
+pub mod seed;
 pub mod telemetry;
 pub mod tenancy;
 

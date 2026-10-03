@@ -26,4 +26,5 @@ mod profiles;
 mod proposals;
 mod rankings;
 mod schema;
+mod seed;
 mod tenancy;
