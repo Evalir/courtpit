@@ -17,6 +17,7 @@ use axum::{
 };
 use courtpit_server::{
     AppState, Config,
+    clock::OffsetClock,
     communities::{Branding, CreatedCommunity, NewCommunity, create_community},
     db,
     mailer::LogMailer,
@@ -142,6 +143,8 @@ pub(crate) struct TestApp {
     pub router: Router,
     pub db: PgPool,
     pub mailer: Arc<LogMailer>,
+    /// The app's clock; `advance` it to drive deadlines and jobs.
+    pub clock: Arc<OffsetClock>,
 }
 
 /// A signed-in test user.
@@ -174,7 +177,8 @@ impl TestApp {
         let options = fresh_database().await;
         let db = db::connect_with(options, 5).await.unwrap();
         let mailer = Arc::new(LogMailer::default());
-        let state = AppState::new(config, db.clone(), mailer.clone());
+        let clock = OffsetClock::shared();
+        let state = AppState::new(config, db.clone(), mailer.clone()).with_clock(clock.clone());
         // `oneshot` has no socket peer; stand in for the `ConnectInfo` that `serve` provides.
         let peer = ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0)));
         let router = courtpit_server::router(state.clone()).layer(Extension(peer));
@@ -183,6 +187,7 @@ impl TestApp {
             router,
             db,
             mailer,
+            clock,
         }
     }
 
