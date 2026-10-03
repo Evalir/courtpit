@@ -1,4 +1,4 @@
-//! `courtpit-server` binary: `serve`, `migrate`, `create-community`.
+//! `courtpit-server` binary: `serve`, `tick`, `migrate`, `create-community`.
 #![deny(unsafe_code)]
 
 use anyhow::Context;
@@ -33,10 +33,21 @@ struct Cli {
 enum Command {
     /// Run the HTTP API (and, later, the background job loop).
     Serve(Config),
+    /// Run due background jobs once, then exit (for hosts that stop the server when idle).
+    Tick(TickArgs),
     /// Apply pending database migrations.
     Migrate(db::DbConfig),
     /// Create a community (tenant), optionally with its owner.
     CreateCommunity(CreateCommunityArgs),
+}
+
+#[derive(Debug, clap::Args)]
+struct TickArgs {
+    #[command(flatten)]
+    config: Config,
+    /// Stop starting new jobs after this many seconds (a running job is always finished).
+    #[arg(long, env = "COURTPIT_TICK_MAX_SECONDS", default_value_t = 300)]
+    max_seconds: u64,
 }
 
 #[derive(Debug, clap::Args)]
@@ -66,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
     telemetry::init(cli.log_format);
     match cli.command {
         Command::Serve(config) => serve(config).await,
+        Command::Tick(args) => tick(args).await,
         Command::Migrate(cfg) => {
             let pool = db::connect(&cfg).await?;
             db::migrate(&pool).await?;
@@ -127,6 +139,19 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     served
 }
 
+async fn tick(args: TickArgs) -> anyhow::Result<()> {
+    let pool = db::connect(&args.config.db).await?;
+    let state = AppState::from_config(args.config, pool)?;
+    let budget = std::time::Duration::from_secs(args.max_seconds);
+    let summary = jobs::tick(&state, budget).await?;
+    tracing::info!(
+        ran = summary.ran,
+        budget_spent = summary.budget_spent,
+        "tick finished"
+    );
+    Ok(())
+}
+
 async fn shutdown_signal() {
     let ctrl_c = async {
         if let Err(err) = tokio::signal::ctrl_c().await {
@@ -149,4 +174,18 @@ async fn shutdown_signal() {
         () = terminate => {},
     }
     tracing::info!("shutting down");
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::CommandFactory as _;
+
+    use super::*;
+
+    /// Flattened config structs share one argument namespace: a duplicate field name between
+    /// them (say `database_url`) only panics when clap builds the command, i.e. at startup.
+    #[test]
+    fn the_cli_definition_is_consistent() {
+        Cli::command().debug_assert();
+    }
 }
