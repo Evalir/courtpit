@@ -73,6 +73,89 @@ pub struct Config {
     /// Database settings.
     #[command(flatten)]
     pub db: DbConfig,
+    /// Nightly database backups to S3-compatible storage.
+    #[command(flatten)]
+    pub backup: BackupConfig,
+}
+
+/// Nightly `pg_dump` backups to S3-compatible object storage (Cloudflare R2). Backups are on
+/// iff the endpoint, bucket and both keys are set; setting only some of them is a startup error.
+#[derive(Debug, Clone, clap::Args)]
+pub struct BackupConfig {
+    /// S3 endpoint, e.g. `https://<account>.r2.cloudflarestorage.com` (path-style URLs).
+    #[arg(long = "backup-s3-endpoint", env = "BACKUP_S3_ENDPOINT")]
+    pub s3_endpoint: Option<String>,
+    /// Bucket the dumps go to.
+    #[arg(long = "backup-s3-bucket", env = "BACKUP_S3_BUCKET")]
+    pub s3_bucket: Option<String>,
+    /// Access key id.
+    #[arg(
+        long = "backup-s3-access-key",
+        env = "BACKUP_S3_ACCESS_KEY",
+        hide_env_values = true
+    )]
+    pub s3_access_key: Option<String>,
+    /// Secret access key.
+    #[arg(
+        long = "backup-s3-secret-key",
+        env = "BACKUP_S3_SECRET_KEY",
+        hide_env_values = true
+    )]
+    pub s3_secret_key: Option<String>,
+    /// Signing region (`auto` is what R2 expects).
+    #[arg(
+        long = "backup-s3-region",
+        env = "BACKUP_S3_REGION",
+        default_value = "auto"
+    )]
+    pub s3_region: String,
+    /// Key prefix for dumps; only keys under it with our naming are ever listed for pruning.
+    #[arg(
+        long = "backup-s3-prefix",
+        env = "BACKUP_S3_PREFIX",
+        default_value = "courtpit/"
+    )]
+    pub s3_prefix: String,
+    /// Days to keep dumps; older ones are deleted after a successful upload.
+    #[arg(
+        long = "backup-retention-days",
+        env = "BACKUP_RETENTION_DAYS",
+        default_value_t = 14,
+        value_parser = clap::value_parser!(i64).range(1..)
+    )]
+    pub retention_days: i64,
+    /// Hour of day (UTC, 0-23) the nightly backup runs at or after.
+    #[arg(
+        long = "backup-hour-utc",
+        env = "BACKUP_HOUR_UTC",
+        default_value_t = 3,
+        value_parser = clap::value_parser!(u32).range(0..24)
+    )]
+    pub hour_utc: u32,
+    /// Direct (non-pooled) connection URL for `pg_dump`; defaults to `DATABASE_URL`. A pooler
+    /// in transaction mode (Neon's `-pooler` host) cannot be dumped.
+    #[arg(
+        long = "backup-database-url",
+        env = "BACKUP_DATABASE_URL",
+        hide_env_values = true
+    )]
+    pub dump_database_url: Option<String>,
+}
+
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            s3_endpoint: None,
+            s3_bucket: None,
+            s3_access_key: None,
+            s3_secret_key: None,
+            s3_region: "auto".to_owned(),
+            s3_prefix: "courtpit/".to_owned(),
+            retention_days: 14,
+            hour_utc: 3,
+            dump_database_url: None,
+        }
+    }
 }
 
 /// Which [`crate::mailer::Mailer`] to use.
@@ -108,6 +191,7 @@ impl Default for Config {
                 database_url: "postgres://courtpit:courtpit@127.0.0.1/courtpit".to_owned(),
                 db_max_connections: 10,
             },
+            backup: BackupConfig::default(),
         }
     }
 }

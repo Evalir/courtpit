@@ -5,6 +5,7 @@
 )]
 
 mod auth;
+mod backup;
 #[expect(
     dead_code,
     reason = "helpers are shared; not every module uses every one"

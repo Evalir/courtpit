@@ -4,7 +4,7 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use courtpit_server::{
-    AppState, Config,
+    AppState, Config, backup,
     communities::{NewCommunity, create_community},
     db, jobs, router, telemetry,
 };
@@ -119,6 +119,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     let pool = db::connect(&config.db).await?;
     tracing::info!(addr = %config.bind, "listening");
     let state = AppState::from_config(config, pool)?;
+    backup::ensure_scheduled(&state).await?;
     let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
     let job_loop = state.config.jobs_enabled.then(|| {
         let every = std::time::Duration::from_millis(state.config.job_poll_ms);
@@ -142,6 +143,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
 async fn tick(args: TickArgs) -> anyhow::Result<()> {
     let pool = db::connect(&args.config.db).await?;
     let state = AppState::from_config(args.config, pool)?;
+    backup::ensure_scheduled(&state).await?;
     let budget = std::time::Duration::from_secs(args.max_seconds);
     let summary = jobs::tick(&state, budget).await?;
     tracing::info!(

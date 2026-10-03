@@ -55,6 +55,13 @@ pub enum Job {
         /// The league to advance.
         league_id: Uuid,
     },
+    /// Dumps the database to object storage, prunes old dumps and schedules the next night's
+    /// run (a no-op when backups are not configured).
+    #[expect(
+        clippy::empty_enum_variants_with_brackets,
+        reason = "keeps the `{}` payload shape stable on the wire and in stored rows"
+    )]
+    BackupDatabase {},
 }
 
 impl Job {
@@ -67,6 +74,7 @@ impl Job {
                 Some(format!("refresh_rankings:{community_id}"))
             }
             Self::AdvanceLeague { league_id, .. } => Some(format!("league:{league_id}")),
+            Self::BackupDatabase {} => Some("backup".to_owned()),
         }
     }
 
@@ -116,6 +124,39 @@ pub async fn enqueue<'e>(
     .await
     .context("enqueueing job")?;
     Ok(())
+}
+
+/// Enqueues `job` unless an unfinished job with the same dedupe key already exists, waiting
+/// *or running*; returns whether it inserted. Unlike [`enqueue`] it never moves an existing
+/// job's time, so it is safe to call on every start (bootstrapping a self-rescheduling job).
+/// A job without a dedupe key is always inserted.
+pub async fn enqueue_if_absent<'e>(
+    conn: impl PgExecutor<'e>,
+    job: Job,
+    run_at: DateTime<Utc>,
+) -> anyhow::Result<bool> {
+    let dedupe = job.dedupe_key();
+    let (kind, payload) = job.into_parts()?;
+    // The unique index only covers waiting rows, so `ON CONFLICT` closes the race between two
+    // callers that both saw nothing; the `NOT EXISTS` also sees a running job.
+    let inserted = sqlx::query(
+        "INSERT INTO jobs (id, kind, payload, run_at, dedupe_key)
+         SELECT $1::uuid, $2::text, $3::jsonb, $4::timestamptz, $5::text
+         WHERE NOT EXISTS (
+             SELECT 1 FROM jobs
+             WHERE dedupe_key = $5::text AND completed_at IS NULL AND failed_at IS NULL)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(Uuid::now_v7())
+    .bind(kind)
+    .bind(Json(payload))
+    .bind(run_at)
+    .bind(dedupe)
+    .execute(conn)
+    .await
+    .context("enqueueing job if absent")?
+    .rows_affected();
+    Ok(inserted > 0)
 }
 
 /// A job claimed by this worker.
@@ -172,6 +213,7 @@ async fn execute(state: &AppState, job: Job) -> anyhow::Result<()> {
             community_id,
             league_id,
         } => crate::leagues::lifecycle::advance(state, community_id, league_id).await,
+        Job::BackupDatabase {} => crate::backup::run(state).await,
     }
 }
 
