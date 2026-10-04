@@ -1,5 +1,5 @@
 # Keep the build context (and so the layer cache key) down to what the build reads:
-# Cargo.toml, Cargo.lock, crates/ and migrations/.
+# Cargo.toml, Cargo.lock, crates/ and migrations/ (the TypeScript workspaces are not built here yet).
 target/
 .git/
 .github/
@@ -10,3 +10,6 @@ docs/
 Dockerfile
 .dockerignore
 fly.toml
+node_modules/
+apps/
+packages/

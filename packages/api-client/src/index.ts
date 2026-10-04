@@ -22,8 +22,17 @@ export function isApiError(error: unknown): error is ApiErrorBody {
 export interface CourtpitClientOptions {
   /** Server origin, e.g. `https://api.courtpit.app` (no trailing path). */
   baseUrl: string;
-  /** Community slug, sent as `X-Courtpit-Community` on every request. */
-  community: string;
+  /**
+   * Community slug, sent as `X-Courtpit-Community` on every request. Leave it out on a
+   * community's own host (`{slug}.courtpit.app` or its custom domain): the server then resolves
+   * the community from `Host`.
+   */
+  community?: string;
+  /**
+   * Browser client: sends `X-Courtpit-Client: web`, so sign-in sets the httpOnly session cookie
+   * instead of returning a token (the browser then sends the cookie by itself).
+   */
+  web?: boolean;
   /**
    * Session token, sent as `Authorization: Bearer <token>`. Pass a function to read it per
    * request (e.g. from secure storage), so the client can be created before sign-in.
@@ -32,11 +41,16 @@ export interface CourtpitClientOptions {
 }
 
 /** Creates a client whose requests carry the community header and, when set, the session. */
-export function createCourtpitClient({ baseUrl, community, token }: CourtpitClientOptions) {
+export function createCourtpitClient({ baseUrl, community, web, token }: CourtpitClientOptions) {
   const client = createClient<paths>({ baseUrl });
   const headers: Middleware = {
     onRequest({ request }) {
-      request.headers.set("X-Courtpit-Community", community);
+      if (community) {
+        request.headers.set("X-Courtpit-Community", community);
+      }
+      if (web) {
+        request.headers.set("X-Courtpit-Client", "web");
+      }
       const session = typeof token === "function" ? token() : token;
       if (session) {
         request.headers.set("Authorization", `Bearer ${session}`);
