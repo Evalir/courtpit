@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use courtpit_server::{
     AppState, Config,
     app::openapi,
+    auth::rate_limit::rate_limit_notice,
     backup,
     communities::{NewCommunity, create_community},
     db, jobs, router, seed, telemetry,
@@ -165,6 +166,9 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .with_context(|| format!("binding {}", config.bind))?;
     let pool = db::connect(&config.db).await?;
     tracing::info!(addr = %config.bind, "listening");
+    if let Some(notice) = rate_limit_notice(std::env::var("FLY_MACHINE_ID").ok().as_deref()) {
+        tracing::warn!("{notice}");
+    }
     let state = AppState::from_config(config, pool)?;
     backup::ensure_scheduled(&state).await?;
     let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);

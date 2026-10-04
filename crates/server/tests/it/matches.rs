@@ -3,7 +3,13 @@
 use axum::http::StatusCode;
 use serde_json::{Value, json};
 
-use crate::common::{Session, TestApp};
+use crate::{
+    common::{Session, TestApp},
+    leagues::open_league,
+    match_results::{report, straight_sets_a},
+    proposals::{in_days, open_proposal},
+    rankings::ledger,
+};
 
 pub(crate) async fn players(app: &TestApp, community: &str, names: &[&str]) -> Vec<Session> {
     let mut out = Vec::new();
@@ -186,4 +192,67 @@ async fn players_cancel_friendlies_outsiders_cannot() {
         .send()
         .await
         .expect(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn friendly_mixed_matches_ignore_gender_and_earn_no_points() {
+    let app = TestApp::spawn().await;
+    let _ = app.community("demo").await;
+    let admin = app.login("admin@example.test", "demo").await;
+    app.make_admin(&admin).await;
+    let [a1, a2, b1, b2] =
+        <[Session; 4]>::try_from(players(&app, "demo", &["a1", "a2", "b1", "b2"]).await).unwrap();
+    for (session, gender) in [
+        (&a1, "male"),
+        (&a2, "male"),
+        (&b1, "undisclosed"),
+        (&b2, "other"),
+    ] {
+        let _ = app.patch_me(session, json!({ "gender": gender })).await;
+    }
+    // Neither pair could enter a mixed league...
+    let league = open_league(&app, &admin, "mixed").await;
+    for (entrant, partner) in [(&a1, &a2), (&b1, &b2)] {
+        let _ = app
+            .post(&format!("/api/v1/leagues/{league}/entries"))
+            .as_(entrant)
+            .json(json!({ "partner_id": partner.player_id }))
+            .send()
+            .await
+            .expect(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    // ...but they can arrange a mixed friendly and play it through.
+    let created = app
+        .post("/api/v1/matches")
+        .as_(&a1)
+        .json(json!({
+            "discipline": "mixed",
+            "partner_id": a2.player_id,
+            "opponent_ids": [b1.player_id, b2.player_id],
+            "proposed_time": in_days(1),
+        }))
+        .send()
+        .await
+        .expect(StatusCode::CREATED);
+    assert_eq!(created["discipline"], "mixed");
+    let id = created["id"].as_str().unwrap();
+    let pid = open_proposal(&created);
+    let view = app
+        .post(&format!("/api/v1/matches/{id}/proposals/{pid}/accept"))
+        .as_(&b1)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(view["status"], "scheduled");
+    let view = report(&app, &a2, id, straight_sets_a()).await;
+    assert_eq!(view["status"], "reported");
+    let view = app
+        .post(&format!("/api/v1/matches/{id}/confirm"))
+        .as_(&b2)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(view["status"], "confirmed");
+    assert!(ledger(&app, &a1, &a1).await.as_array().unwrap().is_empty());
 }

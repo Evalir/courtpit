@@ -7,7 +7,7 @@ use courtpit_domain::{
 use sqlx::types::Json;
 use uuid::Uuid;
 
-use super::{DbMatchStatus, DbSide, MatchRow, load};
+use super::{DbMatchStatus, DbSide, MatchRow, load, supersede_open_proposals};
 use crate::{
     ApiError, AppState, TenantTx,
     jobs::{self, Job},
@@ -18,7 +18,10 @@ pub fn check_score(format: &MatchFormat, score: &Score) -> Result<ScoreSummary, 
     validate_score(format, score).map_err(|err| ApiError::validation(err.to_string()))
 }
 
-/// Records a reported score on a locked, scheduled match and schedules its auto-confirmation.
+/// Records a reported score on a locked `proposed` or `scheduled` match and schedules its
+/// auto-confirmation. A played match has nothing left to negotiate, so any proposal still open
+/// is superseded in the same transaction; `scheduled_at` and `location` are left as they are
+/// (null for a match that was never scheduled).
 pub async fn record_report(
     tx: &mut TenantTx,
     found: &MatchRow,
@@ -44,6 +47,7 @@ pub async fn record_report(
     .bind(deadline)
     .execute(&mut **tx)
     .await?;
+    supersede_open_proposals(tx, found.id).await?;
     let job = Job::AutoConfirmMatch {
         community_id: tx.community_id(),
         match_id: found.id,
