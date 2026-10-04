@@ -4,12 +4,17 @@
 //! Each run applies every step that is due at the clock's `now` (so a late job catches up),
 //! then re-enqueues itself for the next date. Steps are idempotent per status, so retries and
 //! duplicate deliveries are harmless.
+//!
+//! Two rules keep a season from ending badly: a league that cannot field two entries (or two
+//! per box) is cancelled at its start date instead of activated, and a season does not finish
+//! while reported or disputed matches are waiting for a result.
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use courtpit_domain::{
-    EntryId, PlayerId, Previous, RankingEvent, RankingSource, Seed, movements, place, round_robin,
+    EntryId, Placed, PlayerId, Previous, RankingEvent, RankingSource, Seed, movements, place,
+    playable, round_robin,
 };
 use rust_decimal::Decimal;
 use sqlx::FromRow;
@@ -39,10 +44,13 @@ pub async fn advance(state: &AppState, community_id: Uuid, league_id: Uuid) -> a
         Err(ApiError::NotFound(_)) => return Ok(()),
         Err(err) => anyhow::bail!("loading league: {err}"),
     };
-    let status = step(&mut tx, &tenant, &league, now)
+    let stepped = step(&mut tx, &tenant, &league, now)
         .await
         .map_err(|err| anyhow::anyhow!("advancing league {league_id}: {err}"))?;
-    if let Some(at) = next_wake(&league, status, now) {
+    let wake = stepped
+        .retry_at
+        .or_else(|| next_wake(&league, stepped.status, now));
+    if let Some(at) = wake {
         let job = Job::AdvanceLeague {
             community_id,
             league_id,
@@ -53,13 +61,21 @@ pub async fn advance(state: &AppState, community_id: Uuid, league_id: Uuid) -> a
     Ok(())
 }
 
-/// Applies every due step; returns the resulting status.
+/// Where a run of [`step`] ended.
+struct Stepped {
+    /// The league's status now.
+    status: LeagueStatus,
+    /// Set when the season end is deferred by unresolved matches: when to look again.
+    retry_at: Option<DateTime<Utc>>,
+}
+
+/// Applies every due step.
 async fn step(
     tx: &mut TenantTx,
     tenant: &Tenant,
     league: &LeagueRow,
     now: DateTime<Utc>,
-) -> Result<LeagueStatus, ApiError> {
+) -> Result<Stepped, ApiError> {
     let mut status = league.status;
     loop {
         status = match status {
@@ -70,14 +86,30 @@ async fn step(
                 LeagueStatus::Registration
             }
             LeagueStatus::Registration if now >= league.starts_at => {
-                activate(tx, tenant, league).await?;
-                LeagueStatus::Active
+                activate(tx, tenant, league, now).await?
             }
             LeagueStatus::Active if now >= league.ends_at => {
-                finish(tx, tenant, league, now).await?;
-                LeagueStatus::Finished
+                match close_season(tx, tenant, league, now, false).await? {
+                    Closing::Finished => LeagueStatus::Finished,
+                    Closing::Blocked(open) => {
+                        let at = open.retry_at(now);
+                        tracing::info!(
+                            league = %league.id, unresolved = open.count, retry_at = %at,
+                            "season end deferred: matches still reported or disputed"
+                        );
+                        return Ok(Stepped {
+                            status,
+                            retry_at: Some(at),
+                        });
+                    }
+                }
             }
-            _ => return Ok(status),
+            _ => {
+                return Ok(Stepped {
+                    status,
+                    retry_at: None,
+                });
+            }
         };
     }
 }
@@ -118,8 +150,15 @@ struct Confirmed {
 }
 
 /// `registration → active`: drops incomplete entries, places confirmed ones into boxes and
-/// creates every box's round-robin matches (status `proposed`; players self-schedule).
-async fn activate(tx: &mut TenantTx, tenant: &Tenant, league: &LeagueRow) -> Result<(), ApiError> {
+/// creates every box's round-robin matches (status `proposed`; players self-schedule). A league
+/// that cannot field two entries (or two per box) is cancelled instead, with its entrants
+/// told by email; returns the resulting status.
+async fn activate(
+    tx: &mut TenantTx,
+    tenant: &Tenant,
+    league: &LeagueRow,
+    now: DateTime<Utc>,
+) -> Result<LeagueStatus, ApiError> {
     let _ = sqlx::query(
         "UPDATE league_entries SET status = 'withdrawn', invited_partner_id = NULL,
             updated_at = now()
@@ -152,6 +191,62 @@ async fn activate(tx: &mut TenantTx, tenant: &Tenant, league: &LeagueRow) -> Res
         })
         .collect();
     let boxes = place(&seeds, league.box_size()).map_err(|err| ApiError::Internal(err.into()))?;
+    if let Err(unplayable) = playable(entries.len(), &boxes) {
+        cancel_unplayable(tx, league, &unplayable.to_string(), now).await?;
+        return Ok(LeagueStatus::Cancelled);
+    }
+    schedule(tx, tenant, league, &entries, boxes).await?;
+    set_status(tx, league.id, LeagueStatus::Active).await?;
+    tracing::info!(league = %league.id, entries = entries.len(), "league activated");
+    Ok(LeagueStatus::Active)
+}
+
+/// Cancels a league that cannot be played, storing `reason`, and queues an email to every
+/// player on any of its entries (including the incomplete ones just withdrawn). The jobs are
+/// enqueued in this transaction, so they exist exactly when the cancellation does.
+async fn cancel_unplayable(
+    tx: &mut TenantTx,
+    league: &LeagueRow,
+    reason: &str,
+    now: DateTime<Utc>,
+) -> Result<(), ApiError> {
+    let _ = sqlx::query(
+        "UPDATE leagues SET status = 'cancelled', cancel_reason = $3, updated_at = now()
+         WHERE community_id = $1 AND id = $2",
+    )
+    .bind(tx.community_id())
+    .bind(league.id)
+    .bind(reason)
+    .execute(&mut **tx)
+    .await?;
+    let players: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT member FROM league_entries e, unnest(e.player_ids) AS member
+         WHERE e.community_id = $1 AND e.league_id = $2",
+    )
+    .bind(tx.community_id())
+    .bind(league.id)
+    .fetch_all(&mut **tx)
+    .await?;
+    for &player_id in &players {
+        let job = Job::NotifyLeagueCancelled {
+            community_id: tx.community_id(),
+            league_id: league.id,
+            player_id,
+        };
+        jobs::enqueue(&mut **tx, job, now).await?;
+    }
+    tracing::info!(league = %league.id, notified = players.len(), reason, "league cancelled at start");
+    Ok(())
+}
+
+/// Records each placed box as a division and creates its round-robin matches.
+async fn schedule(
+    tx: &mut TenantTx,
+    tenant: &Tenant,
+    league: &LeagueRow,
+    entries: &[Confirmed],
+    boxes: Vec<Placed<EntryId>>,
+) -> Result<(), ApiError> {
     let players_of = |id: EntryId| {
         entries
             .iter()
@@ -208,8 +303,6 @@ async fn activate(tx: &mut TenantTx, tenant: &Tenant, league: &LeagueRow) -> Res
             }
         }
     }
-    set_status(tx, league.id, LeagueStatus::Active).await?;
-    tracing::info!(league = %league.id, entries = entries.len(), "league activated");
     Ok(())
 }
 
@@ -255,14 +348,46 @@ async fn previous_results(
         .collect())
 }
 
-/// `active → finished`: closes unplayed matches, records final standings with promotion and
-/// relegation, and writes season points to the ranking ledger (each partner in full).
-async fn finish(
+/// League matches still waiting for a result at season end.
+#[derive(Debug, Clone, Copy, FromRow)]
+pub struct Unresolved {
+    /// Matches in `reported` or `disputed`.
+    pub count: i64,
+    /// The earliest auto-confirm deadline among the reported ones.
+    pub next_deadline: Option<DateTime<Utc>>,
+}
+
+impl Unresolved {
+    /// When to look at the season again: just after the earliest auto-confirm deadline (so the
+    /// confirmation runs first), at least a minute from `now` so an overdue deadline cannot
+    /// spin the job; a day from `now` when only disputes (an admin's call) remain.
+    fn retry_at(&self, now: DateTime<Utc>) -> DateTime<Utc> {
+        self.next_deadline.map_or_else(
+            || now + Duration::hours(24),
+            |deadline| (deadline + Duration::minutes(1)).max(now + Duration::minutes(1)),
+        )
+    }
+}
+
+/// How [`close_season`] ended.
+#[derive(Debug, Clone, Copy)]
+pub enum Closing {
+    /// The league is now `finished`.
+    Finished,
+    /// Reported or disputed matches remain and the finish was not forced.
+    Blocked(Unresolved),
+}
+
+/// Ends a season at or after `ends_at`: cancels unplayed matches, then finishes the league.
+/// Reported and disputed matches have no result yet and would be left out of the final table,
+/// so unless `force` is set the league stays as it is while any exist.
+pub async fn close_season(
     tx: &mut TenantTx,
     tenant: &Tenant,
     league: &LeagueRow,
     now: DateTime<Utc>,
-) -> Result<(), ApiError> {
+    force: bool,
+) -> Result<Closing, ApiError> {
     let _ = sqlx::query(
         "UPDATE matches SET status = 'cancelled', resolution_note = 'season ended',
             updated_at = now()
@@ -272,6 +397,32 @@ async fn finish(
     .bind(league.id)
     .execute(&mut **tx)
     .await?;
+    let open: Unresolved = sqlx::query_as(
+        "SELECT count(*) AS count,
+                min(confirm_deadline_at) FILTER (WHERE status = 'reported') AS next_deadline
+         FROM matches
+         WHERE community_id = $1 AND league_id = $2 AND status IN ('reported', 'disputed')",
+    )
+    .bind(tx.community_id())
+    .bind(league.id)
+    .fetch_one(&mut **tx)
+    .await?;
+    if open.count > 0 && !force {
+        return Ok(Closing::Blocked(open));
+    }
+    finish(tx, tenant, league, now).await?;
+    Ok(Closing::Finished)
+}
+
+/// `active → finished`: records final standings with promotion and relegation, and writes
+/// season points to the ranking ledger (each partner in full). Matches without a result are
+/// left out of the table.
+async fn finish(
+    tx: &mut TenantTx,
+    tenant: &Tenant,
+    league: &LeagueRow,
+    now: DateTime<Utc>,
+) -> Result<(), ApiError> {
     let config = league.scoring(&tenant.scoring_config.0)?;
     let boxes = standings::compute(tx, league, &config.league_match).await?;
     let tiers = u32::try_from(boxes.len()).unwrap_or(u32::MAX);

@@ -232,6 +232,21 @@ async fn a_late_job_catches_up_and_cancelled_leagues_stay_put() {
         .send()
         .await
         .expect(StatusCode::OK);
+    // Registration was due to open yesterday; the entries exist, but nobody ran the jobs
+    // (a league in `draft` takes none through the API).
+    for player in &ps {
+        let _ = sqlx::query(
+            "INSERT INTO league_entries (id, community_id, league_id, player_ids, created_by, status)
+             SELECT $1, community_id, id, $3, $4, 'confirmed' FROM leagues WHERE id = $2",
+        )
+        .bind(Uuid::now_v7())
+        .bind(id.parse::<Uuid>().unwrap())
+        .bind(vec![player.player_id])
+        .bind(player.player_id)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    }
     // Nobody ran the jobs until after the start date: one run does both steps.
     at_day(&app, 9).await;
     assert_eq!(league(&app, &admin, &id).await["status"], "active");
@@ -256,4 +271,129 @@ async fn a_late_job_catches_up_and_cancelled_leagues_stay_put() {
     at_day(&app, 30).await;
     assert_eq!(league(&app, &admin, &other).await["status"], "cancelled");
     assert!(league_matches(&app, &admin, &other).await.is_empty());
+}
+
+fn cancellation_emails(app: &TestApp) -> Vec<courtpit_server::mailer::Email> {
+    app.mailer
+        .sent()
+        .into_iter()
+        .filter(|mail| mail.subject.starts_with("League cancelled"))
+        .collect()
+}
+
+#[tokio::test]
+async fn too_few_entries_cancel_the_league_and_tell_entrants() {
+    let (app, admin, ps) = setup(4).await;
+    let id = open_league(&app, &admin, "doubles").await;
+    let register = |session: &Session, body: Value| {
+        app.post(&format!("/api/v1/leagues/{id}/entries"))
+            .as_(session)
+            .json(body)
+            .send()
+    };
+    // One complete pair, one solo looking for a partner (withdrawn at the start), and one
+    // solo whose email is not verified (not told).
+    let entry = register(&ps[0], json!({ "partner_id": ps[1].player_id }))
+        .await
+        .expect(StatusCode::CREATED);
+    let _ = app
+        .post(&format!(
+            "/api/v1/leagues/{id}/entries/{}/accept",
+            entry["id"].as_str().unwrap()
+        ))
+        .as_(&ps[1])
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    let _ = register(&ps[2], json!({ "looking_for_partner": true }))
+        .await
+        .expect(StatusCode::CREATED);
+    let _ = register(&ps[3], json!({ "looking_for_partner": true }))
+        .await
+        .expect(StatusCode::CREATED);
+    let _ = sqlx::query("UPDATE users SET email_verified_at = NULL WHERE id = $1")
+        .bind(ps[3].user_id)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    at_day(&app, 8).await;
+    let cancelled = league(&app, &admin, &id).await;
+    assert_eq!(cancelled["status"], "cancelled");
+    assert!(
+        cancelled["cancel_reason"]
+            .as_str()
+            .unwrap()
+            .contains("Fewer than two entries"),
+        "{cancelled}"
+    );
+    assert!(league_matches(&app, &admin, &id).await.is_empty());
+    let table = app
+        .get(&format!("/api/v1/leagues/{id}/standings"))
+        .as_(&ps[0])
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert!(table.as_array().unwrap().is_empty(), "no boxes were made");
+    let withdrawn = app
+        .get(&format!("/api/v1/leagues/{id}/entries?status=withdrawn"))
+        .as_(&admin)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(withdrawn.as_array().unwrap().len(), 2, "both solo entries");
+
+    let sent = cancellation_emails(&app);
+    let mut recipients: Vec<&str> = sent.iter().map(|mail| mail.to.as_str()).collect();
+    recipients.sort_unstable();
+    assert_eq!(
+        recipients,
+        ["p00@example.test", "p01@example.test", "p02@example.test"],
+        "every entrant with a verified email, once"
+    );
+    for mail in &sent {
+        assert!(mail.subject.contains("Autumn doubles"), "{}", mail.subject);
+        assert!(mail.text.contains("\"Autumn doubles\""), "{}", mail.text);
+        assert!(
+            mail.text.contains("Fewer than two entries"),
+            "{}",
+            mail.text
+        );
+    }
+
+    // Done for good: no lifecycle job is left, and later runs mail nobody again.
+    at_day(&app, 61).await;
+    assert_eq!(league(&app, &admin, &id).await["status"], "cancelled");
+    assert_eq!(cancellation_emails(&app).len(), 3);
+    assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn an_empty_league_is_cancelled_without_mail() {
+    let (app, admin, _) = setup(0).await;
+    let id = open_league(&app, &admin, "singles").await;
+    at_day(&app, 8).await;
+    assert_eq!(league(&app, &admin, &id).await["status"], "cancelled");
+    assert!(cancellation_emails(&app).is_empty());
+}
+
+#[tokio::test]
+async fn two_entries_are_enough_to_activate() {
+    let (app, admin, ps) = setup(2).await;
+    let id = open_league(&app, &admin, "singles").await;
+    for player in &ps {
+        let _ = app
+            .post(&format!("/api/v1/leagues/{id}/entries"))
+            .as_(player)
+            .json(json!({}))
+            .send()
+            .await
+            .expect(StatusCode::CREATED);
+    }
+    at_day(&app, 8).await;
+    let active = league(&app, &admin, &id).await;
+    assert_eq!(active["status"], "active");
+    assert!(active["cancel_reason"].is_null());
+    assert_eq!(league_matches(&app, &admin, &id).await.len(), 1);
+    assert!(cancellation_emails(&app).is_empty());
 }

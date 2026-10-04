@@ -55,6 +55,17 @@ pub enum Gender {
     Undisclosed,
 }
 
+impl From<Gender> for courtpit_domain::Gender {
+    fn from(gender: Gender) -> Self {
+        match gender {
+            Gender::Female => Self::Female,
+            Gender::Male => Self::Male,
+            Gender::Other => Self::Other,
+            Gender::Undisclosed => Self::Undisclosed,
+        }
+    }
+}
+
 /// What a player likes to play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
 #[sqlx(type_name = "play_pref", rename_all = "lowercase")]

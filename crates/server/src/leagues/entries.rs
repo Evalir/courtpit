@@ -7,7 +7,9 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{ApiError, TenantTx, auth::CurrentPlayer, models::Gender};
+use crate::{
+    ApiError, Tenant, TenantTx, auth::CurrentPlayer, communities::CommunitySettings, models::Gender,
+};
 
 /// Where an entry stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
@@ -134,10 +136,12 @@ pub async fn require_not_entered(
     }
 }
 
-/// Mixed doubles needs exactly one `female` and one `male` player; `other` and
-/// `undisclosed` are not eligible (spec §9). With one player, checks they are eligible.
+/// Checks mixed-doubles eligibility under the community's `mixed_eligibility` setting
+/// (spec §9; the domain crate holds the rule). With one player, checks they are eligible
+/// to register looking for a partner. Other disciplines have no gender rule.
 pub async fn check_mixed(
     tx: &mut TenantTx,
+    tenant: &Tenant,
     discipline: Discipline,
     players: &[Uuid],
 ) -> Result<(), ApiError> {
@@ -150,29 +154,14 @@ pub async fn check_mixed(
             .bind(players)
             .fetch_all(&mut **tx)
             .await?;
-    let female = genders
-        .iter()
-        .filter(|gender| **gender == Gender::Female)
-        .count();
-    let male = genders
-        .iter()
-        .filter(|gender| **gender == Gender::Male)
-        .count();
-    let eligible = female + male == genders.len()
-        && genders.len() == players.len()
-        && female <= 1
-        && male <= 1;
-    if eligible {
-        Ok(())
-    } else if players.len() == 1 {
-        Err(ApiError::validation(
-            "mixed doubles needs one female and one male player; set your gender to female \
-             or male on your profile to enter (other and undisclosed are not eligible)",
-        ))
-    } else {
-        Err(ApiError::validation(
-            "mixed doubles needs one female and one male player (other and undisclosed are \
-             not eligible)",
-        ))
+    if genders.len() != players.len() {
+        return Err(ApiError::validation(
+            "every player of a mixed entry must be a member of this community",
+        ));
     }
+    let genders: Vec<courtpit_domain::Gender> = genders.into_iter().map(Into::into).collect();
+    CommunitySettings::of(tenant)
+        .mixed_eligibility
+        .check(&genders)
+        .map_err(|err| ApiError::validation(err.to_string()))
 }

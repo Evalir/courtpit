@@ -55,6 +55,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/leagues/{id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finishes an active league whose `ends_at` has passed (admin). Without `force`, refuses
+         *     (409 `unresolved_matches`) while any match is still reported or disputed; before the end
+         *     date it refuses with 409 `season_not_over`. Unplayed matches are cancelled and the final
+         *     standings, season points and promotion/relegation are recorded, as the lifecycle job does.
+         */
+        post: operations["finish_league"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/leagues/{id}/pair": {
         parameters: {
             query?: never;
@@ -86,6 +108,27 @@ export interface paths {
          *     (immediately if that has passed); from then on the dates drive the lifecycle.
          */
         post: operations["publish_league"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/leagues/{id}/unresolved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The league's matches that still lack a result: `reported` (waiting for the other side or
+         *     the auto-confirm deadline) and `disputed` (waiting for an admin). They block the season
+         *     from finishing; newest first.
+         */
+        get: operations["unresolved_matches"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1229,6 +1272,8 @@ export interface components {
              * @description Minimum box size.
              */
             box_min_size: number;
+            /** @description Why the system cancelled the league (too few entries at the start date), if it did. */
+            cancel_reason?: string | null;
             /**
              * Format: date-time
              * @description When the row was created.
@@ -1525,6 +1570,8 @@ export interface components {
                  * @description Minimum box size.
                  */
                 box_min_size: number;
+                /** @description Why the system cancelled the league (too few entries at the start date), if it did. */
+                cancel_reason?: string | null;
                 /**
                  * Format: date-time
                  * @description When the row was created.
@@ -2426,6 +2473,79 @@ export interface operations {
             };
         };
     };
+    finish_league: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Finish even though matches are still reported or disputed; they are left out of the
+                 *     final table.
+                 */
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeagueView"];
+                };
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     pair_entries: {
         parameters: {
             query?: never;
@@ -2555,6 +2675,69 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    unresolved_matches: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous page. */
+                cursor?: string;
+                /** @description Page size, 1–100 (default 20). */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_MatchView"];
+                };
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

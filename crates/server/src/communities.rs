@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
+use courtpit_domain::MixedEligibility;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, types::Json};
 use utoipa::ToSchema;
@@ -34,12 +35,15 @@ pub struct Branding {
 pub struct CommunitySettings {
     /// Days the other side has to confirm or dispute a reported score (spec default: 3).
     pub confirm_window_days: u32,
+    /// Who may enter mixed doubles: `female_male` (default) or `any_two_distinct`.
+    pub mixed_eligibility: MixedEligibility,
 }
 
 impl Default for CommunitySettings {
     fn default() -> Self {
         Self {
             confirm_window_days: 3,
+            mixed_eligibility: MixedEligibility::default(),
         }
     }
 }
@@ -193,6 +197,23 @@ mod tests {
         assert_eq!(
             with_settings(json!({ "confirm_window_days": "x" })),
             CommunitySettings::default()
+        );
+    }
+
+    #[test]
+    fn mixed_eligibility_defaults_and_tolerates_junk() {
+        use serde_json::json;
+        assert_eq!(
+            with_settings(json!({})).mixed_eligibility,
+            MixedEligibility::FemaleMale
+        );
+        let settings = with_settings(json!({ "mixed_eligibility": "any_two_distinct" }));
+        assert_eq!(settings.mixed_eligibility, MixedEligibility::AnyTwoDistinct);
+        assert_eq!(settings.confirm_window_days, 3);
+        assert_eq!(
+            with_settings(json!({ "mixed_eligibility": "anyone" })),
+            CommunitySettings::default(),
+            "malformed settings fall back to the defaults"
         );
     }
 }

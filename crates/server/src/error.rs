@@ -36,6 +36,15 @@ pub enum ApiError {
     /// The request conflicts with current state (duplicate, wrong status, ...).
     #[error("{0}")]
     Conflict(String),
+    /// A conflict clients must tell apart from other conflicts, so it carries its own stable
+    /// `code` (e.g. `season_not_over`).
+    #[error("{message}")]
+    ConflictCode {
+        /// The stable machine-readable code.
+        code: &'static str,
+        /// Human-readable explanation.
+        message: String,
+    },
     /// Rate limit exceeded.
     #[error("too many requests, slow down")]
     RateLimited,
@@ -53,7 +62,7 @@ impl ApiError {
             Self::Unauthorized | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::Conflict(_) | Self::ConflictCode { .. } => StatusCode::CONFLICT,
             Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -69,6 +78,7 @@ impl ApiError {
             Self::Forbidden(_) => "forbidden",
             Self::NotFound(_) => "not_found",
             Self::Conflict(_) => "conflict",
+            Self::ConflictCode { code, .. } => code,
             Self::RateLimited => "rate_limited",
             Self::Internal(_) => "internal",
         }
@@ -82,6 +92,14 @@ impl ApiError {
     /// Shorthand for [`ApiError::Conflict`].
     pub fn conflict(msg: impl Into<String>) -> Self {
         Self::Conflict(msg.into())
+    }
+
+    /// Shorthand for [`ApiError::ConflictCode`].
+    pub fn conflict_code(code: &'static str, message: impl Into<String>) -> Self {
+        Self::ConflictCode {
+            code,
+            message: message.into(),
+        }
     }
 
     /// Shorthand for [`ApiError::Forbidden`].
