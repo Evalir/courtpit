@@ -34,6 +34,9 @@ COURTPIT_MAILER = "resend"
 COURTPIT_BASE_DOMAIN = "courtpit.app"
 # Neon's pooled endpoint multiplexes client connections, so a small pool is plenty.
 COURTPIT_DB_MAX_CONNECTIONS = "5"
+# DATABASE_URL is Neon's pooled (transaction-mode) endpoint; `migrate` then insists on
+# DATABASE_DIRECT_URL. Set to "false" in Phase 2 (direct Postgres).
+COURTPIT_DB_POOLED = "true"
 # While awake the Machine drains jobs itself; poll gently (the hourly tick covers the rest).
 COURTPIT_JOB_POLL_MS = "5000"
 
