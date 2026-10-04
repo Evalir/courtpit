@@ -16,6 +16,17 @@ cargo run -p courtpit-server -- serve
 curl localhost:8080/healthz
 ```
 
+Demo data for development or staging (the command refuses to run when
+`COURTPIT_ENV=production`; re-running it is safe):
+
+```sh
+cargo run -p courtpit-server -- migrate
+cargo run -p courtpit-server -- seed            # community `demo`; `--slug` to change it
+```
+
+Sign in as the owner it prints (`marcus.hale@example.com`); with `COURTPIT_MAILER=log` the
+emailed code appears in the server log.
+
 Requires Rust (edition 2024) and Postgres 16. Local default:
 `DATABASE_URL=postgres://courtpit:courtpit@127.0.0.1/courtpit` (the role must be able to
 `CREATE DATABASE`; integration tests create a throwaway database per test).

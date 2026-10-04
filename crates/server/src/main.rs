@@ -1,4 +1,5 @@
-//! `courtpit-server` binary: `serve`, `tick`, `migrate`, `create-community`, `openapi`.
+//! `courtpit-server` binary: `serve`, `tick`, `migrate`, `create-community`, `openapi`,
+//! `seed`.
 #![deny(unsafe_code)]
 
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ use courtpit_server::{
     app::openapi,
     backup,
     communities::{NewCommunity, create_community},
-    db, jobs, router, telemetry,
+    db, jobs, router, seed, telemetry,
 };
 
 #[derive(Debug, Parser)]
@@ -49,6 +50,9 @@ enum Command {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Fill a development/staging database with a demo community (refused when
+    /// `COURTPIT_ENV=production`).
+    Seed(SeedArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -58,6 +62,15 @@ struct TickArgs {
     /// Stop starting new jobs after this many seconds (a running job is always finished).
     #[arg(long, env = "COURTPIT_TICK_MAX_SECONDS", default_value_t = 300)]
     max_seconds: u64,
+}
+
+#[derive(Debug, clap::Args)]
+struct SeedArgs {
+    #[command(flatten)]
+    db: db::DbConfig,
+    /// Slug of the demo community; re-running with the same slug updates it in place.
+    #[arg(long, default_value = "demo")]
+    slug: String,
 }
 
 #[derive(Debug, clap::Args)]
@@ -118,6 +131,17 @@ async fn main() -> anyhow::Result<()> {
                     .map(|player| format!(", owner player {player}"))
                     .unwrap_or_default()
             );
+            Ok(())
+        }
+        Command::Seed(args) => {
+            seed::ensure_not_production(std::env::var("COURTPIT_ENV").ok().as_deref())?;
+            let pool = db::connect(&args.db).await?;
+            let config = Config {
+                db: args.db,
+                ..Config::default()
+            };
+            let state = AppState::from_config(config, pool)?;
+            println!("{}", seed::seed(&state, &args.slug).await?);
             Ok(())
         }
     }

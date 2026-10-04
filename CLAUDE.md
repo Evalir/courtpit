@@ -8,7 +8,8 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   machine, placement/pairings, scoring rules. Exhaustive unit tests live next to the code.
 - `crates/server` — axum 0.8 + sqlx 0.8 (Postgres) + utoipa. Handlers are thin: parse, call
   `domain`, persist. Single binary `courtpit-server` with subcommands `serve`, `tick`,
-  `migrate`, `create-community`.
+  `migrate`, `create-community`, `openapi`, `seed` (demo data; refuses
+  `COURTPIT_ENV=production`).
 - `migrations/` — sqlx migrations embedded with `sqlx::migrate!()`. **One new migration file per
   PR that touches schema. Never edit a migration that has shipped** (anything below the stack tip).
 
