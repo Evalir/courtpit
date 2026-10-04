@@ -105,3 +105,37 @@ export function groupMatches(matches: readonly MatchView[], me: string, now: Dat
   );
   return groups;
 }
+
+type Proposal = components["schemas"]["Proposal"];
+
+/** What the viewer can do on a match page right now. */
+export interface MatchActions {
+  /** The other side reported a score: confirm or dispute it. */
+  confirm: boolean;
+  /** The other side's open proposal, to accept or decline. */
+  answer: Proposal | null;
+  /** The viewer's side's open proposal, waiting for the other side. */
+  waiting: Proposal | null;
+  /** Propose a time (or a different one). */
+  propose: boolean;
+  /** Report the score; a score may be reported from `proposed` too (decision 71). */
+  report: boolean;
+  /** Players may cancel friendlies; competitive matches are cancelled by admins (decision 19). */
+  cancel: boolean;
+}
+
+/** The actions open to `me` on `match` (no actions for someone not playing in it). */
+export function matchActions(match: MatchView, me: string, now: Date): MatchActions {
+  const mine = sideOf(match, me);
+  const open = match.proposals?.find((proposal) => proposal.status === "open") ?? null;
+  const theirs = open !== null && mine !== null && sideOf(match, open.proposed_by) !== mine;
+  const arranging = mine !== null && (match.status === "proposed" || match.status === "scheduled");
+  return {
+    confirm: actionFor(match, me, now) === "confirm",
+    answer: theirs ? open : null,
+    waiting: open !== null && mine !== null && !theirs ? open : null,
+    propose: arranging,
+    report: arranging,
+    cancel: arranging && match.league_id == null,
+  };
+}

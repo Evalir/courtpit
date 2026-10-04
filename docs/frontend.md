@@ -149,7 +149,9 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Verify code | `/verify?email=` | `POST /auth/otp/verify`, `/auth/otp/request` (resend) | built |
 | Home | `/` | `GET /me`, `GET /matches` | built |
 | Match | `/matches/[id]` | `GET /matches/{id}`, `GET /leagues/{id}`; `POST …/confirm`, `…/dispute`, `…/proposals/{id}/accept`, `…/decline` | built |
-| Match: propose a time, report a score, cancel | `/matches/[id]` | `POST …/proposals`, `…/score`, `…/cancel` | F2 |
+| Propose a time | `/matches/[id]/propose` (modal) | `POST /matches/{id}/proposals` | built |
+| Report the score | `/matches/[id]/report` (modal) | `POST /matches/{id}/score` | built |
+| Cancel a friendly | `/matches/[id]` | `POST /matches/{id}/cancel` | built |
 | Play: directory | `/play` | `GET /players?q=` (cursor pages) | built |
 | Player | `/players/[id]` | `GET /players/{id}` | built |
 | Play: match requests, propose a friendly | `/play`, `/players/[id]` | `GET/POST /match-requests`, `…/join`, `…/leave`, `…/cancel`, `POST /matches` | F3 |
@@ -182,6 +184,24 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
   `Intl.DateTimeFormat`. Pure helpers take "now" as an argument; screens use the time the data
   was fetched.
 
+### Match actions
+
+The match page's action card (`features/matches/MatchActions.tsx`, rules in `matchActions`)
+offers, to players only: confirm or dispute a score the other side reported; accept or decline
+the other side's open proposal (or wait on one's own); propose a time; report the score (from
+`proposed` too, decision 71); cancel, for friendlies only (decision 19). The likelier next step
+leads: proposing on a `proposed` match, reporting on a `scheduled` one.
+
+- **Proposing** uses a day-and-slot picker (`WhenPicker`): the next four weeks as chips, then
+  half-hour start times from 07:00 to 21:30, past slots disabled, in the device's time zone.
+  The place defaults to where the match was last arranged; the player's preferred locations are
+  one-tap suggestions.
+- **Reporting** shows one row per set, the viewer's side in the first column: as many rows as
+  it takes to win, then a deciding row once the sets are split, typed as the format says (set,
+  pro set to 8, or match tiebreak in points). `checkScore` is a port of the domain crate's
+  `validate_score`; both run `crates/domain/testdata/score_vectors.json`, so the form's verdict
+  and the server's cannot drift apart (decision 86).
+
 ## 8. UI conventions
 
 - Build screens from `src/ui` primitives; reach for raw `View`/`Text` styling only inside them.
@@ -206,7 +226,7 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Step | Scope |
 |---|---|
 | F1 | This slice: workspace, theming, API layer, email-code sign-in, five tabs, read-only league/ranking/player screens, confirm/dispute and answering proposals |
-| F2 | Match actions: propose a time (cross-platform date/time picker), format-aware score entry, cancel |
+| F2 | Match actions: propose a time (day-and-slot picker), format-aware score entry checked like the server, cancel a friendly (done) |
 | F3 | Play: open match requests (list, create, join, leave), propose a friendly from a player page |
 | F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view |
 | F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in |

@@ -359,6 +359,58 @@ pub fn validate_score(format: &MatchFormat, score: &Score) -> Result<ScoreSummar
 mod tests {
     use super::*;
 
+    /// A case from `testdata/score_vectors.json`, which the app's TypeScript port of
+    /// [`validate_score`] runs too (`apps/mobile/src/features/matches/score.test.ts`).
+    #[derive(Deserialize)]
+    struct Vector {
+        name: String,
+        format: MatchFormat,
+        sets: Vec<SetScore>,
+        winner: Option<Side>,
+        error: Option<String>,
+        set: Option<usize>,
+    }
+
+    /// The vector file's name for an error, and the set it points at.
+    const fn kind(err: &ScoreError) -> (&'static str, Option<usize>) {
+        match err {
+            ScoreError::Format(_) => ("format", None),
+            ScoreError::Empty => ("empty", None),
+            ScoreError::InvalidSet { set, .. } => ("invalid_set", Some(*set)),
+            ScoreError::MatchTiebreakExpected { set } => ("match_tiebreak_expected", Some(*set)),
+            ScoreError::MatchTiebreakNotAllowed { set } => {
+                ("match_tiebreak_not_allowed", Some(*set))
+            }
+            ScoreError::AfterMatchDecided { set } => ("after_match_decided", Some(*set)),
+            ScoreError::Incomplete { .. } => ("incomplete", None),
+        }
+    }
+
+    #[test]
+    fn shared_vectors() {
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("../testdata/score_vectors.json")).unwrap();
+        assert!(vectors.len() > 40);
+        for vector in vectors {
+            let result = validate_score(&vector.format, &Score { sets: vector.sets });
+            match (&vector.winner, &vector.error) {
+                (Some(winner), None) => {
+                    assert_eq!(
+                        result.map(|summary| summary.winner).as_ref(),
+                        Ok(winner),
+                        "{}",
+                        vector.name
+                    );
+                }
+                (None, Some(error)) => {
+                    let err = result.expect_err(&vector.name);
+                    assert_eq!(kind(&err), (error.as_str(), vector.set), "{}", vector.name);
+                }
+                _ => panic!("{}: give exactly one of winner and error", vector.name),
+            }
+        }
+    }
+
     fn games(side_a: u16, side_b: u16) -> SetScore {
         SetScore::games(side_a, side_b)
     }
