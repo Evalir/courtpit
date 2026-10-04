@@ -72,9 +72,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: packages/api-client/package-lock.json
+      # npm workspaces: one lockfile at the root for packages/* and apps/*.
       - run: npm ci
-        working-directory: packages/api-client
       - run: npm run gen
         working-directory: packages/api-client
       - name: Committed client matches the server's OpenAPI document
@@ -85,6 +84,27 @@ jobs:
           fi
       - run: npm run typecheck
         working-directory: packages/api-client
+
+  # The Expo app (apps/mobile): formatting, lint, types (including Expo Router's typed routes,
+  # generated first), unit and router tests, and a production web export.
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        working-directory: .
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --ci
+      - run: npm run export:web
 
   # The whole suite again through pgbouncer in transaction-pooling mode, the way production
   # reaches Neon's pooled endpoint. App pools use the pooler; admin work (migrations, the

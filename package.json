@@ -1,0 +1,16 @@
+{
+  "name": "courtpit",
+  "private": true,
+  "description": "npm workspaces for Courtpit's TypeScript packages; the server is the Cargo workspace.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  }
+}
