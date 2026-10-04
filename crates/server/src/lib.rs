@@ -8,6 +8,7 @@ use tokio as _;
 pub mod api;
 pub mod app;
 pub mod auth;
+pub mod backup;
 pub mod clock;
 pub mod communities;
 pub mod config;
