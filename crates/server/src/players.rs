@@ -1,5 +1,7 @@
 //! Player rows and their public (redacted) projection.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -205,5 +207,63 @@ pub async fn require_active_members(tx: &mut TenantTx, ids: &[Uuid]) -> Result<(
         Err(ApiError::validation(
             "every player must be an active, verified member of this community",
         ))
+    }
+}
+
+/// A player id with the name to show for it. Views that list player ids carry these so
+/// clients can render names without a request per player.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, FromRow, ToSchema)]
+pub struct PlayerRef {
+    /// Player id.
+    pub id: Uuid,
+    /// Name shown to other members ("Deleted player" for a deleted account).
+    pub display_name: String,
+}
+
+/// Display names of some players of the transaction's community, loaded in one query.
+#[derive(Debug, Default)]
+pub struct Names(HashMap<Uuid, String>);
+
+impl Names {
+    /// Loads the names of `ids` (duplicates and ids that are not players here are ignored).
+    pub async fn load(
+        tx: &mut TenantTx,
+        ids: impl IntoIterator<Item = Uuid>,
+    ) -> Result<Self, sqlx::Error> {
+        let mut ids: Vec<Uuid> = ids.into_iter().collect();
+        ids.sort_unstable();
+        ids.dedup();
+        if ids.is_empty() {
+            return Ok(Self::default());
+        }
+        let rows: Vec<PlayerRef> = sqlx::query_as(
+            "SELECT id, display_name FROM players WHERE community_id = $1 AND id = ANY($2)",
+        )
+        .bind(tx.community_id())
+        .bind(&ids)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(Self(
+            rows.into_iter()
+                .map(|row| (row.id, row.display_name))
+                .collect(),
+        ))
+    }
+
+    /// References for `ids` in first-seen order, without duplicates or unknown ids.
+    pub fn refs(&self, ids: impl IntoIterator<Item = Uuid>) -> Vec<PlayerRef> {
+        let mut refs: Vec<PlayerRef> = Vec::new();
+        for id in ids {
+            if refs.iter().any(|seen| seen.id == id) {
+                continue;
+            }
+            if let Some(name) = self.0.get(&id) {
+                refs.push(PlayerRef {
+                    id,
+                    display_name: name.clone(),
+                });
+            }
+        }
+        refs
     }
 }

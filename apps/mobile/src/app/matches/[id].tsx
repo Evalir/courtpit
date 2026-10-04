@@ -9,7 +9,7 @@ import { describeError } from "@/api/errors";
 import { refreshAfterWrite } from "@/api/queryClient";
 import { disciplineLabel, formatDateTime } from "@/features/format";
 import { actionFor, sideOf, statusBadge, type MatchView } from "@/features/matches/match";
-import { sideName, usePlayerNames } from "@/features/players/names";
+import { nameLookup, sideName } from "@/features/players/names";
 import { useSignedIn } from "@/session/SessionProvider";
 import { createStyles } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
@@ -47,16 +47,7 @@ export default function Match() {
     { enabled: leagueId !== "" },
   );
   const data = match.data;
-  const name = usePlayerNames(
-    data
-      ? [
-          ...data.side_a,
-          ...data.side_b,
-          ...(data.proposals ?? []).map((proposal) => proposal.proposed_by),
-        ]
-      : [],
-    me,
-  );
+  const name = nameLookup(data?.names ?? [], me);
 
   if (match.isPending) return <LoadingState />;
   if (match.error || !data)

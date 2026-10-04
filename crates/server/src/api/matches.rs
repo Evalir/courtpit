@@ -190,10 +190,11 @@ pub async fn list_matches(
     let _ = qb.push(" ORDER BY id DESC LIMIT ").push_bind(limit + 1);
     let mut tx = player.tenant.begin(&state.db).await?;
     let rows: Vec<MatchRow> = qb.build_query_as().fetch_all(&mut *tx).await?;
-    tx.commit().await?;
     let page = paginate(rows, limit, |row| row.id.to_string());
+    let items = matches::views(&mut tx, page.items).await?;
+    tx.commit().await?;
     Ok(Json(Page {
-        items: page.items.into_iter().map(MatchView::from).collect(),
+        items,
         next_cursor: page.next_cursor,
     }))
 }

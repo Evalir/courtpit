@@ -147,7 +147,7 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 |---|---|---|---|
 | Sign in | `/sign-in` | `POST /auth/otp/request` | built |
 | Verify code | `/verify?email=` | `POST /auth/otp/verify`, `/auth/otp/request` (resend) | built |
-| Home | `/` | `GET /me`, `GET /matches`, `GET /players/{id}` | built |
+| Home | `/` | `GET /me`, `GET /matches` | built |
 | Match | `/matches/[id]` | `GET /matches/{id}`, `GET /leagues/{id}`; `POST …/confirm`, `…/dispute`, `…/proposals/{id}/accept`, `…/decline` | built |
 | Match: propose a time, report a score, cancel | `/matches/[id]` | `POST …/proposals`, `…/score`, `…/cancel` | F2 |
 | Play: directory | `/play` | `GET /players?q=` (cursor pages) | built |
@@ -173,9 +173,9 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
   the community and the session (a confirmed league match moves standings and rankings too).
 - **Lists** with cursors use `useCursorList` over the fetch client: `openapi-react-query`'s
   infinite query sends `cursor=0` for the first page, which the API rejects as a bad cursor.
-- **Player names.** Matches, entries and standings carry player ids only; `usePlayerNames` fetches
-  each id once (`GET /players/{id}`, cached 10 minutes, deduplicated). The viewer reads "You", a
-  player the viewer can no longer see reads "Former member".
+- **Player names.** Matches, standings lines, entries and match requests carry `names` for the ids
+  they list (decision 85); `nameLookup(view.names, me)` turns them into a lookup. The viewer
+  reads "You"; an id a view did not name reads "Former member".
 - **Errors** render the API's `message` (written for people, decision 2) via `describeError`;
   code switches on `error.code`.
 - **Time.** ISO instants from the API are shown in the device's locale and time zone with

@@ -48,7 +48,7 @@ async fn respond(
     viewer: &CurrentPlayer,
 ) -> ApiResult<Json<EntryView>> {
     let entry = entries::load(tx, league, id).await?;
-    Ok(Json(EntryView::for_viewer(entry, viewer)))
+    Ok(Json(EntryView::one_for_viewer(tx, entry, viewer).await?))
 }
 
 /// Body of `POST /leagues/{id}/entries`.
@@ -169,12 +169,9 @@ pub async fn list_entries(
     }
     let _ = qb.push(" ORDER BY created_at, id");
     let rows: Vec<EntryRow> = qb.build_query_as().fetch_all(&mut *tx).await?;
+    let views = EntryView::for_viewer(&mut tx, rows, &player).await?;
     tx.commit().await?;
-    Ok(Json(
-        rows.into_iter()
-            .map(|entry| EntryView::for_viewer(entry, &player))
-            .collect(),
-    ))
+    Ok(Json(views))
 }
 
 /// Completes a pending doubles/mixed entry with its second player and confirms it.

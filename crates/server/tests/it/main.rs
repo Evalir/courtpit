@@ -21,6 +21,7 @@ mod leagues;
 mod match_requests;
 mod match_results;
 mod matches;
+mod names;
 mod oidc;
 mod pooling;
 mod profiles;

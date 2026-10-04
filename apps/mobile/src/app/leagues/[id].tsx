@@ -5,7 +5,7 @@ import { View } from "react-native";
 import { useApi } from "@/api/client";
 import { disciplineLabel, formatDate } from "@/features/format";
 import { describeFormat, leagueBadge, leagueTiming } from "@/features/leagues/league";
-import { usePlayerNames, sideName } from "@/features/players/names";
+import { nameLookup, sideName } from "@/features/players/names";
 import { useSignedIn } from "@/session/SessionProvider";
 import { createStyles } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
@@ -30,8 +30,8 @@ export default function League() {
     { params: { path: { id } } },
     { enabled: started },
   );
-  const name = usePlayerNames(
-    (standings.data ?? []).flatMap((box) => box.table.flatMap((line) => line.player_ids)),
+  const name = nameLookup(
+    (standings.data ?? []).flatMap((box) => box.table.flatMap((line) => line.names)),
     me,
   );
 

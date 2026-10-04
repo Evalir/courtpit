@@ -13,7 +13,11 @@ use sqlx::{FromRow, types::Json};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{ApiError, TenantTx, auth::CurrentPlayer};
+use crate::{
+    ApiError, TenantTx,
+    auth::CurrentPlayer,
+    players::{Names, PlayerRef},
+};
 
 pub mod results;
 
@@ -501,10 +505,28 @@ pub struct MatchView {
     /// Scheduling history; included on single-match responses only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub proposals: Option<Vec<Proposal>>,
+    /// Names for every player id this match mentions (both sides, reporter, disputer,
+    /// resolver, proposers).
+    pub names: Vec<PlayerRef>,
 }
 
-impl From<MatchRow> for MatchView {
-    fn from(row: MatchRow) -> Self {
+impl MatchRow {
+    /// Every player id the match's view mentions.
+    fn mentioned(&self) -> impl Iterator<Item = Uuid> + '_ {
+        self.side_a_players
+            .iter()
+            .chain(&self.side_b_players)
+            .copied()
+            .chain(self.reported_by)
+            .chain(self.disputed_by)
+            .chain(self.resolved_by)
+    }
+}
+
+impl MatchView {
+    /// The view of `row`, its names taken from `names` (which must cover `row.mentioned()`).
+    fn new(row: MatchRow, names: &Names) -> Self {
+        let names = names.refs(row.mentioned());
         Self {
             id: row.id,
             discipline: row.discipline.into(),
@@ -529,8 +551,18 @@ impl From<MatchRow> for MatchView {
             resolution_note: row.resolution_note,
             created_at: row.created_at,
             proposals: None,
+            names,
         }
     }
+}
+
+/// Views of several matches (a list page), with every name loaded in one query.
+pub async fn views(tx: &mut TenantTx, rows: Vec<MatchRow>) -> Result<Vec<MatchView>, ApiError> {
+    let names = Names::load(tx, rows.iter().flat_map(MatchRow::mentioned)).await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| MatchView::new(row, &names))
+        .collect())
 }
 
 /// A match with its proposals, for single-match responses.
@@ -539,7 +571,13 @@ pub async fn view_with_proposals(
     match_row: MatchRow,
 ) -> Result<MatchView, ApiError> {
     let proposals = proposals(tx, match_row.id).await?;
-    let mut view = MatchView::from(match_row);
+    let mentioned: Vec<Uuid> = match_row
+        .mentioned()
+        .chain(proposals.iter().map(|proposal| proposal.proposed_by))
+        .collect();
+    let names = Names::load(tx, mentioned.iter().copied()).await?;
+    let mut view = MatchView::new(match_row, &names);
+    view.names = names.refs(mentioned);
     view.proposals = Some(proposals);
     Ok(view)
 }

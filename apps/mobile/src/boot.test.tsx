@@ -125,14 +125,11 @@ describe("boot", () => {
                 final_set: "full_set",
               },
               created_at: "2026-09-01T00:00:00Z",
+              names: [{ id: opponent, display_name: "Mateo Alvarez" }],
             },
           ],
           next_cursor: null,
         },
-      }),
-      "/api/v1/players/": () => ({
-        status: 200,
-        body: { id: opponent, display_name: "Mateo Alvarez" },
       }),
     });
 
@@ -143,6 +140,8 @@ describe("boot", () => {
     expect(await view.findByText("You vs Mateo Alvarez", {}, slow)).toBeVisible();
     // The viewer's games first.
     expect(view.getByText("2–6 3–6")).toBeVisible();
+    // Names come with the matches: no request per player.
+    expect(requests.some((request) => request.url.includes("/api/v1/players/"))).toBe(false);
     const session = requests.find((request) => request.url.endsWith("/api/v1/auth/session"));
     expect(session?.headers.get("Authorization")).toBe("Bearer stored-token");
   });

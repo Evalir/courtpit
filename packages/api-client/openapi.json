@@ -4985,7 +4985,8 @@
           "created_by",
           "status",
           "looking_for_partner",
-          "created_at"
+          "created_at",
+          "names"
         ],
         "properties": {
           "created_at": {
@@ -5027,6 +5028,13 @@
           "looking_for_partner": {
             "type": "boolean",
             "description": "Solo entry listed as looking for a partner."
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerRef"
+            },
+            "description": "Names for the entry's players, its creator and (when shown) the invited partner."
           },
           "player_ids": {
             "type": "array",
@@ -5403,7 +5411,8 @@
           "time_window_start",
           "time_window_end",
           "status",
-          "created_at"
+          "created_at",
+          "names"
         ],
         "properties": {
           "created_at": {
@@ -5439,6 +5448,13 @@
             ],
             "format": "uuid",
             "description": "The match created when the request filled."
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerRef"
+            },
+            "description": "Names of `players`, in the same order."
           },
           "players": {
             "type": "array",
@@ -5509,7 +5525,8 @@
           "side_b",
           "status",
           "match_format",
-          "created_at"
+          "created_at",
+          "names"
         ],
         "properties": {
           "confirm_deadline_at": {
@@ -5575,6 +5592,13 @@
           "match_format": {
             "$ref": "#/components/schemas/MatchFormat",
             "description": "Format the match is played in."
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerRef"
+            },
+            "description": "Names for every player id this match mentions (both sides, reporter, disputer,\nresolver, proposers)."
           },
           "proposals": {
             "type": [
@@ -5923,7 +5947,8 @@
                 "time_window_start",
                 "time_window_end",
                 "status",
-                "created_at"
+                "created_at",
+                "names"
               ],
               "properties": {
                 "created_at": {
@@ -5959,6 +5984,13 @@
                   ],
                   "format": "uuid",
                   "description": "The match created when the request filled."
+                },
+                "names": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerRef"
+                  },
+                  "description": "Names of `players`, in the same order."
                 },
                 "players": {
                   "type": "array",
@@ -6035,7 +6067,8 @@
                 "side_b",
                 "status",
                 "match_format",
-                "created_at"
+                "created_at",
+                "names"
               ],
               "properties": {
                 "confirm_deadline_at": {
@@ -6101,6 +6134,13 @@
                 "match_format": {
                   "$ref": "#/components/schemas/MatchFormat",
                   "description": "Format the match is played in."
+                },
+                "names": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerRef"
+                  },
+                  "description": "Names for every player id this match mentions (both sides, reporter, disputer,\nresolver, proposers)."
                 },
                 "proposals": {
                   "type": [
@@ -6706,6 +6746,25 @@
           }
         }
       },
+      "PlayerRef": {
+        "type": "object",
+        "description": "A player id with the name to show for it. Views that list player ids carry these so\nclients can render names without a request per player.",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "description": "Name shown to other members (\"Deleted player\" for a deleted account)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Player id."
+          }
+        }
+      },
       "PlayerRole": {
         "type": "string",
         "description": "A player's role in a community.",
@@ -7117,6 +7176,7 @@
           "position",
           "entry_id",
           "player_ids",
+          "names",
           "played",
           "won",
           "lost",
@@ -7149,6 +7209,13 @@
             "format": "int32",
             "description": "Matches lost.",
             "minimum": 0
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerRef"
+            },
+            "description": "Names of `player_ids`, in the same order."
           },
           "played": {
             "type": "integer",
