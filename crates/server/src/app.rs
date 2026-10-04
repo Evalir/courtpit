@@ -14,6 +14,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{
     api,
     auth::{oidc::OidcVerifier, rate_limit::RateLimiter},
+    backup::Backup,
     clock::{Clock, SystemClock},
     config::{Config, MailerKind},
     error::ErrorBody,
@@ -38,6 +39,8 @@ pub struct AppState {
     pub oidc: OidcVerifier,
     /// Source of "now" for deadlines, schedules and jobs (tests move it).
     pub clock: Arc<dyn Clock>,
+    /// Where nightly database backups come from and go to; `None` when not configured.
+    pub backup: Option<Backup>,
 }
 
 impl AppState {
@@ -54,6 +57,7 @@ impl AppState {
             mailer,
             limiter,
             clock: Arc::new(SystemClock),
+            backup: None,
         }
     }
 
@@ -64,7 +68,14 @@ impl AppState {
         self
     }
 
-    /// Builds state, choosing the mailer from configuration.
+    /// Sets (or clears) the backup dump source and object store (tests pass fakes).
+    #[must_use]
+    pub fn with_backup(mut self, backup: Option<Backup>) -> Self {
+        self.backup = backup;
+        self
+    }
+
+    /// Builds state, choosing the mailer and the backup target from configuration.
     pub fn from_config(config: Config, db: PgPool) -> anyhow::Result<Self> {
         let mailer: Arc<dyn Mailer> = match config.mailer {
             MailerKind::Log => Arc::new(LogMailer::default()),
@@ -75,7 +86,8 @@ impl AppState {
                 Arc::new(ResendMailer::new(key, config.email_from.clone()))
             }
         };
-        Ok(Self::new(config, db, mailer))
+        let backup = Backup::from_config(&config)?;
+        Ok(Self::new(config, db, mailer).with_backup(backup))
     }
 }
 
