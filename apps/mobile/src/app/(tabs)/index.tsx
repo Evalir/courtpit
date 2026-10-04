@@ -4,7 +4,7 @@ import { View } from "react-native";
 import { useApi } from "@/api/client";
 import { groupMatches, type MatchGroups, type MatchView } from "@/features/matches/match";
 import { MatchCard } from "@/features/matches/MatchCard";
-import { usePlayerNames } from "@/features/players/names";
+import { playerNames } from "@/features/players/names";
 import { useSignedIn } from "@/session/SessionProvider";
 import { useCommunity } from "@/tenant/TenantProvider";
 import { space } from "@/theme/tokens";
@@ -30,8 +30,8 @@ export default function Home() {
   const profile = $api.useQuery("get", "/api/v1/me");
   const matches = $api.useQuery("get", "/api/v1/matches", { params: { query: { limit: 100 } } });
   const items: MatchView[] = matches.data?.items ?? [];
-  const name = usePlayerNames(
-    items.flatMap((match) => [...match.side_a, ...match.side_b]),
+  const name = playerNames(
+    items.flatMap((match) => [...match.side_a_names, ...match.side_b_names]),
     me,
   );
 

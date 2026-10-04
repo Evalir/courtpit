@@ -1180,6 +1180,8 @@ export interface components {
             looking_for_partner: boolean;
             /** @description The entry's players: one for singles or a solo entry, two for a pair. */
             player_ids: string[];
+            /** @description The same players with display names, in the order of `player_ids`. */
+            player_names: components["schemas"]["PlayerName"][];
             /** @description Where the entry stands. */
             status: components["schemas"]["EntryStatus"];
         };
@@ -1409,6 +1411,8 @@ export interface components {
              * @description The match created when the request filled.
              */
             match_id?: string | null;
+            /** @description The same players with display names, in the order of `players`. */
+            player_names: components["schemas"]["PlayerName"][];
             /** @description Creator, their partner (if they brought one), then joiners in join order. */
             players: string[];
             /**
@@ -1516,8 +1520,12 @@ export interface components {
             score?: null | components["schemas"]["Score"];
             /** @description Player ids on side A. */
             side_a: string[];
+            /** @description Side A with display names, in the order of `side_a`. */
+            side_a_names: components["schemas"]["PlayerName"][];
             /** @description Player ids on side B. */
             side_b: string[];
+            /** @description Side B with display names, in the order of `side_b`. */
+            side_b_names: components["schemas"]["PlayerName"][];
             /** @description Current lifecycle status. */
             status: components["schemas"]["MatchStatus"];
             /**
@@ -1660,6 +1668,8 @@ export interface components {
                  * @description The match created when the request filled.
                  */
                 match_id?: string | null;
+                /** @description The same players with display names, in the order of `players`. */
+                player_names: components["schemas"]["PlayerName"][];
                 /** @description Creator, their partner (if they brought one), then joiners in join order. */
                 players: string[];
                 /**
@@ -1767,8 +1777,12 @@ export interface components {
                 score?: null | components["schemas"]["Score"];
                 /** @description Player ids on side A. */
                 side_a: string[];
+                /** @description Side A with display names, in the order of `side_a`. */
+                side_a_names: components["schemas"]["PlayerName"][];
                 /** @description Player ids on side B. */
                 side_b: string[];
+                /** @description Side B with display names, in the order of `side_b`. */
+                side_b_names: components["schemas"]["PlayerName"][];
                 /** @description Current lifecycle status. */
                 status: components["schemas"]["MatchStatus"];
                 /**
@@ -1918,6 +1932,22 @@ export interface components {
          * @enum {string}
          */
         PlayPref: "singles" | "doubles" | "any";
+        /**
+         * @description A player named by another resource (a match side, a box line, an entry, a match request),
+         *     so clients can show names without fetching each player.
+         */
+        PlayerName: {
+            /**
+             * @description Name shown to other members; null when the viewer may not see the player (they left,
+             *     were banned or have not verified their email).
+             */
+            display_name?: string | null;
+            /**
+             * Format: uuid
+             * @description Player id.
+             */
+            id: string;
+        };
         /** @description The owner's own view of their profile: everything, including gender and contact details. */
         PlayerProfile: {
             /**
@@ -2216,6 +2246,8 @@ export interface components {
             played: number;
             /** @description Players of the entry (one for singles, two for doubles). */
             player_ids: string[];
+            /** @description The same players with display names, in the order of `player_ids`. */
+            player_names: components["schemas"]["PlayerName"][];
             /**
              * Format: int32
              * @description Table points under the league scoring rules.

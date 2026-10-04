@@ -69,7 +69,7 @@ pub async fn propose(
     let _ = match_row.transition(actor, Event::Propose)?;
     let _ =
         matches::insert_proposal(&mut tx, id, player.id, body.time, location.as_deref()).await?;
-    let view = matches::view_with_proposals(&mut tx, match_row).await?;
+    let view = matches::view_with_proposals(&mut tx, match_row, &player).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(view)))
 }
@@ -147,7 +147,7 @@ pub async fn accept_proposal(
     .execute(&mut *tx)
     .await?;
     let match_row = matches::load(&mut tx, id, false).await?;
-    let view = matches::view_with_proposals(&mut tx, match_row).await?;
+    let view = matches::view_with_proposals(&mut tx, match_row, &player).await?;
     tx.commit().await?;
     Ok(Json(view))
 }
@@ -172,7 +172,7 @@ pub async fn decline_proposal(
         .ok_or_else(|| ApiError::conflict("the proposer no longer plays in this match"))?;
     let _ = match_row.transition(actor, Event::DeclineProposal { proposed_by })?;
     close_proposal(&mut tx, proposal_id, ProposalStatus::Declined).await?;
-    let view = matches::view_with_proposals(&mut tx, match_row).await?;
+    let view = matches::view_with_proposals(&mut tx, match_row, &player).await?;
     tx.commit().await?;
     Ok(Json(view))
 }

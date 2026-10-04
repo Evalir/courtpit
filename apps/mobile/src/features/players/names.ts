@@ -1,38 +1,22 @@
-import { useQueries } from "@tanstack/react-query";
+import type { components } from "@courtpit/api-client";
 
-import { useApi } from "@/api/client";
-import { errorCode } from "@/api/errors";
+export type PlayerName = components["schemas"]["PlayerName"];
 
 /**
- * Display names for player ids. Matches, entries and standings carry ids only, so each id is
- * fetched once with `GET /players/{id}` and cached for ten minutes; TanStack Query dedupes the
- * requests across every card on screen.
+ * Display names for player ids. Matches, standings, entries and match requests embed
+ * `{ id, display_name }` for every player they name (`side_a_names`, `player_names`, …), so
+ * this needs no requests: pass those lists in.
  *
- * Returns a lookup: the viewer is "You", a player who left or is hidden is "Former member",
- * and a name still loading is an ellipsis.
+ * Returns a lookup: the viewer is "You", and a player the viewer may not see (the API sends a
+ * null name for someone who left, was banned or is unverified) is "Former member", as is an id
+ * the response did not name.
  */
-export function usePlayerNames(ids: readonly string[], me?: string): (id: string) => string {
-  const { $api } = useApi();
-  const unique = [...new Set(ids)].filter((id) => id !== me);
-  const results = useQueries({
-    queries: unique.map((id) =>
-      $api.queryOptions(
-        "get",
-        "/api/v1/players/{id}",
-        { params: { path: { id } } },
-        // A missing player stays missing; don't retry or report it as an outage.
-        { staleTime: 10 * 60_000, retry: false },
-      ),
-    ),
-  });
+export function playerNames(players: readonly PlayerName[], me?: string): (id: string) => string {
   const names = new Map<string, string>();
-  unique.forEach((id, index) => {
-    const result = results[index];
-    if (result?.data) names.set(id, result.data.display_name);
-    else if (result?.error && errorCode(result.error) === "not_found")
-      names.set(id, "Former member");
-  });
-  return (id) => (id === me ? "You" : (names.get(id) ?? "…"));
+  for (const player of players) {
+    if (player.display_name) names.set(player.id, player.display_name);
+  }
+  return (id) => (id === me ? "You" : (names.get(id) ?? "Former member"));
 }
 
 /** "You & Ben Ortiz", "Ana Ruiz". */

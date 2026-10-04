@@ -1,4 +1,6 @@
-//! Player rows and their public (redacted) projection.
+//! Player rows, their public (redacted) projection, and the names other views embed.
+
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -10,6 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     ApiError, TenantTx,
+    auth::CurrentPlayer,
     models::{Gender, PlayPref, PlayerRole, PlayerStatus},
 };
 
@@ -70,6 +73,84 @@ pub async fn load(tx: &mut TenantTx, id: Uuid) -> Result<Option<PlayerRow>, sqlx
     .bind(id)
     .fetch_optional(&mut **tx)
     .await
+}
+
+/// Whether `viewer` may see player `id`: admins and the player themselves see anyone, other
+/// members only active players with a verified email. `GET /players/{id}` answers 404 and
+/// embedded names are null for anyone else.
+pub fn visible_to(
+    viewer: &CurrentPlayer,
+    id: Uuid,
+    status: PlayerStatus,
+    email_verified: bool,
+) -> bool {
+    viewer.role.is_admin() || id == viewer.id || (status == PlayerStatus::Active && email_verified)
+}
+
+/// A player named by another resource (a match side, a box line, an entry, a match request),
+/// so clients can show names without fetching each player.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct PlayerName {
+    /// Player id.
+    pub id: Uuid,
+    /// Name shown to other members; null when the viewer may not see the player (they left,
+    /// were banned or have not verified their email).
+    pub display_name: Option<String>,
+}
+
+#[derive(FromRow)]
+struct NameRow {
+    id: Uuid,
+    display_name: String,
+    status: PlayerStatus,
+    email_verified: bool,
+}
+
+/// Display names of the players a response names, as its viewer may see them (one query per
+/// response, under the same rule as `GET /players/{id}`).
+#[derive(Debug, Default)]
+pub struct Names(HashMap<Uuid, String>);
+
+impl Names {
+    /// Loads the names of `ids` in the transaction's community that `viewer` may see.
+    pub async fn load(
+        tx: &mut TenantTx,
+        viewer: &CurrentPlayer,
+        ids: impl IntoIterator<Item = Uuid>,
+    ) -> Result<Self, sqlx::Error> {
+        let mut ids: Vec<Uuid> = ids.into_iter().collect();
+        ids.sort_unstable();
+        ids.dedup();
+        if ids.is_empty() {
+            return Ok(Self::default());
+        }
+        let rows: Vec<NameRow> = sqlx::query_as(
+            "SELECT p.id, p.display_name, p.status,
+                    (u.email_verified_at IS NOT NULL) AS email_verified
+             FROM players p JOIN users u ON u.id = p.user_id
+             WHERE p.community_id = $1 AND p.id = ANY($2)",
+        )
+        .bind(tx.community_id())
+        .bind(&ids)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(Self(
+            rows.into_iter()
+                .filter(|row| visible_to(viewer, row.id, row.status, row.email_verified))
+                .map(|row| (row.id, row.display_name))
+                .collect(),
+        ))
+    }
+
+    /// `ids` in order, each with its name when the viewer may see it.
+    pub fn of(&self, ids: &[Uuid]) -> Vec<PlayerName> {
+        ids.iter()
+            .map(|&id| PlayerName {
+                id,
+                display_name: self.0.get(&id).cloned(),
+            })
+            .collect()
+    }
 }
 
 /// The owner's own view of their profile: everything, including gender and contact details.

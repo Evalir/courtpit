@@ -9,7 +9,7 @@ import { describeError } from "@/api/errors";
 import { refreshAfterWrite } from "@/api/queryClient";
 import { disciplineLabel, formatDateTime } from "@/features/format";
 import { actionFor, sideOf, statusBadge, type MatchView } from "@/features/matches/match";
-import { sideName, usePlayerNames } from "@/features/players/names";
+import { playerNames, sideName } from "@/features/players/names";
 import { useSignedIn } from "@/session/SessionProvider";
 import { createStyles } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
@@ -47,20 +47,12 @@ export default function Match() {
     { enabled: leagueId !== "" },
   );
   const data = match.data;
-  const name = usePlayerNames(
-    data
-      ? [
-          ...data.side_a,
-          ...data.side_b,
-          ...(data.proposals ?? []).map((proposal) => proposal.proposed_by),
-        ]
-      : [],
-    me,
-  );
 
   if (match.isPending) return <LoadingState />;
   if (match.error || !data)
     return <ErrorState error={match.error} onRetry={() => void match.refetch()} />;
+  // Only the match's own players propose, report and dispute, so its sides name everyone.
+  const name = playerNames([...data.side_a_names, ...data.side_b_names], me);
   const badge = statusBadge[data.status];
   const now = new Date(match.dataUpdatedAt);
   const when = [data.scheduled_at && formatDateTime(data.scheduled_at), data.location]

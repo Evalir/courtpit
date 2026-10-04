@@ -11,7 +11,9 @@ use uuid::Uuid;
 use super::LeagueRow;
 use crate::{
     ApiError, TenantTx,
+    auth::CurrentPlayer,
     matches::{MATCH_COLUMNS, MatchRow, results::check_score},
+    players::{Names, PlayerName},
 };
 
 /// One line of a box table.
@@ -23,6 +25,8 @@ pub struct StandingLine {
     pub entry_id: Uuid,
     /// Players of the entry (one for singles, two for doubles).
     pub player_ids: Vec<Uuid>,
+    /// The same players with display names, in the order of `player_ids`.
+    pub player_names: Vec<PlayerName>,
     /// Matches with a result.
     pub played: u32,
     /// Matches won.
@@ -108,7 +112,7 @@ fn box_result(
 }
 
 /// Standings of every box of `league`, top tier first. Every placed entry appears (withdrawn
-/// ones keep the results they played).
+/// ones keep the results they played). Player names are left empty for [`name_players`].
 pub async fn compute(
     tx: &mut TenantTx,
     league: &LeagueRow,
@@ -167,6 +171,7 @@ pub async fn compute(
                         .find(|entry| entry.id == row.entry.0)
                         .map(|entry| entry.player_ids.clone())
                         .unwrap_or_default(),
+                    player_names: Vec::new(),
                     played: row.played,
                     won: row.won,
                     lost: row.lost,
@@ -186,4 +191,22 @@ pub async fn compute(
         });
     }
     Ok(out)
+}
+
+/// Names every line's players as `viewer` may see them. [`compute`] leaves names empty: the
+/// season-closing job uses it too and has no viewer.
+pub async fn name_players(
+    tx: &mut TenantTx,
+    viewer: &CurrentPlayer,
+    boxes: &mut [DivisionStanding],
+) -> Result<(), sqlx::Error> {
+    let players = boxes
+        .iter()
+        .flat_map(|division| &division.table)
+        .flat_map(|line| line.player_ids.iter().copied());
+    let names = Names::load(tx, viewer, players).await?;
+    for line in boxes.iter_mut().flat_map(|division| &mut division.table) {
+        line.player_names = names.of(&line.player_ids);
+    }
+    Ok(())
 }
