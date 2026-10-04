@@ -55,6 +55,7 @@ async fn verified_claims(
         (status = 200, body = crate::api::auth::AuthSession),
         (status = 401, body = crate::error::ErrorBody),
         (status = 409, description = "Email belongs to an account not linked to this identity", body = crate::error::ErrorBody),
+        (status = 429, body = crate::error::ErrorBody),
     )
 )]
 pub async fn oidc_login(

@@ -16,6 +16,7 @@ use crate::{
 
 /// Directory filters.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct DirectoryQuery {
     /// Minimum UTR (inclusive).
     #[param(value_type = Option<f64>)]

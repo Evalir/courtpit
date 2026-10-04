@@ -207,7 +207,9 @@ pub struct PatchLeague {
 /// Edits a league while it is still a draft (admin).
 #[utoipa::path(patch, path = "/api/v1/admin/leagues/{id}", tag = "admin",
     params(("id" = Uuid, Path)), request_body = PatchLeague, security(("bearer" = [])),
-    responses((status = 200, body = LeagueView), (status = 409, body = crate::error::ErrorBody),
+    responses((status = 200, body = LeagueView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
         (status = 422, body = crate::error::ErrorBody)))]
 pub async fn patch_league(
     State(state): State<AppState>,
@@ -280,7 +282,9 @@ pub async fn patch_league(
 /// (immediately if that has passed); from then on the dates drive the lifecycle.
 #[utoipa::path(post, path = "/api/v1/admin/leagues/{id}/publish", tag = "admin",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = LeagueView), (status = 409, body = crate::error::ErrorBody)))]
+    responses((status = 200, body = LeagueView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody)))]
 pub async fn publish_league(
     State(state): State<AppState>,
     admin: CurrentPlayer,
@@ -329,7 +333,9 @@ pub async fn publish_league(
 /// Cancels a league that hasn't finished (admin). Its unplayed matches are cancelled too.
 #[utoipa::path(post, path = "/api/v1/admin/leagues/{id}/cancel", tag = "admin",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = LeagueView), (status = 409, body = crate::error::ErrorBody)))]
+    responses((status = 200, body = LeagueView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody)))]
 pub async fn cancel_league(
     State(state): State<AppState>,
     admin: CurrentPlayer,
@@ -369,6 +375,7 @@ pub async fn cancel_league(
 
 /// Filters for `GET /leagues`.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct LeagueQuery {
     /// Lifecycle status.
     pub status: Option<LeagueStatus>,
@@ -452,7 +459,8 @@ pub async fn get_league(
 /// match points, then wins, set and game difference).
 #[utoipa::path(get, path = "/api/v1/leagues/{id}/standings", tag = "leagues",
     params(("id" = Uuid, Path)), security(("bearer" = [])),
-    responses((status = 200, body = Vec<DivisionStanding>), (status = 404, body = crate::error::ErrorBody)))]
+    responses((status = 200, body = Vec<DivisionStanding>),
+        (status = 404, body = crate::error::ErrorBody)))]
 pub async fn league_standings(
     State(state): State<AppState>,
     player: CurrentPlayer,

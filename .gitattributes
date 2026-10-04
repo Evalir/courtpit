@@ -1,0 +1,3 @@
+# Generated from the server's OpenAPI document by `npm run gen` in packages/api-client.
+packages/api-client/openapi.json linguist-generated=true
+packages/api-client/src/schema.d.ts linguist-generated=true

@@ -72,7 +72,8 @@ pub struct CreateMatch {
 /// Proposes a friendly match to other members. Friendly matches never count for rankings.
 #[utoipa::path(post, path = "/api/v1/matches", tag = "matches", request_body = CreateMatch,
     security(("bearer" = [])),
-    responses((status = 201, body = MatchView), (status = 422, body = crate::error::ErrorBody)))]
+    responses((status = 201, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 422, body = crate::error::ErrorBody)))]
 pub async fn create_match(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -129,6 +130,7 @@ pub async fn create_match(
 
 /// Filters for `GET /matches`.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct MatchQuery {
     /// Only matches in this status.
     pub status: Option<MatchStatus>,
@@ -146,7 +148,8 @@ pub struct MatchQuery {
 /// Lists your matches (newest first), or a league's, or (admins) the whole community's.
 #[utoipa::path(get, path = "/api/v1/matches", tag = "matches", params(MatchQuery),
     security(("bearer" = [])),
-    responses((status = 200, body = Page<MatchView>), (status = 403, body = crate::error::ErrorBody)))]
+    responses((status = 200, body = Page<MatchView>),
+        (status = 403, body = crate::error::ErrorBody)))]
 pub async fn list_matches(
     State(state): State<AppState>,
     player: CurrentPlayer,
@@ -241,6 +244,7 @@ pub struct CancelMatch {
 #[utoipa::path(post, path = "/api/v1/matches/{id}/cancel", tag = "matches",
     params(("id" = Uuid, Path)), request_body = CancelMatch, security(("bearer" = [])),
     responses((status = 200, body = MatchView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
         (status = 409, body = crate::error::ErrorBody)))]
 pub async fn cancel_match(
     State(state): State<AppState>,

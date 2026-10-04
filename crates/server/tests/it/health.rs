@@ -29,6 +29,18 @@ async fn openapi_lists_health_endpoints() {
 }
 
 #[tokio::test]
+async fn openapi_route_serves_the_generated_document() {
+    let app = TestApp::spawn().await;
+    let served = app
+        .get("/api/v1/openapi.json")
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    let generated = serde_json::to_value(courtpit_server::app::openapi()).unwrap();
+    assert_eq!(served, generated);
+}
+
+#[tokio::test]
 async fn unknown_route_is_404() {
     let app = TestApp::spawn().await;
     let res = app.get("/nope").send().await;
