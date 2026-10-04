@@ -26,6 +26,7 @@ pub mod rankings;
 pub mod seed;
 pub mod telemetry;
 pub mod tenancy;
+pub mod web;
 
 pub use app::{AppState, router};
 pub use config::Config;

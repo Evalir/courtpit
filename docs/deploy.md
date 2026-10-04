@@ -295,6 +295,36 @@ docker run --rm courtpit courtpit-server --help
 docker run --rm courtpit pg_dump --version
 ```
 
+### The web app
+
+A `web` stage (`node:22-slim`) runs `npm ci` at the repository root and
+`expo export --platform web` in `apps/mobile`, then writes a `.gz` twin of every text file.
+The runtime copies the export to `/app/web` and sets `COURTPIT_WEB_DIR=/app/web`, so
+`courtpit-server serve` answers every path outside `/api`, `/healthz` and `/readyz` with the app
+(decisions 77, 88):
+
+- A path naming a file (`/_expo/static/js/web/entry-<hash>.js`, `/favicon.ico`) is served from
+  the export, gzipped when the client accepts it; a missing file is a 404.
+- Any other path (`/`, `/leagues/<id>`, `/verify?email=…`) gets `index.html`, and the app's router
+  takes over in the browser.
+- Content-hashed files under `/_expo/static/` and `/assets/` are cached for a year
+  (`immutable`); everything else is `no-cache`, so a deploy reaches users on their next load.
+- Unknown `/api/…` paths answer with the usual JSON `not_found` error, never the app.
+
+The export is built without `EXPO_PUBLIC_COMMUNITY`, so one image serves every community: the
+browser's `Host` (`{slug}.courtpit.app` or a custom domain, section 8) picks the community and the
+session is the httpOnly cookie. Leave `COURTPIT_WEB_DIR` unset to run the API alone; the server
+refuses to start if it is set to a directory without `index.html`.
+
+To try the same thing locally without Docker:
+
+```sh
+(cd apps/mobile && npx expo export --platform web --output-dir /tmp/courtpit-web)
+COURTPIT_WEB_DIR=/tmp/courtpit-web COURTPIT_BASE_DOMAIN=localhost COURTPIT_COOKIE_SECURE=false \
+  cargo run -p courtpit-server -- serve
+# then open http://demo.localhost:8080 (browsers resolve *.localhost to this machine)
+```
+
 ## 11. Neon and transaction pooling
 
 Phase 1 runs on Neon Free. Every Neon endpoint has two hostnames: the direct one

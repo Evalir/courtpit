@@ -2,7 +2,12 @@
 
 use std::{sync::Arc, time::Duration};
 
-use axum::{Json, Router, http::HeaderName, routing::get};
+use axum::{
+    Json, Router,
+    extract::Request,
+    http::HeaderName,
+    routing::{any, get},
+};
 use sqlx::PgPool;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
@@ -12,7 +17,7 @@ use utoipa::{Modify, OpenApi};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
-    api,
+    ApiError, api,
     auth::{oidc::OidcVerifier, rate_limit::RateLimiter},
     backup::Backup,
     clock::{Clock, SystemClock},
@@ -20,6 +25,7 @@ use crate::{
     mailer::{LogMailer, Mailer, ResendMailer},
     openapi::{ApiConventions, ApiDoc},
     tenancy::TenantCache,
+    web::WebApp,
 };
 
 /// State shared by every handler. Cheap to clone.
@@ -172,22 +178,34 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     api_router().1
 }
 
-/// The complete application router, ready to serve.
-pub fn router(state: AppState) -> Router {
+/// Unknown API paths answer in the API's error shape, never with the web app.
+async fn no_such_route() -> ApiError {
+    ApiError::NotFound("route")
+}
+
+/// The complete application router, ready to serve. With a `web` app, every path outside the
+/// API serves it (see [`WebApp`]).
+pub fn router(state: AppState, web: Option<WebApp>) -> Router {
     let (api, openapi) = api_router();
     let client_ip_source = state.config.client_ip_source.clone();
     let openapi = Arc::new(openapi);
     let request_id = HeaderName::from_static("x-request-id");
-    api.route(
-        "/api/v1/openapi.json",
-        get(move || {
-            let doc = Arc::clone(&openapi);
-            async move { Json(doc.as_ref().clone()) }
-        }),
-    )
-    .layer(PropagateRequestIdLayer::new(request_id.clone()))
-    .layer(TraceLayer::new_for_http())
-    .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
-    .layer(client_ip_source.into_extension())
-    .with_state(state)
+    let api = api
+        .route(
+            "/api/v1/openapi.json",
+            get(move || {
+                let doc = Arc::clone(&openapi);
+                async move { Json(doc.as_ref().clone()) }
+            }),
+        )
+        .route("/api/{*path}", any(no_such_route));
+    let app = match web {
+        Some(web) => api.fallback(move |request: Request| web.clone().respond(request)),
+        None => api,
+    };
+    app.layer(PropagateRequestIdLayer::new(request_id.clone()))
+        .layer(TraceLayer::new_for_http())
+        .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
+        .layer(client_ip_source.into_extension())
+        .with_state(state)
 }

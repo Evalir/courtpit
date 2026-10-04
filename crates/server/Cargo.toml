@@ -47,11 +47,11 @@ tracing-subscriber.workspace = true
 utoipa.workspace = true
 utoipa-axum.workspace = true
 uuid.workspace = true
+tower.workspace = true
 tower-http.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
-tower.workspace = true
 
 [lints]
 workspace = true
