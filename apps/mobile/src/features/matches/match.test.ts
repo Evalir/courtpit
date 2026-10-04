@@ -14,6 +14,9 @@ function match(overrides: Partial<MatchView>): MatchView {
     discipline: "singles",
     side_a: [ME],
     side_b: [OPP],
+    // Names don't affect these helpers.
+    side_a_names: [],
+    side_b_names: [],
     status: "proposed",
     match_format: {
       sets_to_win: 2,

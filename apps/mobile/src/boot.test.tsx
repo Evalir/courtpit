@@ -109,6 +109,8 @@ describe("boot", () => {
               discipline: "singles",
               side_a: [opponent],
               side_b: [me],
+              side_a_names: [{ id: opponent, display_name: "Mateo Alvarez" }],
+              side_b_names: [{ id: me, display_name: "Lily Fernandez" }],
               status: "reported",
               reported_by: opponent,
               score: {
@@ -130,10 +132,6 @@ describe("boot", () => {
           next_cursor: null,
         },
       }),
-      "/api/v1/players/": () => ({
-        status: 200,
-        body: { id: opponent, display_name: "Mateo Alvarez" },
-      }),
     });
 
     const view = await renderApp("/");
@@ -145,5 +143,7 @@ describe("boot", () => {
     expect(view.getByText("2–6 3–6")).toBeVisible();
     const session = requests.find((request) => request.url.endsWith("/api/v1/auth/session"));
     expect(session?.headers.get("Authorization")).toBe("Bearer stored-token");
+    // Names come with the matches: no request per player.
+    expect(requests.filter((request) => request.url.includes("/api/v1/players"))).toEqual([]);
   });
 });

@@ -147,7 +147,7 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 |---|---|---|---|
 | Sign in | `/sign-in` | `POST /auth/otp/request` | built |
 | Verify code | `/verify?email=` | `POST /auth/otp/verify`, `/auth/otp/request` (resend) | built |
-| Home | `/` | `GET /me`, `GET /matches`, `GET /players/{id}` | built |
+| Home | `/` | `GET /me`, `GET /matches` | built |
 | Match | `/matches/[id]` | `GET /matches/{id}`, `GET /leagues/{id}`; `POST …/confirm`, `…/dispute`, `…/proposals/{id}/accept`, `…/decline` | built |
 | Match: propose a time, report a score, cancel | `/matches/[id]` | `POST …/proposals`, `…/score`, `…/cancel` | F2 |
 | Play: directory | `/play` | `GET /players?q=` (cursor pages) | built |
@@ -173,9 +173,10 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
   the community and the session (a confirmed league match moves standings and rankings too).
 - **Lists** with cursors use `useCursorList` over the fetch client: `openapi-react-query`'s
   infinite query sends `cursor=0` for the first page, which the API rejects as a bad cursor.
-- **Player names.** Matches, entries and standings carry player ids only; `usePlayerNames` fetches
-  each id once (`GET /players/{id}`, cached 10 minutes, deduplicated). The viewer reads "You", a
-  player the viewer can no longer see reads "Former member".
+- **Player names.** Matches, standings, entries and match requests embed `{ id, display_name }`
+  for every player they name (`side_a_names` / `side_b_names`, `player_names`; decision 85), and
+  `playerNames` turns those lists into a lookup without any requests. The viewer reads "You"; a
+  player the viewer may not see comes with a null name and reads "Former member".
 - **Errors** render the API's `message` (written for people, decision 2) via `describeError`;
   code switches on `error.code`.
 - **Time.** ISO instants from the API are shown in the device's locale and time zone with
@@ -197,7 +198,8 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
   grouping, league dates and format descriptions) has plain unit tests next to the code.
 - `src/boot.test.tsx` mounts the real route tree with a stubbed `fetch`: tenant → theme →
   signed-out deep link lands on sign-in; a failed boot offers a retry; a stored native token
-  restores the session and Home shows the match that needs the player.
+  restores the session and Home shows the match that needs the player, named from the match
+  itself with no per-player requests.
 - CI (`mobile` job) runs Prettier, ESLint, `tsc` (after generating Expo Router's route types),
   Jest and a production web export.
 
