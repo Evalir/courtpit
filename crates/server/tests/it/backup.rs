@@ -147,7 +147,8 @@ async fn the_job_uploads_prunes_and_schedules_the_next_night() {
     ]);
     let state = backup_state(&app, &store, false);
     app.clock.set(utc(10, 4, 10, 30));
-    jobs::enqueue(&app.db, Job::BackupDatabase {}, Utc::now())
+    // Due at the pinned time, not the wall clock (which passes 10:30 on 2026-10-04).
+    jobs::enqueue(&app.db, Job::BackupDatabase {}, utc(10, 4, 10, 30))
         .await
         .unwrap();
 
