@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -9,6 +9,7 @@ import { refreshAfterWrite } from "@/api/queryClient";
 import { formatDateTime } from "@/features/format";
 import { startOfDay } from "@/features/matches/when";
 import { WhenPicker } from "@/features/matches/WhenPicker";
+import { closeModal } from "@/features/navigation";
 import { space } from "@/theme/tokens";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
@@ -31,7 +32,7 @@ export default function ProposeTime() {
   const propose = $api.useMutation("post", "/api/v1/matches/{id}/proposals", {
     onSuccess: async () => {
       await refreshAfterWrite(queryClient);
-      router.back();
+      closeModal({ pathname: "/matches/[id]", params: { id } });
     },
   });
 

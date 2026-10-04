@@ -1868,7 +1868,9 @@ export interface components {
                 /** @description Role within the community. */
                 role: components["schemas"]["PlayerRole"];
                 /** @description Social handles; only when the player opted in and the viewer is verified. */
-                socials?: Record<string, never> | null;
+                socials?: {
+                    [key: string]: string;
+                } | null;
                 /** @description String setup, if shared. */
                 strings?: string | null;
                 /**
@@ -2012,7 +2014,9 @@ export interface components {
             /** @description Role within the community. */
             role: components["schemas"]["PlayerRole"];
             /** @description Social handles keyed by network. */
-            socials: Record<string, never>;
+            socials: {
+                [key: string]: string;
+            };
             /** @description Whether social handles are shown to other players. */
             socials_visible: boolean;
             /** @description Membership status. */
@@ -2053,7 +2057,9 @@ export interface components {
             /** @description Role within the community. */
             role: components["schemas"]["PlayerRole"];
             /** @description Social handles; only when the player opted in and the viewer is verified. */
-            socials?: Record<string, never> | null;
+            socials?: {
+                [key: string]: string;
+            } | null;
             /** @description String setup, if shared. */
             strings?: string | null;
             /**
@@ -2104,8 +2110,10 @@ export interface components {
             preferred_locations?: string[] | null;
             /** @description New racket; `null` clears it. */
             racket?: string | null;
-            /** @description New social handles (object of strings). */
-            socials?: Record<string, never> | null;
+            /** @description New social handles keyed by network (up to 10 strings). */
+            socials?: {
+                [key: string]: string;
+            } | null;
             /** @description Whether social handles are public. */
             socials_visible?: boolean | null;
             /** @description New strings; `null` clears them. */

@@ -10,6 +10,7 @@ import { useCommunity } from "@/tenant/TenantProvider";
 import { createStyles } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
 import { Avatar } from "@/ui/Avatar";
+import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
 import { Segmented } from "@/ui/Segmented";
 import { EmptyState, ErrorState, LoadingState } from "@/ui/States";
@@ -44,6 +45,13 @@ export default function Rankings() {
         {disciplines.length > 1 ? (
           <Segmented options={disciplines} value={discipline} onChange={setDiscipline} />
         ) : null}
+        <Button
+          label="Your points history"
+          variant="secondary"
+          size="sm"
+          icon="time-outline"
+          onPress={() => router.push("/rankings/me")}
+        />
         <Text variant="caption" tone="textMuted">
           Points from league and tournament play over the last 52 weeks.
           {rows[0] ? ` Updated ${formatDateTime(rows[0].refreshed_at)}.` : ""}

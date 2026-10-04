@@ -91,7 +91,7 @@ pub struct PlayerProfile {
     /// Whether the phone number is shown to other players.
     pub phone_visible: bool,
     /// Social handles keyed by network.
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, String>)]
     pub socials: Value,
     /// Whether social handles are shown to other players.
     pub socials_visible: bool,
@@ -161,7 +161,7 @@ pub struct PlayerPublic {
     pub tension_kg: Option<Decimal>,
     /// Phone number; only when the player opted in and the viewer is verified.
     pub phone: Option<String>,
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<std::collections::HashMap<String, String>>)]
     /// Social handles; only when the player opted in and the viewer is verified.
     pub socials: Option<Value>,
     /// Role within the community.

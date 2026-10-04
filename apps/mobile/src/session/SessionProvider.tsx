@@ -14,7 +14,8 @@ type AuthSession = components["schemas"]["AuthSession"];
 /** Who is using the app, as far as the client knows. */
 export type Session =
   | { status: "loading" }
-  | { status: "signed-out" }
+  /** `expired`: the server ended the session (not the player signing out). */
+  | { status: "signed-out"; expired: boolean }
   | { status: "signed-in"; info: SessionInfo }
   /** Signed in, but not a member here or banned (`GET /auth/session` → 403). */
   | { status: "no-access"; error: unknown }
@@ -31,8 +32,9 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-// boot: reading the stored token (native); check: asking the server; out: no session.
-type Phase = "boot" | "check" | "out";
+// boot: reading the stored token (native); check: asking the server; out: no session;
+// expired: no session any more because the server ended it.
+type Phase = "boot" | "check" | "out" | "expired";
 
 /**
  * Owns the session lifecycle. Native keeps a bearer token in secure storage; web relies on the
@@ -56,13 +58,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const forgetUserData = () =>
     queryClient.removeQueries({ predicate: (query) => queryPath(query) !== "/api/v1/tenant" });
 
-  const endLocally = async () => {
+  const endLocally = async (phase: "out" | "expired") => {
     await sessionToken.clear().catch(() => undefined);
     forgetUserData();
-    setPhase("out");
+    setPhase(phase);
   };
 
-  useEffect(() => onSessionExpired(() => void endLocally()));
+  useEffect(() => onSessionExpired(() => void endLocally("expired")));
 
   const check = $api.useQuery("get", "/api/v1/auth/session", undefined, {
     enabled: phase === "check",
@@ -71,11 +73,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const session = ((): Session => {
     if (phase === "boot") return { status: "loading" };
-    if (phase === "out") return { status: "signed-out" };
+    if (phase === "out" || phase === "expired") {
+      return { status: "signed-out", expired: phase === "expired" };
+    }
     if (check.data) return { status: "signed-in", info: check.data };
     if (check.error) {
       const code = errorCode(check.error);
-      if (code === "unauthorized") return { status: "signed-out" };
+      if (code === "unauthorized") return { status: "signed-out", expired: false };
       if (code === "forbidden") return { status: "no-access", error: check.error };
       return { status: "error", error: check.error, retry: () => void check.refetch() };
     }
@@ -91,7 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     async signOut() {
       await fetch.POST("/api/v1/auth/logout").catch(() => undefined);
-      await endLocally();
+      await endLocally("out");
     },
   };
 
