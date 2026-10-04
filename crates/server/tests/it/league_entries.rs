@@ -407,3 +407,206 @@ async fn withdrawal_rules() {
         .expect(StatusCode::OK);
     assert_eq!(w["status"], "withdrawn");
 }
+
+async fn change_partner(
+    app: &TestApp,
+    session: &Session,
+    league: &str,
+    entry: &Value,
+    body: Value,
+) -> crate::common::Res {
+    app.post(&format!(
+        "/api/v1/leagues/{league}/entries/{}/partner",
+        entry["id"].as_str().unwrap()
+    ))
+    .as_(session)
+    .json(body)
+    .send()
+    .await
+}
+
+async fn my_entries(app: &TestApp, session: &Session) -> Vec<Value> {
+    app.get("/api/v1/me/entries")
+        .as_(session)
+        .send()
+        .await
+        .expect(StatusCode::OK)
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+#[tokio::test]
+async fn players_looking_for_a_partner_can_be_invited() {
+    let (app, admin, ps) = setup(&["ana", "bo", "cy"]).await;
+    let (ana, bo, cy) = (&ps[0], &ps[1], &ps[2]);
+    let league = open_league(&app, &admin, "doubles").await;
+    let looking = json!({ "looking_for_partner": true });
+    let ana_solo = register(&app, ana, &league, looking.clone())
+        .await
+        .expect(StatusCode::CREATED);
+    let bo_solo = register(&app, bo, &league, looking)
+        .await
+        .expect(StatusCode::CREATED);
+
+    // Cy, not yet entered, invites Bo although Bo is on his own solo entry.
+    let cy_entry = register(&app, cy, &league, json!({ "partner_id": bo.player_id }))
+        .await
+        .expect(StatusCode::CREATED);
+    // Ana turns her listing into an invitation to Bo as well.
+    let _ = change_partner(
+        &app,
+        bo,
+        &league,
+        &ana_solo,
+        json!({ "partner_id": cy.player_id }),
+    )
+    .await
+    .expect(StatusCode::FORBIDDEN);
+    let invited = change_partner(
+        &app,
+        ana,
+        &league,
+        &ana_solo,
+        json!({ "partner_id": bo.player_id }),
+    )
+    .await
+    .expect(StatusCode::OK);
+    assert_eq!(invited["invited_partner_id"], json!(bo.player_id));
+    assert_eq!(invited["looking_for_partner"], false);
+
+    // Bo sees his own entry and both invitations, each with its league.
+    let mine = my_entries(&app, bo).await;
+    let ids: Vec<&Value> = mine.iter().map(|item| &item["entry"]["id"]).collect();
+    assert_eq!(ids, [&ana_solo["id"], &bo_solo["id"], &cy_entry["id"]]);
+    assert!(
+        mine.iter()
+            .all(|item| item["league"]["id"] == json!(league))
+    );
+    assert_eq!(mine[0]["league"]["name"], "Autumn doubles");
+
+    let done = act(&app, bo, &league, &ana_solo, "accept")
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(done["player_ids"], json!([ana.player_id, bo.player_id]));
+    // Bo's solo entry is withdrawn and Cy's invitation lapses, so Cy can ask someone else.
+    // Bo is paired now: nobody can invite him again.
+    let mine = my_entries(&app, bo).await;
+    assert_eq!(mine.len(), 1);
+    assert_eq!(mine[0]["entry"]["status"], "confirmed");
+    let cy_mine = my_entries(&app, cy).await;
+    assert!(cy_mine[0]["entry"]["invited_partner_id"].is_null());
+    let _ = act(&app, bo, &league, &cy_entry, "accept")
+        .await
+        .expect(StatusCode::FORBIDDEN);
+    let _ = change_partner(
+        &app,
+        cy,
+        &league,
+        &cy_entry,
+        json!({ "partner_id": bo.player_id }),
+    )
+    .await
+    .expect(StatusCode::CONFLICT);
+    let _ = change_partner(
+        &app,
+        cy,
+        &league,
+        &cy_entry,
+        json!({ "partner_id": ana.player_id }),
+    )
+    .await
+    .expect(StatusCode::CONFLICT);
+    let _ = change_partner(
+        &app,
+        ana,
+        &league,
+        &ana_solo,
+        json!({ "looking_for_partner": true }),
+    )
+    .await
+    .expect(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn a_declined_entry_invites_someone_else_or_looks() {
+    let (app, admin, ps) = setup(&["ana", "bo", "cy"]).await;
+    let (ana, bo, cy) = (&ps[0], &ps[1], &ps[2]);
+    let league = open_league(&app, &admin, "doubles").await;
+    let entry = register(&app, ana, &league, json!({ "partner_id": bo.player_id }))
+        .await
+        .expect(StatusCode::CREATED);
+    let _ = act(&app, bo, &league, &entry, "decline")
+        .await
+        .expect(StatusCode::OK);
+    assert!(
+        my_entries(&app, bo).await.is_empty(),
+        "a declined invitation is gone"
+    );
+
+    let _ = change_partner(&app, ana, &league, &entry, json!({}))
+        .await
+        .expect(StatusCode::UNPROCESSABLE_ENTITY);
+    let _ = change_partner(
+        &app,
+        ana,
+        &league,
+        &entry,
+        json!({ "partner_id": ana.player_id }),
+    )
+    .await
+    .expect(StatusCode::UNPROCESSABLE_ENTITY);
+    let listed = change_partner(
+        &app,
+        ana,
+        &league,
+        &entry,
+        json!({ "looking_for_partner": true }),
+    )
+    .await
+    .expect(StatusCode::OK);
+    assert_eq!(listed["looking_for_partner"], true);
+    assert!(listed["invited_partner_id"].is_null());
+    let looking = app
+        .get(&format!(
+            "/api/v1/leagues/{league}/entries?looking_for_partner=true"
+        ))
+        .as_(cy)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(looking[0]["id"], entry["id"]);
+
+    let reinvited = change_partner(
+        &app,
+        ana,
+        &league,
+        &entry,
+        json!({ "partner_id": cy.player_id }),
+    )
+    .await
+    .expect(StatusCode::OK);
+    assert_eq!(reinvited["looking_for_partner"], false);
+    assert_eq!(my_entries(&app, cy).await.len(), 1);
+
+    app.clock.advance(Duration::days(8));
+    let _ = change_partner(
+        &app,
+        ana,
+        &league,
+        &entry,
+        json!({ "partner_id": bo.player_id }),
+    )
+    .await
+    .expect(StatusCode::CONFLICT);
+    let _ = app
+        .post(&format!("/api/v1/admin/leagues/{league}/cancel"))
+        .as_(&admin)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert!(
+        my_entries(&app, ana).await.is_empty(),
+        "cancelled leagues drop out"
+    );
+}

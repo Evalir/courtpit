@@ -157,7 +157,7 @@ pub async fn load(tx: &mut TenantTx, id: Uuid, lock: bool) -> Result<LeagueRow, 
 }
 
 /// A league as the API shows it.
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct LeagueView {
     /// League id.
     pub id: Uuid,

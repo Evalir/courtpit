@@ -2149,6 +2149,125 @@
         ]
       }
     },
+    "/api/v1/leagues/{id}/entries/{entry_id}/partner": {
+      "post": {
+        "tags": [
+          "leagues"
+        ],
+        "summary": "Changes who a solo doubles/mixed entry waits for: invites a partner (replacing any open\ninvitation, e.g. after a decline) or lists the entry as looking for one. Only its creator,\nonly while registration is open.",
+        "operationId": "change_partner",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Register"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any other error; see `error.code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session_cookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/leagues/{id}/entries/{entry_id}/withdraw": {
       "post": {
         "tags": [
@@ -3965,6 +4084,58 @@
         ]
       }
     },
+    "/api/v1/me/entries": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "The caller's live entries (their own, and entries inviting them as partner) in leagues\nthat have not finished or been cancelled, by league start. Bounded by the community's\nlive leagues, so not paginated.",
+        "operationId": "my_entries",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MyEntry"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any other error; see `error.code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session_cookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/me/export": {
       "get": {
         "tags": [
@@ -5724,6 +5895,24 @@
           "player": {
             "$ref": "#/components/schemas/PlayerProfile",
             "description": "Profile in the request community."
+          }
+        }
+      },
+      "MyEntry": {
+        "type": "object",
+        "description": "One of the caller's entries or invitations, with its league.",
+        "required": [
+          "league",
+          "entry"
+        ],
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/EntryView",
+            "description": "The entry, as its players see it."
+          },
+          "league": {
+            "$ref": "#/components/schemas/LeagueView",
+            "description": "The league the entry is in."
           }
         }
       },

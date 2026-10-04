@@ -183,6 +183,35 @@ pub async fn require_not_entered(
     }
 }
 
+/// Errors if `player` is already paired in `league`: a live entry with two players, or a
+/// singles entry. A solo doubles entry still waiting for its partner does not count, so a
+/// player looking for a partner can be invited (accepting withdraws their solo entry).
+pub async fn require_unpaired(
+    tx: &mut TenantTx,
+    league: Uuid,
+    player: Uuid,
+    who: &str,
+) -> Result<(), ApiError> {
+    let paired: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM league_entries
+         WHERE community_id = $1 AND league_id = $2 AND status <> 'withdrawn'
+           AND player_ids @> ARRAY[$3]::uuid[]
+           AND NOT (status = 'pending_partner' AND cardinality(player_ids) = 1))",
+    )
+    .bind(tx.community_id())
+    .bind(league)
+    .bind(player)
+    .fetch_one(&mut **tx)
+    .await?;
+    if paired {
+        Err(ApiError::conflict(format!(
+            "{who} already in an entry of this league"
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 /// Checks mixed-doubles eligibility under the community's `mixed_eligibility` setting
 /// (spec §9; the domain crate holds the rule). With one player, checks they are eligible
 /// to register looking for a partner. Other disciplines have no gender rule.
