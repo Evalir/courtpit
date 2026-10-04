@@ -37,7 +37,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Run the HTTP API (and, later, the background job loop).
+    /// Run the HTTP API and the background job loop.
     Serve(Config),
     /// Run due background jobs once, then exit (for hosts that stop the server when idle).
     Tick(TickArgs),

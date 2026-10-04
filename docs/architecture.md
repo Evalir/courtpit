@@ -1,6 +1,6 @@
 # Courtpit — Architecture
 
-**Status:** v0.1 draft, agreed in discussion on 2026-10-02. Living document; the Decisions Log at the end records what was settled and why.
+**Status:** v0.1 draft, agreed in discussion on 2026-10-02; updated 2026-10-03 with the Phase 1/Phase 2 hosting plan (§17) and the resolved open questions (§20). Living document; the Decisions Log at the end records what was settled and why, and `docs/decisions.md` records the finer rulings.
 
 ## 1. Product scope (v1)
 
@@ -29,7 +29,7 @@ Rules that communities will want to tune (match formats, scoring, fees) are data
                                     webhooks)
 ```
 
-`courtpit-server` serves the REST API, verifies Stripe webhooks, and runs an in-process job loop (season transitions, auto-confirmations, reminders, leaderboard refresh) backed by a `jobs` table. Multiple instances coordinate through Postgres (`FOR UPDATE SKIP LOCKED`), nothing else.
+`courtpit-server` serves the REST API, verifies Stripe webhooks, and runs an in-process job loop (season transitions, auto-confirmations, reminders, leaderboard refresh) backed by a `jobs` table. Multiple instances coordinate through Postgres (`FOR UPDATE SKIP LOCKED`), nothing else. While the server is scaled to zero, an hourly `courtpit-server tick` drains due jobs and exits (§17).
 
 Expected load is low; the stack is chosen so that a single small instance handles thousands of requests per second on CRUD traffic and the only resource to watch is the Postgres connection pool.
 
@@ -41,17 +41,19 @@ courtpit/
   crates/
     domain/                  # pure logic: scores, state machines, draws, pairings, scoring
     server/                  # axum app, auth, extractors, sqlx queries, migrations, jobs
-                             # bin subcommands: serve | migrate | create-community | set-fee ...
+                             # bin subcommands: serve | tick | migrate | create-community |
+                             #   seed | openapi (later: set-fee ...)
   apps/
     mobile/                  # Expo + Expo Router + react-native-web; EAS build profiles per community
   packages/
     api-client/              # TypeScript client generated from the server's OpenAPI spec
+                             #   (openapi-typescript + openapi-fetch; committed, drift-checked in CI)
   migrations/                # sqlx migrations
 ```
 
 Two crates is intentional. Split `server` further only when a module is clearly reusable (e.g. a thin Stripe client).
 
-Core dependencies: `axum`, `tokio`, `sqlx` (Postgres, compile-time checked queries), `utoipa` (OpenAPI), `argon2`, `reqwest`, `tracing` + OpenTelemetry, `moka` (in-memory tenant cache). Stripe via a thin hand-written `reqwest` client for the handful of endpoints needed, rather than the full `async-stripe` crate.
+Core dependencies: `axum`, `tokio`, `sqlx` (Postgres; runtime-checked queries, see `docs/decisions.md` #1), `utoipa` (OpenAPI), `argon2`, `reqwest`, `tracing` + OpenTelemetry, `moka` (in-memory tenant cache). Stripe via a thin hand-written `reqwest` client for the handful of endpoints needed, rather than the full `async-stripe` crate.
 
 ## 5. Tenancy and white-labelling
 
@@ -150,12 +152,16 @@ Gender is collected on the profile as an optional field with `undisclosed` as de
 State machine (in `domain`):
 
 ```
+   ┌───────────────── report ─────────────────┐
+   │                                          ▼
 proposed ──accept──▶ scheduled ──report──▶ reported ──confirm / timeout──▶ confirmed
    │                     │                    │
    │                     │                    └──dispute──▶ disputed ──admin──▶ resolved
    │                     └──no-show / admin──▶ walkover
    └──decline all / admin──▶ cancelled
 ```
+
+Reporting a score implies the match was played, so a score may be reported straight from `proposed` (any open proposal is then superseded); league matches, which start `proposed`, are often played this way.
 
 Scheduling is a proposal flow: either side proposes a time and place, the other accepts or counter-proposes. No chat in v1; polling is sufficient.
 
@@ -173,11 +179,11 @@ Score format and validation:
 
 Lifecycle `draft → registration → active → finished` is driven by the dates; a job flips status on time. Admins can cancel at any stage (triggering refunds).
 
-Registration: a player creates an entry. For singles it is immediately `confirmed` (or `pending_payment` if there is a fee). For doubles and mixed the creator names a partner; the entry is `pending_partner` until the partner accepts, and each partner pays their own share on acceptance. A `looking_for_partner` flag makes solo registrants visible to each other; admins can pair remaining solos before the draw. Mixed entries require exactly one `female` and one `male` player; `undisclosed` or `other` makes a player ineligible for mixed divisions (and the UI says why).
+Registration: a player creates an entry. For singles it is immediately `confirmed` (or `pending_payment` if there is a fee). For doubles and mixed the creator names a partner; the entry is `pending_partner` until the partner accepts, and each partner pays their own share on acceptance. A `looking_for_partner` flag makes solo registrants visible to each other; admins can pair remaining solos before the draw. By default mixed entries require exactly one `female` and one `male` player, and `undisclosed` or `other` makes a player ineligible for mixed divisions (the UI says why). A community can set `settings.mixed_eligibility` to `"any_two_distinct"` to admit any two different disclosed genders, so `other` players can enter mixed; `undisclosed` is never eligible. Friendly mixed matches never check gender.
 
-Divisions ("boxes") are UTR bands of 6–8 entries with a `tier` (1 = top). At `registration → active`, the domain crate places confirmed entries into divisions and generates a full round-robin schedule per division (circle method). Entries then self-schedule their matches within the active window.
+Divisions ("boxes") are UTR bands of 6–8 entries with a `tier` (1 = top), always generated by placement (there is no manual division mode). At `registration → active`, the domain crate places confirmed entries into divisions and generates a full round-robin schedule per division (circle method). Entries then self-schedule their matches within the active window. A league that reaches `starts_at` with fewer than two confirmed entries (or a box under two) is cancelled instead, and its entrants are emailed.
 
-Standings per division are computed from confirmed matches using the league scoring rules. At `active → finished`, season-end ranking points are written to the ledger and promotion/relegation is applied for the next season (default: top two up, bottom two down), which is the "ranking moves up or down" in the product description — distinct from the points leaderboard.
+Standings per division are computed from confirmed matches using the league scoring rules. At `ends_at` unplayed matches are cancelled, but the season only finishes once no league match is still `reported` or `disputed`: reported scores auto-confirm, admins resolve disputes (listed at `GET /admin/leagues/{id}/unresolved`) or force the finish, which leaves those matches out of the table. At `active → finished`, season-end ranking points are written to the ledger and promotion/relegation is applied for the next season (default: top two up, bottom two down), which is the "ranking moves up or down" in the product description — distinct from the points leaderboard.
 
 ## 10. Tournaments
 
@@ -230,7 +236,7 @@ Push (Expo's push service over APNs/FCM) is the primary channel, keyed by `devic
 
 ## 15. API
 
-REST JSON under `/api/v1`, OpenAPI generated by `utoipa`, TypeScript client generated into `packages/api-client` in CI. Resource groups: `tenant`, `auth`, `me`, `players`, `leagues` (+ divisions, entries, standings), `tournaments` (+ entries, draw), `matches` (+ proposals, score, confirm, dispute), `match-requests`, `rankings`, `payments` (checkout, webhook), `admin/*`. Cursor pagination on lists. No GraphQL and no realtime in v1.
+REST JSON under `/api/v1`, OpenAPI generated by `utoipa` (also printed by `courtpit-server openapi`), TypeScript client generated into `packages/api-client` with `npm run gen`, committed, and checked for drift in CI. Resource groups: `tenant`, `auth`, `me`, `players`, `leagues` (+ divisions, entries, standings), `tournaments` (+ entries, draw), `matches` (+ proposals, score, confirm, dispute), `match-requests`, `rankings`, `payments` (checkout, webhook), `admin/*`. Cursor pagination on lists. No GraphQL and no realtime in v1.
 
 ## 16. Mobile client and distribution
 
@@ -242,7 +248,17 @@ No avatar uploads in v1 (avoids object storage); community logos are URLs in the
 
 ## 17. Deployment, operations, observability
 
-Docker image (distroless) built in GitHub Actions; deployed to Fly.io or a single VPS, with managed Postgres (Fly Postgres or Neon). Migrations run as a release step (`courtpit-server migrate`). Secrets via the platform's secret store. `tracing` with OpenTelemetry export to a hosted backend's free tier; structured logs include `community_id` and request id. Postgres daily backups with point-in-time recovery enabled. Integration tests run against a real Postgres (testcontainers or a CI service container); the domain crate is covered by plain unit tests.
+One Docker image built from a multi-stage `Dockerfile`: a Debian slim runtime with `postgresql-client` (for `pg_dump`) rather than distroless. GitHub Actions deploys it to Fly.io after CI passes on `main`; migrations run as Fly's release step (`courtpit-server migrate`, over a direct database connection); secrets live in Fly's secret store. `tracing` emits JSON logs with the request id; OpenTelemetry export to a hosted backend's free tier comes later. Integration tests run against a real Postgres service container, and a second CI job runs the whole suite through pgbouncer in transaction mode; the domain crate is covered by plain unit tests. Step-by-step setup is in `docs/deploy.md`.
+
+**Phase 1 (before payments, about $0/month).**
+
+- *Server:* one Fly Machine with `auto_stop_machines = "stop"` and `min_machines_running = 0`, billed only while serving traffic. Cold starts are accepted.
+- *Database:* Neon Free (scale-to-zero after 5 minutes, 1 GB, 6 h point-in-time restore). The app connects through Neon's **pooled** connection string (pgbouncer, transaction mode). That is safe because the server keeps no session state: `TenantTx` uses `SET LOCAL`/`set_config(.., true)`, job claims are single `SKIP LOCKED` statements, and Neon's pooler tracks protocol-level prepared statements. Anything that needs a session — migrations (sqlx's advisory lock) and `pg_dump` — uses the direct URL (`DATABASE_DIRECT_URL`).
+- *Jobs:* the in-process loop runs while the Machine is awake. Because nothing polls while it is stopped, a Fly **scheduled Machine** runs `courtpit-server tick` hourly: it drains due jobs (bounded by `--max-seconds`) and exits. Deadlines such as auto-confirmation and league dates therefore fire within the hour even when nobody uses the app.
+- *Backups:* besides Neon's PITR, a nightly `backup_database` job streams `pg_dump --format=custom` to Cloudflare R2 (S3-compatible, free tier) through a small built-in S3 client, and prunes dumps past `BACKUP_RETENTION_DAYS`.
+- *Rate limits* stay in memory, which is exact with a single Machine.
+
+**Phase 2 (when payments ship).** Stripe webhooks and checkout returns want a warm, always reachable server, so the database moves to an always-on Postgres on Fly and the app runs with `min_machines_running = 1` (the tick Machine can then go). The pooled/direct split disappears (`COURTPIT_DB_POOLED=false`). Nothing in the schema or the server changes between phases.
 
 ## 18. Privacy and compliance
 
@@ -266,10 +282,17 @@ Phone and socials are hidden by default and only exposed to other verified membe
 | Platform fee | Per-community bps + fixed, changeable any time, recorded per charge | Product requirement for switching at will |
 | Jobs | Postgres `jobs` table, in-process loop | No queue infrastructure |
 | Realtime / chat | None in v1 | Proposal flow + polling suffices |
+| Hosting, Phase 1 | One auto-stopping Fly Machine, Neon Free via the pooled URL, hourly scheduled `tick`, nightly `pg_dump` to R2 | About $0/month before revenue; no always-on compute; off-platform backups beyond Neon's 6 h PITR |
+| Hosting, Phase 2 | Always-on Postgres on Fly, `min_machines_running = 1` | Payments need a warm server; no schema or code change |
+| Connection pooling | Transaction-mode pooling for the app, direct URL for migrations and dumps | Server keeps only transaction-scoped state; proven by a pooled CI run |
+| Image | Debian slim + `postgresql-client`, not distroless | Backups need `pg_dump` at least as new as the server |
+| API client | `openapi-typescript` + `openapi-fetch`, generated and committed, drift-checked in CI | Smallest runtime; API changes show up in review diffs |
 
 ## 20. Open questions
 
-Whether `other` should be eligible for mixed doubles under a community-configurable rule rather than being ineligible by default. Whether a community may run multiple concurrent leagues per discipline (the schema allows it; the UI may want to constrain it). How community onboarding (Stripe account, Apple developer account, DNS) is operated once there is more than one community. Whether friendly matches should ever count toward any ranking or an informal "activity" score.
+Whether a community may run multiple concurrent leagues per discipline (the schema allows it; the UI may want to constrain it). How community onboarding (Stripe account, Apple developer account, DNS) is operated once there is more than one community. Whether friendly matches should ever count toward any ranking or an informal "activity" score. If the API ever runs on more than one Machine, moving the per-IP auth rate limits into Postgres.
+
+Resolved since v0.1 (details in `docs/decisions.md`): mixed eligibility for `other` is a community setting (#65); a season does not finish over unresolved matches unless forced (#66–67); a league too small to play is cancelled at its start (#68); boxes stay auto-generated (#69); friendly mixed matches never check gender (#70); a score can be reported from `proposed` (#71); rate limits stay in memory for now (#72).
 
 ## 21. Suggested build order
 
