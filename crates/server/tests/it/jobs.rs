@@ -238,3 +238,125 @@ async fn dedupe_applies_to_waiting_jobs_and_failed_runs_yield_to_successors() {
     .unwrap();
     assert!(!completed && !locked);
 }
+
+const fn budget() -> std::time::Duration {
+    std::time::Duration::from_secs(60)
+}
+
+#[tokio::test]
+async fn tick_returns_promptly_when_nothing_is_due() {
+    let app = TestApp::spawn().await;
+    let summary = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        jobs::tick(&app.state, budget()),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        summary,
+        jobs::TickSummary {
+            ran: 0,
+            budget_spent: false
+        }
+    );
+}
+
+#[tokio::test]
+async fn tick_runs_due_jobs_and_leaves_future_ones() {
+    let app = TestApp::spawn().await;
+    for _ in 0..3 {
+        jobs::enqueue(&app.db, Job::Noop {}, Utc::now())
+            .await
+            .unwrap();
+    }
+    jobs::enqueue(&app.db, Job::Noop {}, Utc::now() + Duration::hours(1))
+        .await
+        .unwrap();
+    let summary = jobs::tick(&app.state, budget()).await.unwrap();
+    assert_eq!((summary.ran, summary.budget_spent), (3, false));
+    let (done, waiting, attempts): (i64, i64, i64) = sqlx::query_as(
+        "SELECT count(*) FILTER (WHERE completed_at IS NOT NULL),
+                count(*) FILTER (WHERE completed_at IS NULL AND locked_at IS NULL),
+                coalesce(sum(attempts) FILTER (WHERE completed_at IS NULL), 0)::bigint FROM jobs",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(
+        (done, waiting, attempts),
+        (3, 1, 0),
+        "the future job is untouched"
+    );
+}
+
+#[tokio::test]
+async fn a_spent_budget_claims_nothing() {
+    let app = TestApp::spawn().await;
+    insert_raw(&app, "noop", 3).await;
+    let summary = jobs::tick(&app.state, std::time::Duration::ZERO)
+        .await
+        .unwrap();
+    assert_eq!((summary.ran, summary.budget_spent), (0, true));
+    let (locked, attempts): (i64, i64) = sqlx::query_as(
+        "SELECT count(*) FILTER (WHERE locked_at IS NOT NULL), sum(attempts)::bigint FROM jobs",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!((locked, attempts), (0, 0), "no lease, no attempt burned");
+    let claimable = jobs::claim(&app.db, "serve", 10, Utc::now()).await.unwrap();
+    assert_eq!(
+        claimable.len(),
+        3,
+        "everything is still claimable right away"
+    );
+}
+
+/// Whatever the budget cuts off, every job is either done or untouched: none sits leased.
+#[tokio::test]
+async fn running_out_of_budget_midway_strands_no_lease() {
+    let app = TestApp::spawn().await;
+    insert_raw(&app, "noop", 400).await;
+    let summary = jobs::tick(&app.state, std::time::Duration::from_millis(30))
+        .await
+        .unwrap();
+    let (done, idle, locked, idle_attempts): (i64, i64, i64, i64) = sqlx::query_as(
+        "SELECT count(*) FILTER (WHERE completed_at IS NOT NULL),
+                count(*) FILTER (WHERE completed_at IS NULL AND locked_at IS NULL),
+                count(*) FILTER (WHERE locked_at IS NOT NULL AND completed_at IS NULL),
+                coalesce(sum(attempts) FILTER (WHERE completed_at IS NULL), 0)::bigint
+         FROM jobs",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(done as usize, summary.ran);
+    assert_eq!(done + idle, 400);
+    assert_eq!((locked, idle_attempts), (0, 0));
+}
+
+#[tokio::test]
+async fn tick_skips_jobs_leased_to_another_worker_and_survives_failures() {
+    let app = TestApp::spawn().await;
+    insert_raw(&app, "noop", 1).await;
+    assert_eq!(
+        jobs::claim(&app.db, "serve", 10, Utc::now())
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(jobs::tick(&app.state, budget()).await.unwrap().ran, 0);
+
+    // A failing job is recorded and retried later; the tick itself still succeeds.
+    insert_raw(&app, "kind_from_a_newer_release", 1).await;
+    assert_eq!(jobs::tick(&app.state, budget()).await.unwrap().ran, 1);
+    let (err, in_future): (Option<String>, bool) =
+        sqlx::query_as("SELECT last_error, run_at > now() FROM jobs WHERE kind <> 'noop'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert!(err.unwrap().contains("kind_from_a_newer_release"));
+    assert!(in_future);
+}

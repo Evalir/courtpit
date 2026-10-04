@@ -3,6 +3,10 @@
 //! Claiming uses `FOR UPDATE SKIP LOCKED` plus a lease (`locked_at`), so several instances can
 //! poll concurrently without double-running a job, and a job whose worker died is retried once
 //! its lease expires. Failures retry with exponential backoff and record `last_error`.
+//!
+//! Two ways to drain the table: [`spawn_loop`] polls inside `serve`, and [`tick`] drains what
+//! is due within a time budget and returns (the `tick` subcommand, for hosts that stop the
+//! server when idle).
 
 use std::time::Duration;
 
@@ -11,7 +15,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{FromRow, PgExecutor, PgPool, types::Json};
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::{sync::watch, task::JoinHandle, time::Instant};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -227,6 +231,21 @@ pub async fn finish(
     Ok(())
 }
 
+/// Runs a claimed job's handler and records its outcome.
+async fn run_claimed(state: &AppState, claimed: ClaimedJob) -> Result<(), sqlx::Error> {
+    let result = match Job::from_parts(&claimed.kind, claimed.payload.0) {
+        Ok(job) => {
+            // A panicking handler fails its job instead of killing the loop.
+            let state = state.clone();
+            tokio::spawn(async move { execute(&state, job).await })
+                .await
+                .unwrap_or_else(|err| Err(anyhow::anyhow!("job panicked: {err}")))
+        }
+        Err(err) => Err(err),
+    };
+    finish(&state.db, claimed.id, state.clock.now(), result).await
+}
+
 /// Claims and runs jobs due by the state's clock until none are left; returns how many ran.
 pub async fn run_due(state: &AppState, worker: &str) -> anyhow::Result<usize> {
     let mut total = 0;
@@ -237,19 +256,51 @@ pub async fn run_due(state: &AppState, worker: &str) -> anyhow::Result<usize> {
         }
         total += batch.len();
         for claimed in batch {
-            let result = match Job::from_parts(&claimed.kind, claimed.payload.0) {
-                Ok(job) => {
-                    // A panicking handler fails its job instead of killing the loop.
-                    let state = state.clone();
-                    tokio::spawn(async move { execute(&state, job).await })
-                        .await
-                        .unwrap_or_else(|err| Err(anyhow::anyhow!("job panicked: {err}")))
-                }
-                Err(err) => Err(err),
-            };
-            finish(&state.db, claimed.id, state.clock.now(), result).await?;
+            run_claimed(state, claimed).await?;
         }
     }
+}
+
+/// What a [`tick`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TickSummary {
+    /// Jobs run. A job whose handler failed still counts: the failure is recorded on the job.
+    pub ran: usize,
+    /// The budget ran out before the queue was seen empty, so more jobs may be due.
+    pub budget_spent: bool,
+}
+
+/// Runs due jobs until none are due or `budget` has passed.
+///
+/// The budget only decides whether to *start* another job: a handler already running is
+/// awaited to the end (cutting it off would repeat half-done side effects on retry), so a long
+/// job can overrun it. Jobs are claimed one at a time, right before they run, so running out of
+/// budget never leaves a claimed job idling under a lease. Claiming is the same
+/// `SKIP LOCKED` + lease as the polling loop, so a tick is safe next to a live `serve`.
+pub async fn tick(state: &AppState, budget: Duration) -> anyhow::Result<TickSummary> {
+    let worker = worker_id("tick");
+    // `None` (a budget so large it overflows `Instant`) means "until the queue is empty".
+    let deadline = Instant::now().checked_add(budget);
+    let mut ran = 0;
+    while deadline.is_none_or(|end| Instant::now() < end) {
+        let Some(claimed) = claim(&state.db, &worker, 1, state.clock.now()).await?.pop() else {
+            return Ok(TickSummary {
+                ran,
+                budget_spent: false,
+            });
+        };
+        run_claimed(state, claimed).await?;
+        ran += 1;
+    }
+    Ok(TickSummary {
+        ran,
+        budget_spent: true,
+    })
+}
+
+/// A worker name unique to this process and run, recorded in `jobs.locked_by`.
+fn worker_id(role: &str) -> String {
+    format!("{role}-{}-{}", std::process::id(), Uuid::now_v7().simple())
 }
 
 /// Spawns the polling loop; it stops when `shutdown` flips to `true`.
@@ -258,7 +309,7 @@ pub fn spawn_loop(
     every: Duration,
     mut shutdown: watch::Receiver<bool>,
 ) -> JoinHandle<()> {
-    let worker = format!("{}-{}", std::process::id(), Uuid::now_v7().simple());
+    let worker = worker_id("serve");
     tokio::spawn(async move {
         tracing::info!(%worker, "job loop started");
         loop {
