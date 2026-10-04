@@ -123,7 +123,7 @@ pub async fn create_match(
         let _ = matches::insert_proposal(&mut tx, id, player.id, time, location.as_deref()).await?;
     }
     let found = matches::load(&mut tx, id, false).await?;
-    let view = matches::view_with_proposals(&mut tx, found).await?;
+    let view = matches::view_with_proposals(&mut tx, found, &player).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(view)))
 }
@@ -190,10 +190,11 @@ pub async fn list_matches(
     let _ = qb.push(" ORDER BY id DESC LIMIT ").push_bind(limit + 1);
     let mut tx = player.tenant.begin(&state.db).await?;
     let rows: Vec<MatchRow> = qb.build_query_as().fetch_all(&mut *tx).await?;
-    tx.commit().await?;
     let page = paginate(rows, limit, |row| row.id.to_string());
+    let items = matches::views(&mut tx, page.items, &player).await?;
+    tx.commit().await?;
     Ok(Json(Page {
-        items: page.items.into_iter().map(MatchView::from).collect(),
+        items,
         next_cursor: page.next_cursor,
     }))
 }
@@ -226,7 +227,7 @@ pub async fn get_match(
     if !matches::visible_to(&found, &player) {
         return Err(ApiError::NotFound("match"));
     }
-    let view = matches::view_with_proposals(&mut tx, found).await?;
+    let view = matches::view_with_proposals(&mut tx, found, &player).await?;
     tx.commit().await?;
     Ok(Json(view))
 }
@@ -269,7 +270,7 @@ pub async fn cancel_match(
     .await?;
     matches::supersede_open_proposals(&mut tx, id).await?;
     let found = matches::load(&mut tx, id, false).await?;
-    let view = matches::view_with_proposals(&mut tx, found).await?;
+    let view = matches::view_with_proposals(&mut tx, found, &player).await?;
     tx.commit().await?;
     Ok(Json(view))
 }

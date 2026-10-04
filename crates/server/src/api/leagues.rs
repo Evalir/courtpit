@@ -19,7 +19,7 @@ use crate::{
         lifecycle::{self, Closing},
         standings::{self, DivisionStanding},
     },
-    matches::{DbDiscipline, MATCH_COLUMNS, MatchRow, MatchView},
+    matches::{self, DbDiscipline, MATCH_COLUMNS, MatchRow, MatchView},
     models::{Page, PageParams, double_option, paginate},
 };
 
@@ -467,10 +467,11 @@ pub async fn unresolved_matches(
     .bind(limit + 1)
     .fetch_all(&mut *tx)
     .await?;
-    tx.commit().await?;
     let page = paginate(rows, limit, |row| row.id.to_string());
+    let items = matches::views(&mut tx, page.items, &admin).await?;
+    tx.commit().await?;
     Ok(Json(Page {
-        items: page.items.into_iter().map(MatchView::from).collect(),
+        items,
         next_cursor: page.next_cursor,
     }))
 }
@@ -574,7 +575,8 @@ pub async fn league_standings(
         return Err(ApiError::NotFound("league"));
     }
     let config = league.scoring(&player.tenant.scoring_config.0)?;
-    let table = standings::compute(&mut tx, &league, &config.league_match).await?;
+    let mut table = standings::compute(&mut tx, &league, &config.league_match).await?;
+    standings::name_players(&mut tx, &player, &mut table).await?;
     tx.commit().await?;
     Ok(Json(table))
 }

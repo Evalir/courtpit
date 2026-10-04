@@ -13,7 +13,11 @@ use sqlx::{FromRow, types::Json};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{ApiError, TenantTx, auth::CurrentPlayer};
+use crate::{
+    ApiError, TenantTx,
+    auth::CurrentPlayer,
+    players::{Names, PlayerName},
+};
 
 pub mod results;
 
@@ -214,6 +218,14 @@ impl MatchRow {
             Side::A => &self.side_a_players,
             Side::B => &self.side_b_players,
         }
+    }
+
+    /// Players of both sides, side A first.
+    pub fn everyone(&self) -> impl Iterator<Item = Uuid> + '_ {
+        self.side_a_players
+            .iter()
+            .chain(&self.side_b_players)
+            .copied()
     }
 
     /// Whether `player` plays in this match.
@@ -470,6 +482,10 @@ pub struct MatchView {
     pub side_a: Vec<Uuid>,
     /// Player ids on side B.
     pub side_b: Vec<Uuid>,
+    /// Side A with display names, in the order of `side_a`.
+    pub side_a_names: Vec<PlayerName>,
+    /// Side B with display names, in the order of `side_b`.
+    pub side_b_names: Vec<PlayerName>,
     /// Current lifecycle status.
     pub status: MatchStatus,
     /// Agreed start time, if scheduled.
@@ -503,8 +519,9 @@ pub struct MatchView {
     pub proposals: Option<Vec<Proposal>>,
 }
 
-impl From<MatchRow> for MatchView {
-    fn from(row: MatchRow) -> Self {
+impl MatchView {
+    /// The view of `row`, its players named from `names`.
+    pub fn new(row: MatchRow, names: &Names) -> Self {
         Self {
             id: row.id,
             discipline: row.discipline.into(),
@@ -513,6 +530,8 @@ impl From<MatchRow> for MatchView {
             tournament_id: row.tournament_id,
             round: row.round,
             status: row.status.into(),
+            side_a_names: names.of(&row.side_a_players),
+            side_b_names: names.of(&row.side_b_players),
             side_a: row.side_a_players,
             side_b: row.side_b_players,
             scheduled_at: row.scheduled_at,
@@ -533,13 +552,28 @@ impl From<MatchRow> for MatchView {
     }
 }
 
+/// Views of `rows` for `viewer`, for list responses.
+pub async fn views(
+    tx: &mut TenantTx,
+    rows: Vec<MatchRow>,
+    viewer: &CurrentPlayer,
+) -> Result<Vec<MatchView>, sqlx::Error> {
+    let names = Names::load(tx, viewer, rows.iter().flat_map(MatchRow::everyone)).await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| MatchView::new(row, &names))
+        .collect())
+}
+
 /// A match with its proposals, for single-match responses.
 pub async fn view_with_proposals(
     tx: &mut TenantTx,
     match_row: MatchRow,
+    viewer: &CurrentPlayer,
 ) -> Result<MatchView, ApiError> {
     let proposals = proposals(tx, match_row.id).await?;
-    let mut view = MatchView::from(match_row);
+    let names = Names::load(tx, viewer, match_row.everyone()).await?;
+    let mut view = MatchView::new(match_row, &names);
     view.proposals = Some(proposals);
     Ok(view)
 }

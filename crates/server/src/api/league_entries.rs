@@ -19,7 +19,7 @@ use crate::{
         self, LeagueRow, LeagueStatus,
         entries::{self, ENTRY_COLUMNS, EntryRow, EntryStatus, EntryView},
     },
-    players,
+    players::{self, Names},
 };
 
 /// Loads a league the caller can see, locked, and requires registration to be open now.
@@ -48,7 +48,8 @@ async fn respond(
     viewer: &CurrentPlayer,
 ) -> ApiResult<Json<EntryView>> {
     let entry = entries::load(tx, league, id).await?;
-    Ok(Json(EntryView::for_viewer(entry, viewer)))
+    let names = Names::load(tx, viewer, entry.player_ids.iter().copied()).await?;
+    Ok(Json(EntryView::for_viewer(entry, viewer, &names)))
 }
 
 /// Body of `POST /leagues/{id}/entries`.
@@ -169,10 +170,14 @@ pub async fn list_entries(
     }
     let _ = qb.push(" ORDER BY created_at, id");
     let rows: Vec<EntryRow> = qb.build_query_as().fetch_all(&mut *tx).await?;
+    let players = rows
+        .iter()
+        .flat_map(|entry| entry.player_ids.iter().copied());
+    let names = Names::load(&mut tx, &player, players).await?;
     tx.commit().await?;
     Ok(Json(
         rows.into_iter()
-            .map(|entry| EntryView::for_viewer(entry, &player))
+            .map(|entry| EntryView::for_viewer(entry, &player, &names))
             .collect(),
     ))
 }

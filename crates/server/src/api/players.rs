@@ -133,9 +133,7 @@ pub async fn get_player(
     tx.commit().await?;
     let row = row
         .filter(|player| {
-            viewer.role.is_admin()
-                || player.id == viewer.id
-                || (player.status == PlayerStatus::Active && player.email_verified)
+            players::visible_to(&viewer, player.id, player.status, player.email_verified)
         })
         .ok_or(ApiError::NotFound("player"))?;
     Ok(Json(PlayerPublic::redacted(row, viewer.user.is_verified())))

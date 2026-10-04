@@ -24,9 +24,13 @@ async fn record_result(state: &AppState, tx: &mut TenantTx, id: Uuid) -> ApiResu
     rankings::on_match_result(tx, &row, state.clock.now()).await
 }
 
-async fn respond(tx: &mut TenantTx, id: Uuid) -> ApiResult<Json<MatchView>> {
+async fn respond(
+    tx: &mut TenantTx,
+    id: Uuid,
+    viewer: &CurrentPlayer,
+) -> ApiResult<Json<MatchView>> {
     let found = matches::load(tx, id, false).await?;
-    Ok(Json(matches::view_with_proposals(tx, found).await?))
+    Ok(Json(matches::view_with_proposals(tx, found, viewer).await?))
 }
 
 /// Reports the score of a match that was played, whether or not a time was ever agreed
@@ -65,7 +69,7 @@ pub async fn report_score(
         window,
     )
     .await?;
-    let res = respond(&mut tx, id).await?;
+    let res = respond(&mut tx, id, &player).await?;
     tx.commit().await?;
     Ok(res)
 }
@@ -87,7 +91,7 @@ pub async fn confirm_score(
     let status = found.transition(actor, Event::Confirm)?;
     matches::set_status(&mut tx, id, status).await?;
     record_result(&state, &mut tx, id).await?;
-    let res = respond(&mut tx, id).await?;
+    let res = respond(&mut tx, id, &player).await?;
     tx.commit().await?;
     Ok(res)
 }
@@ -128,7 +132,7 @@ pub async fn dispute_score(
     .bind(note)
     .execute(&mut *tx)
     .await?;
-    let res = respond(&mut tx, id).await?;
+    let res = respond(&mut tx, id, &player).await?;
     tx.commit().await?;
     Ok(res)
 }
@@ -197,7 +201,7 @@ pub async fn resolve_match(
     .execute(&mut *tx)
     .await?;
     record_result(&state, &mut tx, id).await?;
-    let res = respond(&mut tx, id).await?;
+    let res = respond(&mut tx, id, &admin).await?;
     tx.commit().await?;
     Ok(res)
 }
@@ -243,7 +247,7 @@ pub async fn walkover_match(
     .execute(&mut *tx)
     .await?;
     record_result(&state, &mut tx, id).await?;
-    let res = respond(&mut tx, id).await?;
+    let res = respond(&mut tx, id, &admin).await?;
     tx.commit().await?;
     Ok(res)
 }

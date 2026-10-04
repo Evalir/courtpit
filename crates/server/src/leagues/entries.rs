@@ -8,7 +8,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    ApiError, Tenant, TenantTx, auth::CurrentPlayer, communities::CommunitySettings, models::Gender,
+    ApiError, Tenant, TenantTx,
+    auth::CurrentPlayer,
+    communities::CommunitySettings,
+    models::Gender,
+    players::{Names, PlayerName},
 };
 
 /// Where an entry stands.
@@ -64,6 +68,8 @@ pub struct EntryView {
     pub division_id: Option<Uuid>,
     /// The entry's players: one for singles or a solo entry, two for a pair.
     pub player_ids: Vec<Uuid>,
+    /// The same players with display names, in the order of `player_ids`.
+    pub player_names: Vec<PlayerName>,
     /// Player who registered the entry.
     pub created_by: Uuid,
     /// Where the entry stands.
@@ -77,8 +83,8 @@ pub struct EntryView {
 }
 
 impl EntryView {
-    /// The view of `e` for `viewer`.
-    pub fn for_viewer(entry: EntryRow, viewer: &CurrentPlayer) -> Self {
+    /// The view of `entry` for `viewer`, its players named from `names`.
+    pub fn for_viewer(entry: EntryRow, viewer: &CurrentPlayer, names: &Names) -> Self {
         let involved = viewer.role.is_admin()
             || entry.player_ids.contains(&viewer.id)
             || entry.invited_partner_id == Some(viewer.id);
@@ -87,6 +93,7 @@ impl EntryView {
             league_id: entry.league_id,
             division_id: entry.division_id,
             invited_partner_id: entry.invited_partner_id.filter(|_| involved),
+            player_names: names.of(&entry.player_ids),
             player_ids: entry.player_ids,
             created_by: entry.created_by,
             status: entry.status,

@@ -4982,6 +4982,7 @@
           "id",
           "league_id",
           "player_ids",
+          "player_names",
           "created_by",
           "status",
           "looking_for_partner",
@@ -5035,6 +5036,13 @@
               "format": "uuid"
             },
             "description": "The entry's players: one for singles or a solo entry, two for a pair."
+          },
+          "player_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerName"
+            },
+            "description": "The same players with display names, in the order of `player_ids`."
           },
           "status": {
             "$ref": "#/components/schemas/EntryStatus",
@@ -5399,6 +5407,7 @@
           "created_by",
           "discipline",
           "players",
+          "player_names",
           "slots_open",
           "time_window_start",
           "time_window_end",
@@ -5439,6 +5448,13 @@
             ],
             "format": "uuid",
             "description": "The match created when the request filled."
+          },
+          "player_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerName"
+            },
+            "description": "The same players with display names, in the order of `players`."
           },
           "players": {
             "type": "array",
@@ -5507,6 +5523,8 @@
           "discipline",
           "side_a",
           "side_b",
+          "side_a_names",
+          "side_b_names",
           "status",
           "match_format",
           "created_at"
@@ -5652,6 +5670,13 @@
             },
             "description": "Player ids on side A."
           },
+          "side_a_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerName"
+            },
+            "description": "Side A with display names, in the order of `side_a`."
+          },
           "side_b": {
             "type": "array",
             "items": {
@@ -5659,6 +5684,13 @@
               "format": "uuid"
             },
             "description": "Player ids on side B."
+          },
+          "side_b_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerName"
+            },
+            "description": "Side B with display names, in the order of `side_b`."
           },
           "status": {
             "$ref": "#/components/schemas/MatchStatus",
@@ -5919,6 +5951,7 @@
                 "created_by",
                 "discipline",
                 "players",
+                "player_names",
                 "slots_open",
                 "time_window_start",
                 "time_window_end",
@@ -5959,6 +5992,13 @@
                   ],
                   "format": "uuid",
                   "description": "The match created when the request filled."
+                },
+                "player_names": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerName"
+                  },
+                  "description": "The same players with display names, in the order of `players`."
                 },
                 "players": {
                   "type": "array",
@@ -6033,6 +6073,8 @@
                 "discipline",
                 "side_a",
                 "side_b",
+                "side_a_names",
+                "side_b_names",
                 "status",
                 "match_format",
                 "created_at"
@@ -6178,6 +6220,13 @@
                   },
                   "description": "Player ids on side A."
                 },
+                "side_a_names": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerName"
+                  },
+                  "description": "Side A with display names, in the order of `side_a`."
+                },
                 "side_b": {
                   "type": "array",
                   "items": {
@@ -6185,6 +6234,13 @@
                     "format": "uuid"
                   },
                   "description": "Player ids on side B."
+                },
+                "side_b_names": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerName"
+                  },
+                  "description": "Side B with display names, in the order of `side_b`."
                 },
                 "status": {
                   "$ref": "#/components/schemas/MatchStatus",
@@ -6519,6 +6575,27 @@
           "doubles",
           "any"
         ]
+      },
+      "PlayerName": {
+        "type": "object",
+        "description": "A player named by another resource (a match side, a box line, an entry, a match request),\nso clients can show names without fetching each player.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name shown to other members; null when the viewer may not see the player (they left,\nwere banned or have not verified their email)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Player id."
+          }
+        }
       },
       "PlayerProfile": {
         "type": "object",
@@ -7117,6 +7194,7 @@
           "position",
           "entry_id",
           "player_ids",
+          "player_names",
           "played",
           "won",
           "lost",
@@ -7163,6 +7241,13 @@
               "format": "uuid"
             },
             "description": "Players of the entry (one for singles, two for doubles)."
+          },
+          "player_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayerName"
+            },
+            "description": "The same players with display names, in the order of `player_ids`."
           },
           "points": {
             "type": "integer",
