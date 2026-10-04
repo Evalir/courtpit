@@ -1,0 +1,57 @@
+import { useLocalSearchParams } from "expo-router";
+import { View } from "react-native";
+
+import { useApi } from "@/api/client";
+import { formatUtr, playPrefLabel } from "@/features/format";
+import { Detail, DetailsCard, gearLine, socialsLine } from "@/features/players/ProfileDetails";
+import { space } from "@/theme/tokens";
+import { Avatar } from "@/ui/Avatar";
+import { Badge } from "@/ui/Badge";
+import { Screen } from "@/ui/Screen";
+import { ErrorState, LoadingState } from "@/ui/States";
+import { Text } from "@/ui/Text";
+
+/** Another member's profile as the directory shows it (spec §18: contacts only if shared). */
+export default function Player() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { $api } = useApi();
+  const player = $api.useQuery("get", "/api/v1/players/{id}", { params: { path: { id } } });
+
+  if (player.isPending) return <LoadingState />;
+  if (player.error)
+    return <ErrorState error={player.error} onRetry={() => void player.refetch()} />;
+  const data = player.data;
+  const gear = gearLine(data.racket, data.strings, data.tension_kg);
+  const socials = socialsLine(data.socials);
+
+  return (
+    <Screen refreshing={player.isRefetching} onRefresh={() => void player.refetch()}>
+      <View style={{ alignItems: "center", gap: space.sm }}>
+        <Avatar id={data.id} name={data.display_name} size={80} />
+        <Text variant="title" align="center" accessibilityRole="header">
+          {data.display_name}
+        </Text>
+        <View style={{ flexDirection: "row", gap: space.sm }}>
+          <Badge label={`UTR ${formatUtr(data.utr)}`} tone="primary" />
+          {data.role !== "player" ? <Badge label="Club admin" tone="accent" /> : null}
+        </View>
+      </View>
+      <DetailsCard title="Tennis">
+        <Detail icon="tennisball-outline" label="Plays" value={playPrefLabel[data.play_pref]} />
+        <Detail
+          icon="location-outline"
+          label="Likes to play at"
+          value={data.preferred_locations.join(", ") || null}
+        />
+        <Detail icon="construct-outline" label="Racket" value={gear.racket} />
+        <Detail icon="git-network-outline" label="Strings" value={gear.strings} />
+      </DetailsCard>
+      {data.phone || socials ? (
+        <DetailsCard title="Contact">
+          <Detail icon="call-outline" label="Phone" value={data.phone} />
+          <Detail icon="at-outline" label="Socials" value={socials} />
+        </DetailsCard>
+      ) : null}
+    </Screen>
+  );
+}
