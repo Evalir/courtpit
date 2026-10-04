@@ -95,7 +95,15 @@ function RootNavigator() {
             name="matches/[id]/report"
             options={{ title: "Report the score", presentation: "modal" }}
           />
-          <Stack.Screen name="players/[id]" options={{ title: "Player" }} />
+          <Stack.Screen name="players/[id]/index" options={{ title: "Player" }} />
+          <Stack.Screen
+            name="players/[id]/challenge"
+            options={{ title: "Challenge", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="requests/new"
+            options={{ title: "New match request", presentation: "modal" }}
+          />
           <Stack.Screen name="leagues/[id]" options={{ title: "League" }} />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>

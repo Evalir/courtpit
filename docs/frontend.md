@@ -122,7 +122,7 @@ Five tabs, chosen around what a club player does weekly:
 | Tab | Purpose |
 |---|---|
 | **Home** | "What needs me": scores to confirm or report, upcoming matches, matches to arrange, waiting on others, recent results |
-| **Play** | Find a player (directory); open match requests and proposing a friendly join it next |
+| **Play** | Open match requests (join one or post your own) and the player directory; challenge a player from their page |
 | **Leagues** | Seasons by status; a league's dates, format and box tables; registration next |
 | **Rankings** | 52-week points per discipline (singles / doubles / mixed, by feature flag) |
 | **Profile** | The player's profile, contact visibility and account; editing next |
@@ -155,7 +155,9 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Cancel a friendly | `/matches/[id]` | `POST /matches/{id}/cancel` | built |
 | Play: directory | `/play` | `GET /players?q=` (cursor pages) | built |
 | Player | `/players/[id]` | `GET /players/{id}` | built |
-| Play: match requests, propose a friendly | `/play`, `/players/[id]` | `GET/POST /match-requests`, `…/join`, `…/leave`, `…/cancel`, `POST /matches` | F3 |
+| Play: open requests | `/play` | `GET /match-requests?fits_me=` (cursor pages), `POST /match-requests/{id}/join`, `…/leave`, `…/cancel` | built |
+| New match request | `/requests/new` (modal) | `POST /match-requests`, `GET /players?q=` (partner) | built |
+| Challenge a player | `/players/[id]/challenge` (modal) | `POST /matches` | built |
 | Leagues | `/leagues` | `GET /leagues` | built |
 | League | `/leagues/[id]` | `GET /leagues/{id}`, `GET /leagues/{id}/standings` | built |
 | League: enter, partner invites, withdraw | `/leagues/[id]` | `GET/POST /leagues/{id}/entries`, `…/accept`, `…/decline`, `…/withdraw` | F4 |
@@ -202,6 +204,21 @@ leads: proposing on a `proposed` match, reporting on a `scheduled` one.
   pro set to 8, or match tiebreak in points). `checkScore` is a port of the domain crate's
   `validate_score`; both run `crates/domain/testdata/score_vectors.json`, so the form's verdict
   and the server's cannot drift apart (decision 86).
+- **Cancelled** matches say who called them off (a player by name, anyone else as "a club
+  admin") with the reason; a proposal a cancel or a report closed reads "Closed", not
+  "replaced".
+
+### Match requests
+
+Play opens on the community's open requests when the `match_requests` feature is on (the
+directory sits beside them), with a "Fits my level" filter (`fits_me`). A card shows the
+window, place, level band, who is in and the spots left; the viewer can join (greyed out
+outside the band, decision 27), leave, or cancel their own. Whoever fills the last spot lands on
+the new match. Posting a request (`/requests/new`) takes the discipline (as the community's
+features allow), a partner for doubles (optional), a start from the same `WhenPicker` and a
+length (1, 1½, 2 or 3 hours), a level (any, or ±1.00 around the poster's UTR) and a place.
+A player page offers "Challenge to a match": a singles friendly, optionally with a first
+proposed time and place, that opens on its match page (decision 89).
 
 ## 8. UI conventions
 
@@ -228,7 +245,7 @@ leads: proposing on a `proposed` match, reporting on a `scheduled` one.
 |---|---|
 | F1 | This slice: workspace, theming, API layer, email-code sign-in, five tabs, read-only league/ranking/player screens, confirm/dispute and answering proposals |
 | F2 | Match actions: propose a time (day-and-slot picker), format-aware score entry checked like the server, cancel a friendly (done) |
-| F3 | Play: open match requests (list, create, join, leave), propose a friendly from a player page |
+| F3 | Play: open match requests (list, create, join, leave), propose a friendly from a player page (done) |
 | F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view |
 | F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in |
 | F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |

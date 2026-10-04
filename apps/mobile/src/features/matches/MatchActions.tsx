@@ -167,7 +167,7 @@ export function MatchActions({
       <View style={styles.buttons}>
         {match.status === "scheduled"
           ? [reportButton(true), proposeButton(false)]
-          : [proposeButton(!actions.answer), reportButton(false)]}
+          : [proposeButton(!actions.answer && !actions.waiting), reportButton(false)]}
       </View>
       {actions.cancel ? (
         cancelling ? (
