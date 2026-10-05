@@ -5,6 +5,7 @@ import { View } from "react-native";
 import { useApi } from "@/api/client";
 import { disciplineLabel, formatDate, formatLastDay } from "@/features/format";
 import { AdminLeagueActions } from "@/features/admin/AdminLeagueActions";
+import { SeasonAdmin } from "@/features/admin/SeasonAdmin";
 import { EntryPanel } from "@/features/leagues/EntryPanel";
 import { describeFormat, leagueBadge, leagueTiming, ownBoxFirst } from "@/features/leagues/league";
 import { nameLookup, sideName } from "@/features/players/names";
@@ -84,6 +85,7 @@ export default function League() {
         />
       </Card>
       <AdminLeagueActions league={data} />
+      <SeasonAdmin league={data} now={now} />
       <EntryPanel league={data} now={now} />
       {started ? (
         standings.isPending ? (
