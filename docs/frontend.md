@@ -68,8 +68,16 @@ development `metro.config.js` proxies `/api/*`, `/healthz` and `/readyz` from th
 to `COURTPIT_DEV_API` (default `http://127.0.0.1:8080`); Expo Go on a phone reaches the API the
 same way, through the host it loaded the bundle from.
 
-App identity for native builds (`COURTPIT_APP_NAME`, `COURTPIT_BUNDLE_ID`, `COURTPIT_SCHEME`) is
-read by `app.config.ts`; per-community EAS build profiles that set these arrive with spec step 7.
+App identity for native builds (`COURTPIT_APP_NAME`, `COURTPIT_BUNDLE_ID`, `COURTPIT_SCHEME`,
+`COURTPIT_EAS_PROJECT_ID`, `COURTPIT_WEB_HOST`) is read by `app.config.ts`; per-community EAS
+build profiles that set these arrive with spec step 7.
+
+**Links.** With `COURTPIT_WEB_HOST` set, the build claims the community's https links: iOS
+`associatedDomains` (`applinks:` and `webcredentials:`) and an Android `VIEW` intent filter with
+`autoVerify`. The server publishes the matching association files per host (decision 99), so a
+link to `https://{host}/matches/<id>` (an email, a shared link, a notification's fallback email)
+opens that screen in the app when it is installed and the web app otherwise. Expo Router maps
+the path; a signed-out link waits for sign-in (return-to).
 
 ## 4. Sign-in and sessions
 

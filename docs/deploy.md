@@ -129,6 +129,21 @@ audiences (comma-separated; empty disables a provider):
 fly secrets set --stage COURTPIT_APPLE_CLIENT_IDS=app.example.club COURTPIT_GOOGLE_CLIENT_IDS=1234.apps.googleusercontent.com
 ```
 
+### App links
+
+For a community's links to open its app, publish which apps may claim its host. After the first
+EAS build (step 7) gives you the Apple team id and the Android signing certificate:
+
+```sh
+fly ssh console -C "courtpit-server set-app-links --slug riverside \
+  --ios-app-id ABCDE12345.app.courtpit.riverside \
+  --android-package app.courtpit.riverside --android-sha256 AB:CD:…:EF"
+```
+
+The server then answers `/.well-known/apple-app-site-association` and
+`/.well-known/assetlinks.json` on that community's host (404 until set, which leaves links on
+the web). Running servers pick the change up within a minute (tenant cache).
+
 ### Push notifications
 
 `COURTPIT_PUSH=expo` (set in `fly.toml`) sends through Expo's push service, which relays to APNs

@@ -9,10 +9,10 @@ use uuid::Uuid;
 use crate::common::{Res, TestApp, test_config};
 
 /// A throwaway export: the app shell, a hashed bundle with its gzip twin, and a favicon.
-struct Export(PathBuf);
+pub(crate) struct Export(PathBuf);
 
 impl Export {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("courtpit-web-{}", Uuid::now_v7()));
         let bundles = dir.join("_expo/static/js/web");
         fs::create_dir_all(&bundles).unwrap();
@@ -23,7 +23,7 @@ impl Export {
         Self(dir)
     }
 
-    fn config(&self) -> Config {
+    pub(crate) fn config(&self) -> Config {
         Config {
             web_dir: Some(self.0.clone()),
             ..test_config()

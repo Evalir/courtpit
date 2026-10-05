@@ -4,6 +4,7 @@
     reason = "a failed harness step should abort the test"
 )]
 
+mod applinks;
 mod auth;
 mod backup;
 mod common;

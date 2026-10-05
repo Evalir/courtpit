@@ -225,7 +225,15 @@ pub fn router(state: AppState, web: Option<WebApp>) -> Router {
                 async move { Json(doc.as_ref().clone()) }
             }),
         )
-        .route("/api/{*path}", any(no_such_route));
+        .route("/api/{*path}", any(no_such_route))
+        .route(
+            "/.well-known/apple-app-site-association",
+            get(crate::applinks::apple),
+        )
+        .route(
+            "/.well-known/assetlinks.json",
+            get(crate::applinks::android),
+        );
     let app = match web {
         Some(web) => api.fallback(move |request: Request| web.clone().respond(request)),
         None => api,
