@@ -1,7 +1,7 @@
 //! Universal-link and app-link association files, per community.
 
 use axum::http::StatusCode;
-use courtpit_server::applinks::{self, AndroidApp, AppLinks};
+use racquetcollective_server::applinks::{self, AndroidApp, AppLinks};
 use serde_json::json;
 
 use crate::{common::TestApp, web::Export};
@@ -14,9 +14,9 @@ async fn communities_publish_the_apps_that_open_their_links() {
     let _ = app.community("demo").await;
     let _ = app.community("other").await;
     let links = AppLinks {
-        ios: vec!["TEAM123.app.courtpit.demo".to_owned()],
+        ios: vec!["TEAM123.app.racquetcollective.demo".to_owned()],
         android: vec![AndroidApp {
-            package: "app.courtpit.demo".to_owned(),
+            package: "app.racquetcollective.demo".to_owned(),
             sha256_cert_fingerprints: vec!["AB:CD:EF".to_owned()],
         }],
     };
@@ -30,7 +30,10 @@ async fn communities_publish_the_apps_that_open_their_links() {
         .await
         .expect(StatusCode::OK);
     let details = &apple["applinks"]["details"][0];
-    assert_eq!(details["appIDs"], json!(["TEAM123.app.courtpit.demo"]));
+    assert_eq!(
+        details["appIDs"],
+        json!(["TEAM123.app.racquetcollective.demo"])
+    );
     assert_eq!(
         details["components"][0],
         json!({ "/": "/api/*", "exclude": true, "comment": "The API is not a page" })
@@ -48,7 +51,7 @@ async fn communities_publish_the_apps_that_open_their_links() {
             "relation": ["delegate_permission/common.handle_all_urls"],
             "target": {
                 "namespace": "android_app",
-                "package_name": "app.courtpit.demo",
+                "package_name": "app.racquetcollective.demo",
                 "sha256_cert_fingerprints": ["AB:CD:EF"],
             },
         }])

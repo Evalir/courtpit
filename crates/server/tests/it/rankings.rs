@@ -2,7 +2,7 @@
 
 use axum::http::StatusCode;
 use chrono::Duration;
-use courtpit_server::jobs;
+use racquetcollective_server::jobs;
 use serde_json::{Value, json};
 use uuid::Uuid;
 

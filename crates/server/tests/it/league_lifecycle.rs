@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use axum::http::StatusCode;
 use chrono::Duration;
-use courtpit_server::jobs;
+use racquetcollective_server::jobs;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -273,7 +273,7 @@ async fn a_late_job_catches_up_and_cancelled_leagues_stay_put() {
     assert!(league_matches(&app, &admin, &other).await.is_empty());
 }
 
-fn cancellation_emails(app: &TestApp) -> Vec<courtpit_server::mailer::Email> {
+fn cancellation_emails(app: &TestApp) -> Vec<racquetcollective_server::mailer::Email> {
     app.mailer
         .sent()
         .into_iter()

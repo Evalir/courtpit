@@ -23,7 +23,7 @@ use uuid::Uuid;
 use crate::{ApiError, AppState, communities::Branding};
 
 /// Header carrying the community slug (native clients bake it into the build).
-pub const COMMUNITY_HEADER: &str = "x-courtpit-community";
+pub const COMMUNITY_HEADER: &str = "x-racquetcollective-community";
 
 /// A community (tenant) row.
 #[derive(Debug, Clone, FromRow)]
@@ -266,18 +266,21 @@ mod tests {
 
     #[test]
     fn header_wins_over_host() {
-        let map = headers(&[(COMMUNITY_HEADER, "Demo"), ("host", "other.courtpit.app")]);
+        let map = headers(&[
+            (COMMUNITY_HEADER, "Demo"),
+            ("host", "other.racquetcollective.app"),
+        ]);
         assert_eq!(
-            tenant_key(&map, "courtpit.app"),
+            tenant_key(&map, "racquetcollective.app"),
             Some(TenantKey::Slug("demo".into()))
         );
     }
 
     #[test]
     fn subdomain_of_base_is_slug() {
-        let map = headers(&[("host", "madrid.courtpit.app:443")]);
+        let map = headers(&[("host", "madrid.racquetcollective.app:443")]);
         assert_eq!(
-            tenant_key(&map, "courtpit.app"),
+            tenant_key(&map, "racquetcollective.app"),
             Some(TenantKey::Slug("madrid".into()))
         );
     }
@@ -285,15 +288,24 @@ mod tests {
     #[test]
     fn nested_subdomain_or_bare_base_is_none() {
         assert_eq!(
-            tenant_key(&headers(&[("host", "a.b.courtpit.app")]), "courtpit.app"),
+            tenant_key(
+                &headers(&[("host", "a.b.racquetcollective.app")]),
+                "racquetcollective.app"
+            ),
             None
         );
         assert_eq!(
-            tenant_key(&headers(&[("host", "courtpit.app")]), "courtpit.app"),
+            tenant_key(
+                &headers(&[("host", "racquetcollective.app")]),
+                "racquetcollective.app"
+            ),
             None
         );
         assert_eq!(
-            tenant_key(&headers(&[("host", "localhost:8080")]), "courtpit.app"),
+            tenant_key(
+                &headers(&[("host", "localhost:8080")]),
+                "racquetcollective.app"
+            ),
             None
         );
     }
@@ -302,7 +314,7 @@ mod tests {
     fn foreign_host_is_custom_domain() {
         let map = headers(&[("host", "Tennis.Example.org")]);
         assert_eq!(
-            tenant_key(&map, "courtpit.app"),
+            tenant_key(&map, "racquetcollective.app"),
             Some(TenantKey::Domain("tennis.example.org".into()))
         );
     }

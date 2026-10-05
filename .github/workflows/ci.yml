@@ -8,7 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
-  DATABASE_URL: postgres://courtpit:courtpit@localhost:5432/courtpit
+  DATABASE_URL: postgres://racquetcollective:racquetcollective@localhost:5432/racquetcollective
 
 jobs:
   fmt:
@@ -46,13 +46,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: courtpit
-          POSTGRES_PASSWORD: courtpit
-          POSTGRES_DB: courtpit
+          POSTGRES_USER: racquetcollective
+          POSTGRES_PASSWORD: racquetcollective
+          POSTGRES_DB: racquetcollective
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U courtpit"
+          --health-cmd "pg_isready -U racquetcollective"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -112,20 +112,20 @@ jobs:
   test-pooled:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgres://courtpit:courtpit@127.0.0.1:6432/courtpit
-      DATABASE_DIRECT_URL: postgres://courtpit:courtpit@127.0.0.1:5432/courtpit
-      COURTPIT_DB_POOLED: "true"
+      DATABASE_URL: postgres://racquetcollective:racquetcollective@127.0.0.1:6432/racquetcollective
+      DATABASE_DIRECT_URL: postgres://racquetcollective:racquetcollective@127.0.0.1:5432/racquetcollective
+      RACQUETCOLLECTIVE_DB_POOLED: "true"
     services:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: courtpit
-          POSTGRES_PASSWORD: courtpit
-          POSTGRES_DB: courtpit
+          POSTGRES_USER: racquetcollective
+          POSTGRES_PASSWORD: racquetcollective
+          POSTGRES_DB: racquetcollective
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U courtpit"
+          --health-cmd "pg_isready -U racquetcollective"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -140,7 +140,7 @@ jobs:
           cd ci/pgbouncer
           nohup /usr/sbin/pgbouncer pgbouncer.ini > "$RUNNER_TEMP/pgbouncer.log" 2>&1 &
           for _ in $(seq 30); do
-            PGPASSWORD=courtpit psql "$DATABASE_URL" -Atc 'select 1' && exit 0
+            PGPASSWORD=racquetcollective psql "$DATABASE_URL" -Atc 'select 1' && exit 0
             sleep 1
           done
           cat "$RUNNER_TEMP/pgbouncer.log"

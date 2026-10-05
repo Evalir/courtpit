@@ -62,8 +62,8 @@ jobs:
 
       # `fly deploy` only updates Machines it manages. The hourly tick Machine is created with
       # `fly machine run` (docs/deploy.md), so move it to the image that was just deployed and
-      # refresh the COURTPIT_* settings it does not inherit from fly.toml. It is found by its
-      # `courtpit_role=tick` metadata. `--skip-start` leaves it waiting for its schedule.
+      # refresh the RACQUETCOLLECTIVE_* settings it does not inherit from fly.toml. It is found by its
+      # `racquetcollective_role=tick` metadata. `--skip-start` leaves it waiting for its schedule.
       - name: Update the tick Machine
         if: steps.tip.outputs.current == 'true'
         run: |
@@ -73,10 +73,10 @@ jobs:
           image=$(jq -er '[.[] | select(.config.metadata.fly_process_group == "app")][0].config.image' <<<"$machines")
           mapfile -t env_args < <(jq -r '
             [.[] | select(.config.metadata.fly_process_group == "app")][0].config.env // {}
-            | to_entries[] | select(.key | startswith("COURTPIT_")) | "--env", "\(.key)=\(.value)"' <<<"$machines")
-          ids=$(jq -r '.[] | select(.config.metadata.courtpit_role == "tick") | .id' <<<"$machines")
+            | to_entries[] | select(.key | startswith("RACQUETCOLLECTIVE_")) | "--env", "\(.key)=\(.value)"' <<<"$machines")
+          ids=$(jq -r '.[] | select(.config.metadata.racquetcollective_role == "tick") | .id' <<<"$machines")
           if [ -z "$ids" ]; then
-            echo "::warning::No tick Machine (metadata courtpit_role=tick) in ${app}: due jobs only run while the web Machine is awake. Create it as described in docs/deploy.md."
+            echo "::warning::No tick Machine (metadata racquetcollective_role=tick) in ${app}: due jobs only run while the web Machine is awake. Create it as described in docs/deploy.md."
             exit 0
           fi
           for id in $ids; do

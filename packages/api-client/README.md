@@ -1,11 +1,11 @@
-# @courtpit/api-client
+# @racquetcollective/api-client
 
-Typed client for the Courtpit REST API (`/api/v1`), generated from the server's OpenAPI
+Typed client for the Racquet Collective REST API (`/api/v1`), generated from the server's OpenAPI
 document. The Expo app (`apps/mobile`, spec §4) consumes it.
 
-- `openapi.json` is the server's document, dumped by `courtpit-server openapi`.
+- `openapi.json` is the server's document, dumped by `racquetcollective-server openapi`.
 - `src/schema.d.ts` is [`openapi-typescript`](https://openapi-ts.dev)'s types for it.
-- `src/index.ts` is the only hand-written file: `createCourtpitClient` on top of
+- `src/index.ts` is the only hand-written file: `createRacquetCollectiveClient` on top of
   [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch/).
 
 Both generated files are committed, so API changes show up in review. CI regenerates them and
@@ -18,7 +18,7 @@ After any change to a handler, its `#[utoipa::path]` or a type it exposes:
 ```sh
 npm ci                              # at the repository root (npm workspaces), first time only
 cd packages/api-client
-npm run gen                         # cargo run -p courtpit-server -- openapi, then openapi-typescript
+npm run gen                         # cargo run -p racquetcollective-server -- openapi, then openapi-typescript
 git add -A .
 ```
 
@@ -28,17 +28,17 @@ git add -A .
 ## Using it
 
 ```ts
-import { createCourtpitClient, isApiError } from "@courtpit/api-client";
+import { createRacquetCollectiveClient, isApiError } from "@racquetcollective/api-client";
 
-const api = createCourtpitClient({
-  baseUrl: "https://api.courtpit.app",
-  community: "madrid-tc", // sent as X-Courtpit-Community; omit on a community host
+const api = createRacquetCollectiveClient({
+  baseUrl: "https://api.racquetcollective.app",
+  community: "madrid-tc", // sent as X-RacquetCollective-Community; omit on a community host
   token: () => sessionStore.token, // Authorization: Bearer; a string works too
 });
 
 // In a browser on the community's own host: no community header (Host decides) and a
 // cookie session instead of a token.
-const web = createCourtpitClient({ baseUrl: location.origin, web: true });
+const web = createRacquetCollectiveClient({ baseUrl: location.origin, web: true });
 
 const { data, error } = await api.GET("/api/v1/matches/{id}", {
   params: { path: { id } },

@@ -47,7 +47,7 @@ const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
 /**
  * Google sign-in needs the build's OAuth client ids: the web client id (the token's audience,
- * which the server lists in `COURTPIT_GOOGLE_CLIENT_IDS`) and, on iOS, the iOS client id.
+ * which the server lists in `RACQUETCOLLECTIVE_GOOGLE_CLIENT_IDS`) and, on iOS, the iOS client id.
  */
 export function googleAvailable(): boolean {
   return Boolean(googleWebClientId) && (Platform.OS !== "ios" || Boolean(googleIosClientId));

@@ -1,7 +1,7 @@
 //! Writing results: reports, confirmations, admin decisions, and the auto-confirm job.
 
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::{
+use racquetcollective_domain::{
     Actor, Event, MatchFormat, MatchStatus, Score, ScoreSummary, Side, validate_score,
 };
 use sqlx::types::Json;

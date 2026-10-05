@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 

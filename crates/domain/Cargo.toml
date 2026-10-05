@@ -1,6 +1,6 @@
 [package]
-name = "courtpit-domain"
-description = "Pure Courtpit domain logic: scores, match state, pairings, scoring. No IO."
+name = "racquetcollective-domain"
+description = "Pure Racquet Collective domain logic: scores, match state, pairings, scoring. No IO."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

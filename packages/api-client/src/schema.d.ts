@@ -1018,7 +1018,7 @@ export interface components {
             /** @description Linked sign-in providers. */
             identities: string[];
         };
-        /** @description Everything Courtpit stores about the account (GDPR export). */
+        /** @description Everything Racquet Collective stores about the account (GDPR export). */
         AccountExport: {
             /**
              * Format: date-time
@@ -1034,7 +1034,7 @@ export interface components {
         };
         /**
          * @description A new session. `token` is omitted when it was delivered as a cookie
-         *     (`X-Courtpit-Client: web`).
+         *     (`X-RacquetCollective-Client: web`).
          */
         AuthSession: {
             /**

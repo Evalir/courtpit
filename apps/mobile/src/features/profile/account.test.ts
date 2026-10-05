@@ -25,7 +25,7 @@ describe("deletionConfirmed", () => {
 describe("exportFileName", () => {
   it("dates the file", () => {
     expect(exportFileName(new Date("2026-10-04T23:00:00Z"))).toBe(
-      "courtpit-export-2026-10-04.json",
+      "racquetcollective-export-2026-10-04.json",
     );
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Typed client for the Courtpit REST API (`/api/v1`), built on `openapi-fetch`.
+ * Typed client for the Racquet Collective REST API (`/api/v1`), built on `openapi-fetch`.
  *
  * `schema.d.ts` is generated from the server's OpenAPI document (`npm run gen`); this file is
  * the only hand-written code in the package.
@@ -19,17 +19,17 @@ export function isApiError(error: unknown): error is ApiErrorBody {
   return typeof detail?.code === "string" && typeof detail.message === "string";
 }
 
-export interface CourtpitClientOptions {
-  /** Server origin, e.g. `https://api.courtpit.app` (no trailing path). */
+export interface RacquetCollectiveClientOptions {
+  /** Server origin, e.g. `https://api.racquetcollective.app` (no trailing path). */
   baseUrl: string;
   /**
-   * Community slug, sent as `X-Courtpit-Community` on every request. Leave it out on a
-   * community's own host (`{slug}.courtpit.app` or its custom domain): the server then resolves
+   * Community slug, sent as `X-RacquetCollective-Community` on every request. Leave it out on a
+   * community's own host (`{slug}.racquetcollective.app` or its custom domain): the server then resolves
    * the community from `Host`.
    */
   community?: string;
   /**
-   * Browser client: sends `X-Courtpit-Client: web`, so sign-in sets the httpOnly session cookie
+   * Browser client: sends `X-RacquetCollective-Client: web`, so sign-in sets the httpOnly session cookie
    * instead of returning a token (the browser then sends the cookie by itself).
    */
   web?: boolean;
@@ -41,15 +41,20 @@ export interface CourtpitClientOptions {
 }
 
 /** Creates a client whose requests carry the community header and, when set, the session. */
-export function createCourtpitClient({ baseUrl, community, web, token }: CourtpitClientOptions) {
+export function createRacquetCollectiveClient({
+  baseUrl,
+  community,
+  web,
+  token,
+}: RacquetCollectiveClientOptions) {
   const client = createClient<paths>({ baseUrl });
   const headers: Middleware = {
     onRequest({ request }) {
       if (community) {
-        request.headers.set("X-Courtpit-Community", community);
+        request.headers.set("X-RacquetCollective-Community", community);
       }
       if (web) {
-        request.headers.set("X-Courtpit-Client", "web");
+        request.headers.set("X-RacquetCollective-Client", "web");
       }
       const session = typeof token === "function" ? token() : token;
       if (session) {
@@ -62,5 +67,5 @@ export function createCourtpitClient({ baseUrl, community, web, token }: Courtpi
   return client;
 }
 
-/** The client returned by {@link createCourtpitClient}. */
-export type CourtpitClient = ReturnType<typeof createCourtpitClient>;
+/** The client returned by {@link createRacquetCollectiveClient}. */
+export type RacquetCollectiveClient = ReturnType<typeof createRacquetCollectiveClient>;

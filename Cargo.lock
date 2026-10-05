@@ -447,58 +447,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
-name = "courtpit-domain"
-version = "0.1.0"
-dependencies = [
- "rust_decimal",
- "serde",
- "serde_json",
- "thiserror",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "courtpit-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "axum-client-ip",
- "axum-extra",
- "base64 0.22.1",
- "chrono",
- "clap",
- "cookie",
- "courtpit-domain",
- "email_address",
- "governor",
- "hmac",
- "http-body-util",
- "jsonwebtoken",
- "moka",
- "password-auth",
- "percent-encoding",
- "rand 0.9.5",
- "reqwest",
- "rust_decimal",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "subtle",
- "thiserror",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "utoipa",
- "utoipa-axum",
- "uuid",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1967,6 +1915,58 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "racquetcollective-domain"
+version = "0.1.0"
+dependencies = [
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "racquetcollective-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-client-ip",
+ "axum-extra",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "cookie",
+ "email_address",
+ "governor",
+ "hmac",
+ "http-body-util",
+ "jsonwebtoken",
+ "moka",
+ "password-auth",
+ "percent-encoding",
+ "racquetcollective-domain",
+ "rand 0.9.5",
+ "reqwest",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "utoipa",
+ "utoipa-axum",
+ "uuid",
+]
 
 [[package]]
 name = "rand"

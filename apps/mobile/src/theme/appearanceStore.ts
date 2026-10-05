@@ -3,7 +3,7 @@ import { Appearance } from "react-native";
 
 import { parsePreference, type AppearancePreference } from "./appearance";
 
-const KEY = "courtpit.appearance";
+const KEY = "racquetcollective.appearance";
 
 /**
  * Native: the choice is kept in SecureStore (already a dependency; the value is not secret)

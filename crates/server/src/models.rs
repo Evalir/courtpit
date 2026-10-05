@@ -55,7 +55,7 @@ pub enum Gender {
     Undisclosed,
 }
 
-impl From<Gender> for courtpit_domain::Gender {
+impl From<Gender> for racquetcollective_domain::Gender {
     fn from(gender: Gender) -> Self {
         match gender {
             Gender::Female => Self::Female,

@@ -1,8 +1,8 @@
-//! Courtpit server: REST API, background jobs and admin CLI, backed by Postgres.
+//! Racquet Collective server: REST API, background jobs and admin CLI, backed by Postgres.
 #![deny(unsafe_code)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
-// Used only by the `courtpit-server` binary target, which shares this manifest.
+// Used only by the `racquetcollective-server` binary target, which shares this manifest.
 use tokio as _;
 
 pub mod api;

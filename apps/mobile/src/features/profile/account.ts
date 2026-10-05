@@ -19,7 +19,7 @@ export function deletionConfirmed(typed: string, email: string): boolean {
   return typed.trim().toLowerCase() === email.trim().toLowerCase();
 }
 
-/** `courtpit-export-2026-10-04.json`. */
+/** `racquetcollective-export-2026-10-04.json`. */
 export function exportFileName(now: Date): string {
-  return `courtpit-export-${now.toISOString().slice(0, 10)}.json`;
+  return `racquetcollective-export-${now.toISOString().slice(0, 10)}.json`;
 }

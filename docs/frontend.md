@@ -1,4 +1,4 @@
-# Courtpit — Frontend
+# Racquet Collective — Frontend
 
 **Status:** first slice (stack step F1 below), 2026-10-04. The architecture doc (§5, §6, §16) is
 authoritative; this document records how the client realises it, and `docs/decisions.md` (#73
@@ -15,7 +15,7 @@ flags arrive at runtime from `GET /api/v1/tenant`, so a rebrand needs no store r
 | Framework | Expo SDK 57 (React Native 0.86, React 19.2), `react-native-web` for the web surface |
 | Navigation | Expo Router: file-based routes in `src/app`, typed routes, `Stack.Protected` guards |
 | Language | TypeScript, `strict` + `noUncheckedIndexedAccess` |
-| API | `@courtpit/api-client` (`openapi-fetch`, types generated from the server's OpenAPI document) |
+| API | `@racquetcollective/api-client` (`openapi-fetch`, types generated from the server's OpenAPI document) |
 | Server state | TanStack Query 5, with `openapi-react-query` for typed `useQuery` / `useMutation` |
 | Styling | React Native `StyleSheet` plus a runtime theme built from the community's branding; no UI kit |
 | Icons, type | Ionicons (`@expo/vector-icons`); the system font or Inter, picked by `branding.typography` |
@@ -31,7 +31,7 @@ local state is component state) and no form library yet.
 ```
 apps/mobile/
   app.config.ts            per-community identity from the build environment
-  metro.config.js          dev proxy: /api → local courtpit-server
+  metro.config.js          dev proxy: /api → local racquetcollective-server
   .env.development         EXPO_PUBLIC_COMMUNITY=demo for `expo start`
   src/
     app/                   routes (every file is a screen; _layout files are navigators)
@@ -55,25 +55,25 @@ The bundle reads two `EXPO_PUBLIC_*` variables (inlined at build time) in `src/a
 
 | Build | `EXPO_PUBLIC_COMMUNITY` | `EXPO_PUBLIC_API_URL` | Community resolved by | Session |
 |---|---|---|---|---|
-| Native, store build | baked per community (EAS profile) | `https://api.courtpit.app` | `X-Courtpit-Community` header | bearer token |
+| Native, store build | baked per community (EAS profile) | `https://api.racquetcollective.app` | `X-RacquetCollective-Community` header | bearer token |
 | Native, development | `demo` (`.env.development`) | empty → the dev server's host | header | bearer token |
-| Web, production | unset | unset → the page's own origin | `Host` (`{slug}.courtpit.app` or custom domain) | httpOnly cookie |
+| Web, production | unset | unset → the page's own origin | `Host` (`{slug}.racquetcollective.app` or custom domain) | httpOnly cookie |
 | Web, development | `demo` | unset → `localhost:8081` | header (localhost is no community host) | httpOnly cookie |
 
 The web app and the API share an origin in every environment. In production the API serves the
-exported single-page app itself (`COURTPIT_WEB_DIR`, decision 88; see `docs/deploy.md`), so the
-browser talks to `{slug}.courtpit.app` only:
+exported single-page app itself (`RACQUETCOLLECTIVE_WEB_DIR`, decision 88; see `docs/deploy.md`), so the
+browser talks to `{slug}.racquetcollective.app` only:
 the session cookie is same-site, the host already names the community, and no CORS is needed. In
 development `metro.config.js` proxies `/api/*`, `/healthz` and `/readyz` from the Expo dev server
-to `COURTPIT_DEV_API` (default `http://127.0.0.1:8080`); Expo Go on a phone reaches the API the
+to `RACQUETCOLLECTIVE_DEV_API` (default `http://127.0.0.1:8080`); Expo Go on a phone reaches the API the
 same way, through the host it loaded the bundle from.
 
-App identity for native builds (`COURTPIT_APP_NAME`, `COURTPIT_BUNDLE_ID`, `COURTPIT_SCHEME`,
-`COURTPIT_EAS_PROJECT_ID`, `COURTPIT_WEB_HOST`, `COURTPIT_ICON`) is read by `app.config.ts` and
+App identity for native builds (`RACQUETCOLLECTIVE_APP_NAME`, `RACQUETCOLLECTIVE_BUNDLE_ID`, `RACQUETCOLLECTIVE_SCHEME`,
+`RACQUETCOLLECTIVE_EAS_PROJECT_ID`, `RACQUETCOLLECTIVE_WEB_HOST`, `RACQUETCOLLECTIVE_ICON`) is read by `app.config.ts` and
 set per community by its EAS build profile in `eas.json`; `docs/release.md` walks through
 shipping a community's app (decision 101).
 
-**Links.** With `COURTPIT_WEB_HOST` set, the build claims the community's https links: iOS
+**Links.** With `RACQUETCOLLECTIVE_WEB_HOST` set, the build claims the community's https links: iOS
 `associatedDomains` (`applinks:` and `webcredentials:`) and an Android `VIEW` intent filter with
 `autoVerify`. The server publishes the matching association files per host (decision 99), so a
 link to `https://{host}/matches/<id>` (an email, a shared link, a notification's fallback email)
@@ -87,7 +87,7 @@ the path; a signed-out link waits for sign-in (return-to).
   with a device label. Signing in through a community's app also joins it (decision 9), so there
   is no separate sign-up.
 - **Storage.** Native keeps the bearer token in the keychain/keystore and in memory for the
-  request middleware. Web sends `X-Courtpit-Client: web`, receives the httpOnly cookie and never
+  request middleware. Web sends `X-RacquetCollective-Client: web`, receives the httpOnly cookie and never
   sees the token (decision 10).
 - **Boot.** The app asks `GET /auth/session` (native only when a token is stored). `401` →
   signed out; `403` → a "you can't open this community" screen offering *Join* (`POST /me/join`)
@@ -108,9 +108,9 @@ the path; a signed-out link waits for sign-in (return-to).
   `expo-apple-authentication` is available, with a random nonce sent both to Apple and to
   `POST /auth/oidc/apple`. "Continue with Google" (`@react-native-google-signin/google-signin`)
   shows when the build has `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (and, on iOS,
-  `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` plus `COURTPIT_GOOGLE_IOS_URL_SCHEME` for the config
+  `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` plus `RACQUETCOLLECTIVE_GOOGLE_IOS_URL_SCHEME` for the config
   plugin); its ID token's audience is the web client id, which the server must accept
-  (`COURTPIT_GOOGLE_CLIENT_IDS`). Backing out of either is silent. The web app offers codes and
+  (`RACQUETCOLLECTIVE_GOOGLE_CLIENT_IDS`). Backing out of either is silent. The web app offers codes and
   passwords only.
 
 ## 5. Theming (white-label)
@@ -150,7 +150,7 @@ palette; the dark one is derived from it:
 - a brand that is dark already is used as it is in both schemes: its community chose it.
 
 `TenantProvider` builds both themes once per tenant response and picks one with
-`useAppearance().scheme`; until the branding arrives, Courtpit's default look follows the same
+`useAppearance().scheme`; until the branding arrives, Racquet Collective's default look follows the same
 scheme. The root view (native) and page body (web) take the theme's background through
 `expo-system-ui`, and the dark splash screen uses the same near-black.
 
@@ -290,7 +290,7 @@ viewer's entry, with the number of complete entries beside the heading.
   `Toggle` (React Native `Switch`).
 - **Points history** groups the ledger by month, links league matches and season finishes,
   and greys out results older than 52 weeks (they no longer count, spec §12).
-- **Download my data** saves `courtpit-export-<date>.json` on web and opens the share sheet
+- **Download my data** saves `racquetcollective-export-<date>.json` on web and opens the share sheet
   on native (`saveExport.ts` / `.web.ts`, no new native module).
 - **Delete account** lists what happens and asks for the account's email before
   `DELETE /me`, then signs the device out.
@@ -304,7 +304,7 @@ Push is native-only (`session/push.ts`; `push.web.ts` is a no-op, decision 97).
 - **Asking.** The app never asks at launch. Home shows "Know when it’s your move" while the
   system would still ask; "Turn on" asks, "Not now" snoozes it for 30 days (kept in
   SecureStore). A device that already allows push registers silently after sign-in.
-- **Registering.** The Expo push token (for the build's EAS project, `COURTPIT_EAS_PROJECT_ID`)
+- **Registering.** The Expo push token (for the build's EAS project, `RACQUETCOLLECTIVE_EAS_PROJECT_ID`)
   goes to `PUT /me/devices/{token}`; signing out deletes it first, so the next person on the
   device doesn't get the last one's news. Android gets a "Matches and leagues" channel.
 - **Tapping** a notification opens its `data.url` (`/matches/<id>`), checked like any link
@@ -385,7 +385,7 @@ proposed time and place, that opens on its match page (decision 89).
 | F3 | Play: open match requests (list, create, join, leave), propose a friendly from a player page (done) |
 | F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view (done) |
 | F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in (done) |
-| F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
+| F6 | `racquetcollective-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
 | F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation (done) |
 | F8 | Native: Apple/Google sign-in, push and deep links (spec step 6), per-community EAS profiles and store submission (spec step 7) (done) |
 | F9 | Dark mode: a dark palette derived from each brand, following the device with a per-device override (done) |
@@ -396,13 +396,13 @@ Payments (spec step 4) and tournaments (step 5) slot in after F4 as the server g
 
 ```sh
 npm ci                                   # repository root: installs every workspace
-cargo run -p courtpit-server -- seed     # demo community `demo` (see README)
-cargo run -p courtpit-server -- serve    # API on :8080
+cargo run -p racquetcollective-server -- seed     # demo community `demo` (see README)
+cargo run -p racquetcollective-server -- serve    # API on :8080
 cd apps/mobile
 npm run web                              # http://localhost:8081, /api proxied to :8080
 npm start                                # Expo Go / simulators (same proxy)
 ```
 
 Sign in as any seeded member (`lily.fernandez@example.com` has a score to confirm); with
-`COURTPIT_MAILER=log` the code is in the server log. Checks: `npm run format:check`, `npm run
+`RACQUETCOLLECTIVE_MAILER=log` the code is in the server log. Checks: `npm run format:check`, `npm run
 lint`, `npm run typecheck`, `npm test`, `npm run export:web`.

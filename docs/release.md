@@ -1,4 +1,4 @@
-# Courtpit — shipping a community's app
+# Racquet Collective — shipping a community's app
 
 How one community gets its own app in the App Store and Google Play (spec §16, build step 7).
 The code is the same for every community; what differs is an EAS build profile in
@@ -10,13 +10,13 @@ Everything below runs from `apps/mobile` unless it says otherwise. You need the 
 ## 1. Accounts the community holds
 
 Apple's guideline 4.3 (template apps) means each community publishes under **its own** Apple
-Developer account, not a shared Courtpit one (spec §16).
+Developer account, not a shared Racquet Collective one (spec §16).
 
 | What | Who creates it | Notes |
 |---|---|---|
 | Apple Developer Program | the community (an organisation needs a D-U-N-S number) | Note the **Team ID** (10 characters). |
 | Google Play Console | the community | A one-time fee; create the app listing once the first build exists. |
-| Expo account or organisation | Courtpit, with the community's Apple/Google access shared to it | Holds the EAS project, builds, credentials and updates. |
+| Expo account or organisation | Racquet Collective, with the community's Apple/Google access shared to it | Holds the EAS project, builds, credentials and updates. |
 
 ## 2. The EAS project
 
@@ -25,7 +25,7 @@ npx eas init        # creates the project under the logged-in account; prints it
 ```
 
 `app.config.ts` is dynamic, so `eas init` can't write the id itself: put it in the profile as
-`COURTPIT_EAS_PROJECT_ID` (next step). The id is what push tokens are issued for and where EAS
+`RACQUETCOLLECTIVE_EAS_PROJECT_ID` (next step). The id is what push tokens are issued for and where EAS
 Update serves updates; a build without it has neither.
 
 ## 3. The build profile
@@ -35,14 +35,14 @@ Copy the `demo` and `demo-preview` profiles in `eas.json` and change every value
 | Variable | Example | Meaning |
 |---|---|---|
 | `EXPO_PUBLIC_COMMUNITY` | `riverside` | The community's slug on the server. |
-| `EXPO_PUBLIC_API_URL` | `https://riverside.courtpit.app` | Where the app talks to; `https://` + the web host. |
-| `COURTPIT_WEB_HOST` | `riverside.courtpit.app` | Its links open the app (step 7). |
-| `COURTPIT_APP_NAME` | `Riverside Tennis` | The name under the icon and in the stores. |
-| `COURTPIT_BUNDLE_ID` | `app.courtpit.riverside` | iOS bundle id and Android package. **Never change it after release.** |
-| `COURTPIT_SCHEME` | `courtpit-riverside` | The app's own URL scheme; unique per community. |
-| `COURTPIT_EAS_PROJECT_ID` | from step 2 | Push and updates. |
-| `COURTPIT_ICON` | `./assets/communities/riverside/icon.png` | 1024×1024 PNG, no transparency (optional). |
-| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `COURTPIT_GOOGLE_IOS_URL_SCHEME` | from step 6 | Only if the community offers Google sign-in. |
+| `EXPO_PUBLIC_API_URL` | `https://riverside.racquetcollective.app` | Where the app talks to; `https://` + the web host. |
+| `RACQUETCOLLECTIVE_WEB_HOST` | `riverside.racquetcollective.app` | Its links open the app (step 7). |
+| `RACQUETCOLLECTIVE_APP_NAME` | `Riverside Tennis` | The name under the icon and in the stores. |
+| `RACQUETCOLLECTIVE_BUNDLE_ID` | `app.racquetcollective.riverside` | iOS bundle id and Android package. **Never change it after release.** |
+| `RACQUETCOLLECTIVE_SCHEME` | `racquetcollective-riverside` | The app's own URL scheme; unique per community. |
+| `RACQUETCOLLECTIVE_EAS_PROJECT_ID` | from step 2 | Push and updates. |
+| `RACQUETCOLLECTIVE_ICON` | `./assets/communities/riverside/icon.png` | 1024×1024 PNG, no transparency (optional). |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `RACQUETCOLLECTIVE_GOOGLE_IOS_URL_SCHEME` | from step 6 | Only if the community offers Google sign-in. |
 
 The profile's name is also its EAS Update **channel**. `src/eas.test.ts` (run by `npm test` and
 CI) fails if a store profile misses an identity variable, uses a channel other than its name,
@@ -73,12 +73,12 @@ Store builds increment the build number on EAS (`appVersionSource: remote`). The
 ## 6. Sign in with Apple and Google (server side)
 
 - **Apple:** the iOS build always has the Sign in with Apple entitlement. Add the bundle id to
-  the server's accepted audiences: `COURTPIT_APPLE_CLIENT_IDS=app.courtpit.riverside,…`.
+  the server's accepted audiences: `RACQUETCOLLECTIVE_APPLE_CLIENT_IDS=app.racquetcollective.riverside,…`.
 - **Google (optional):** in the community's Google Cloud project create three OAuth clients —
   *Web* (its id is the token audience), *iOS* (bundle id; its reversed id is
-  `COURTPIT_GOOGLE_IOS_URL_SCHEME`) and *Android* (package name and the SHA-1 from
+  `RACQUETCOLLECTIVE_GOOGLE_IOS_URL_SCHEME`) and *Android* (package name and the SHA-1 from
   `eas credentials`). Put the web and iOS ids in the profile (step 3) and the **web** client id in
-  `COURTPIT_GOOGLE_CLIENT_IDS` on the server.
+  `RACQUETCOLLECTIVE_GOOGLE_CLIENT_IDS` on the server.
 
 Both server settings are comma-separated lists shared by every community (`docs/deploy.md`).
 
@@ -88,12 +88,12 @@ With the Apple Team ID and the Android signing certificate's SHA-256 (from
 `npx eas credentials`, Android → keystore):
 
 ```sh
-fly ssh console -C "courtpit-server set-app-links --slug riverside \
-  --ios-app-id TEAMID1234.app.courtpit.riverside \
-  --android-package app.courtpit.riverside --android-sha256 AB:CD:…:EF"
+fly ssh console -C "racquetcollective-server set-app-links --slug riverside \
+  --ios-app-id TEAMID1234.app.racquetcollective.riverside \
+  --android-package app.racquetcollective.riverside --android-sha256 AB:CD:…:EF"
 ```
 
-Check `https://riverside.courtpit.app/.well-known/apple-app-site-association` and
+Check `https://riverside.racquetcollective.app/.well-known/apple-app-site-association` and
 `/.well-known/assetlinks.json`. When Play App Signing re-signs the app, add Google's app-signing
 certificate SHA-256 as a second `--android-sha256`.
 

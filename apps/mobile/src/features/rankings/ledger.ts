@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 
 export type LedgerEntry = components["schemas"]["LedgerEntry"];
 

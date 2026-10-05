@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 import * as SplashScreen from "expo-splash-screen";
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -56,7 +56,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   // One object per response and scheme: themed styles are cached per theme object
   // (`createStyles`), so switching back and forth reuses them.
   const community = useMemo(() => (tenant.data ? communityFrom(tenant.data) : null), [tenant.data]);
-  // Before the branding arrives (or when it fails), Courtpit's own look in the right scheme.
+  // Before the branding arrives (or when it fails), Racquet Collective's own look in the right scheme.
   const fallback = useMemo(() => themeFromBranding(undefined, scheme), [scheme]);
   const typography = community?.themes.light.typography;
   const [fontsReady, setFontsReady] = useState<string | null>(null);

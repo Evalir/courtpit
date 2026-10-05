@@ -3,7 +3,7 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::Event;
+use racquetcollective_domain::Event;
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;

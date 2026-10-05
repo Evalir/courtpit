@@ -1,4 +1,4 @@
-import type { CourtpitClient } from "@courtpit/api-client";
+import type { RacquetCollectiveClient } from "@racquetcollective/api-client";
 
 /** Whether this device can show pushes, and whether the player let it. */
 export type PushPermission = "granted" | "undetermined" | "denied" | "unavailable";
@@ -10,12 +10,12 @@ export async function pushPermission(): Promise<PushPermission> {
 }
 
 export async function registerForPush(
-  _fetch: CourtpitClient,
+  _fetch: RacquetCollectiveClient,
   _ask: boolean,
 ): Promise<PushPermission> {
   return "unavailable";
 }
 
-export async function forgetPushDevice(_fetch: CourtpitClient): Promise<void> {}
+export async function forgetPushDevice(_fetch: RacquetCollectiveClient): Promise<void> {}
 
 export function useNotificationTaps(_signedIn: boolean) {}

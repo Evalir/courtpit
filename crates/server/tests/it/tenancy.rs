@@ -1,7 +1,7 @@
 //! Tenant resolution and RLS isolation.
 
 use axum::http::StatusCode;
-use courtpit_server::TenantTx;
+use racquetcollective_server::TenantTx;
 use uuid::Uuid;
 
 use crate::common::TestApp;
@@ -28,7 +28,7 @@ async fn tenant_resolves_from_host() {
     let _ = app.community("madrid").await;
     let body = app
         .get("/api/v1/tenant")
-        .header("host", "madrid.courtpit.app")
+        .header("host", "madrid.racquetcollective.app")
         .send()
         .await
         .expect(StatusCode::OK);

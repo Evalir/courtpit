@@ -15,7 +15,8 @@ use axum::{
     extract::ConnectInfo,
     http::{HeaderMap, Method, Request, StatusCode, header},
 };
-use courtpit_server::{
+use http_body_util::BodyExt;
+use racquetcollective_server::{
     AppState, Config,
     clock::OffsetClock,
     communities::{Branding, CreatedCommunity, NewCommunity, create_community},
@@ -24,14 +25,14 @@ use courtpit_server::{
     push::LogPusher,
     tenancy::Community,
 };
-use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use sqlx::{Connection, Executor, PgConnection, PgPool, postgres::PgConnectOptions};
 use tokio::sync::OnceCell;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-const DEFAULT_URL: &str = "postgres://courtpit:courtpit@127.0.0.1/courtpit";
+const DEFAULT_URL: &str =
+    "postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective";
 /// Advisory lock key serialising template creation across test processes.
 const TEMPLATE_LOCK: i64 = 7_253_001;
 
@@ -53,9 +54,9 @@ fn admin_options() -> PgConnectOptions {
 }
 
 /// Options for the application pool under test: `DATABASE_URL` (the pooler when testing
-/// pooled), with sqlx's statement cache off when `COURTPIT_DB_POOLED=true`.
+/// pooled), with sqlx's statement cache off when `RACQUETCOLLECTIVE_DB_POOLED=true`.
 fn app_options() -> PgConnectOptions {
-    let pooled = std::env::var("COURTPIT_DB_POOLED")
+    let pooled = std::env::var("RACQUETCOLLECTIVE_DB_POOLED")
         .is_ok_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"));
     db::pooled_options(url_from_env(&["DATABASE_URL"]), pooled)
 }
@@ -66,7 +67,7 @@ fn template_name() -> String {
         migration.version.hash(&mut hasher);
         migration.checksum.hash(&mut hasher);
     }
-    format!("courtpit_tpl_{:016x}", hasher.finish())
+    format!("racquetcollective_tpl_{:016x}", hasher.finish())
 }
 
 /// Ensures the migrated template exists (once per process) and returns its name.
@@ -84,8 +85,8 @@ async fn template() -> &'static str {
             // Clean up databases left behind by earlier runs; ignore ones still in use.
             let stale: Vec<String> = sqlx::query_scalar(
                 "SELECT datname FROM pg_database
-                 WHERE datname LIKE 'courtpit\\_test\\_%'
-                    OR (datname LIKE 'courtpit\\_tpl\\_%' AND datname <> $1)",
+                 WHERE datname LIKE 'racquetcollective\\_test\\_%'
+                    OR (datname LIKE 'racquetcollective\\_tpl\\_%' AND datname <> $1)",
             )
             .bind(&name)
             .fetch_all(&mut conn)
@@ -137,7 +138,7 @@ async fn template() -> &'static str {
 /// Creates a fresh database for one test, cloned from the migrated template.
 async fn fresh_database() -> PgConnectOptions {
     let template = template().await;
-    let name = format!("courtpit_test_{}", Uuid::now_v7().simple());
+    let name = format!("racquetcollective_test_{}", Uuid::now_v7().simple());
     let mut conn = PgConnection::connect_with(&admin_options()).await.unwrap();
     let sql = format!(r#"CREATE DATABASE "{name}" TEMPLATE "{template}""#);
     let mut attempts = 0;
@@ -209,10 +210,10 @@ impl TestApp {
             .config
             .web_dir
             .as_deref()
-            .map(courtpit_server::web::WebApp::new)
+            .map(racquetcollective_server::web::WebApp::new)
             .transpose()
             .unwrap();
-        let router = courtpit_server::router(state.clone(), web).layer(Extension(peer));
+        let router = racquetcollective_server::router(state.clone(), web).layer(Extension(peer));
         Self {
             state,
             router,
@@ -356,7 +357,7 @@ impl Req<'_> {
 
     /// Scopes the request to a community via the tenant header.
     pub(crate) fn community(self, slug: &str) -> Self {
-        self.header("x-courtpit-community", slug)
+        self.header("x-racquetcollective-community", slug)
     }
 
     pub(crate) fn header(mut self, name: &str, value: &str) -> Self {
