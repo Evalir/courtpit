@@ -3,6 +3,8 @@ import {
   formatScore,
   groupMatches,
   matchActions,
+  outcomeNote,
+  proposalLabel,
   sideOf,
   type MatchView,
 } from "./match";
@@ -180,5 +182,42 @@ describe("matchActions", () => {
     expect(Object.values(done).every((value) => value === false || value === null)).toBe(true);
     const bystander = matchActions(match({ status: "proposed" }), "someone", NOW);
     expect(bystander).toMatchObject({ propose: false, report: false, cancel: false });
+  });
+});
+
+describe("outcomeNote", () => {
+  const name = (id: string) => (id === ME ? "You" : "Olivia");
+
+  it("says which player called a friendly off, with their reason", () => {
+    const cancelled = match({ status: "cancelled", resolved_by: OPP, resolution_note: "Rain" });
+    expect(outcomeNote(cancelled, name)).toBe("Cancelled by Olivia: “Rain”");
+    expect(outcomeNote(match({ status: "cancelled", resolved_by: ME }), name)).toBe(
+      "Cancelled by You.",
+    );
+  });
+
+  it("credits anyone outside the match to the club's admins", () => {
+    const byAdmin = match({ status: "cancelled", resolved_by: "admin" });
+    expect(outcomeNote(byAdmin, name)).toBe("Cancelled by a club admin.");
+    const ruled = match({ status: "resolved", resolved_by: "admin", resolution_note: "6–4 6–4" });
+    expect(outcomeNote(ruled, name)).toBe("Admin ruling: 6–4 6–4");
+    expect(outcomeNote(match({ status: "confirmed" }), name)).toBeNull();
+  });
+});
+
+describe("proposalLabel", () => {
+  const superseded = {
+    id: "p1",
+    proposed_by: OPP,
+    proposed_time: "2026-10-10T17:00:00Z",
+    status: "superseded" as const,
+    created_at: "2026-10-01T00:00:00Z",
+  };
+
+  it("tells a replaced proposal from one the match's end closed", () => {
+    expect(proposalLabel(superseded, match({ status: "scheduled" }))).toBe(
+      "Replaced by a newer proposal",
+    );
+    expect(proposalLabel(superseded, match({ status: "cancelled" }))).toBe("Closed");
   });
 });

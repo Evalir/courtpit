@@ -4,7 +4,13 @@ import { View } from "react-native";
 
 import { useApi } from "@/api/client";
 import { disciplineLabel, formatDateTime } from "@/features/format";
-import { sideOf, statusBadge, type MatchView } from "@/features/matches/match";
+import {
+  outcomeNote,
+  proposalLabel,
+  sideOf,
+  statusBadge,
+  type MatchView,
+} from "@/features/matches/match";
 import { MatchActions } from "@/features/matches/MatchActions";
 import { nameLookup, sideName } from "@/features/players/names";
 import { useSignedIn } from "@/session/SessionProvider";
@@ -17,15 +23,7 @@ import { Screen, Section } from "@/ui/Screen";
 import { ErrorState, LoadingState } from "@/ui/States";
 import { Text } from "@/ui/Text";
 
-type Proposal = components["schemas"]["Proposal"];
 type Side = components["schemas"]["Side"];
-
-const proposalStatus: Record<Proposal["status"], string> = {
-  open: "Waiting for an answer",
-  accepted: "Accepted",
-  declined: "Declined",
-  superseded: "Replaced by a newer proposal",
-};
 
 /** A match: the scoreboard, where things stand, and the viewer's next step. */
 export default function Match() {
@@ -87,7 +85,7 @@ export default function Match() {
                 {proposal.location ? ` · ${proposal.location}` : ""}
               </Text>
               <Text variant="caption" tone="textMuted">
-                Proposed by {name(proposal.proposed_by)} · {proposalStatus[proposal.status]}
+                Proposed by {name(proposal.proposed_by)} · {proposalLabel(proposal, data)}
               </Text>
             </Card>
           ))}
@@ -148,7 +146,7 @@ function Scoreboard({
   );
 }
 
-/** Who reported, the confirmation deadline, a dispute or a ruling. */
+/** Who reported, the confirmation deadline, a dispute, a cancellation or a ruling. */
 function StatusNotes({ match, name }: { match: MatchView; name: (id: string) => string }) {
   const lines: string[] = [];
   if (match.reported_by && match.reported_at) {
@@ -164,7 +162,8 @@ function StatusNotes({ match, name }: { match: MatchView; name: (id: string) => 
       `Disputed by ${name(match.disputed_by)}${match.dispute_note ? `: “${match.dispute_note}”` : ""}. A club admin will decide.`,
     );
   }
-  if (match.resolution_note) lines.push(`Admin ruling: ${match.resolution_note}`);
+  const outcome = outcomeNote(match, name);
+  if (outcome) lines.push(outcome);
   if (lines.length === 0) return null;
   return (
     <Card>

@@ -139,3 +139,33 @@ export function matchActions(match: MatchView, me: string, now: Date): MatchActi
     cancel: arranging && match.league_id == null,
   };
 }
+
+/** Why a match ended the way it did: who called it off, or an admin's ruling. */
+export function outcomeNote(match: MatchView, name: (id: string) => string): string | null {
+  const note = match.resolution_note;
+  if (match.status === "cancelled") {
+    const by =
+      match.resolved_by != null && sideOf(match, match.resolved_by) !== null
+        ? name(match.resolved_by)
+        : "a club admin";
+    return `Cancelled by ${by}${note ? `: “${note}”` : "."}`;
+  }
+  return note ? `Admin ruling: ${note}` : null;
+}
+
+/** How a proposal reads in the match's scheduling history. */
+export function proposalLabel(proposal: Proposal, match: MatchView): string {
+  switch (proposal.status) {
+    case "open":
+      return "Waiting for an answer";
+    case "accepted":
+      return "Accepted";
+    case "declined":
+      return "Declined";
+    case "superseded":
+      // A cancel or a reported score also closes the open proposal.
+      return match.status === "proposed" || match.status === "scheduled"
+        ? "Replaced by a newer proposal"
+        : "Closed";
+  }
+}

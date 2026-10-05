@@ -1,12 +1,14 @@
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 
 import { useApi } from "@/api/client";
 import { formatUtr, playPrefLabel } from "@/features/format";
 import { Detail, DetailsCard, gearLine, socialsLine } from "@/features/players/ProfileDetails";
+import { useSignedIn } from "@/session/SessionProvider";
 import { space } from "@/theme/tokens";
 import { Avatar } from "@/ui/Avatar";
 import { Badge } from "@/ui/Badge";
+import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
 import { ErrorState, LoadingState } from "@/ui/States";
 import { Text } from "@/ui/Text";
@@ -15,6 +17,7 @@ import { Text } from "@/ui/Text";
 export default function Player() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { $api } = useApi();
+  const me = useSignedIn().player_id;
   const player = $api.useQuery("get", "/api/v1/players/{id}", { params: { path: { id } } });
 
   if (player.isPending) return <LoadingState />;
@@ -35,6 +38,15 @@ export default function Player() {
           <Badge label={`UTR ${formatUtr(data.utr)}`} tone="primary" />
           {data.role !== "player" ? <Badge label="Club admin" tone="accent" /> : null}
         </View>
+        {data.id !== me ? (
+          <Button
+            label="Challenge to a match"
+            icon="tennisball-outline"
+            onPress={() =>
+              router.push({ pathname: "/players/[id]/challenge", params: { id: data.id } })
+            }
+          />
+        ) : null}
       </View>
       <DetailsCard title="Tennis">
         <Detail icon="tennisball-outline" label="Plays" value={playPrefLabel[data.play_pref]} />
