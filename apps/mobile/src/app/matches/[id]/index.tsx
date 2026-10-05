@@ -3,6 +3,7 @@ import { Link, useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 
 import { useApi } from "@/api/client";
+import { AdminMatchActions } from "@/features/admin/AdminMatchActions";
 import { disciplineLabel, formatDateTime } from "@/features/format";
 import {
   outcomeNote,
@@ -76,6 +77,10 @@ export default function Match() {
       ) : null}
       <StatusNotes match={data} name={name} />
       <MatchActions match={data} me={me} now={now} name={name} />
+      <AdminMatchActions
+        match={data}
+        sides={{ a: sideName(data.side_a, name), b: sideName(data.side_b, name) }}
+      />
       {data.proposals && data.proposals.length > 0 ? (
         <Section title="Scheduling">
           {data.proposals.map((proposal) => (
@@ -158,9 +163,9 @@ function StatusNotes({ match, name }: { match: MatchView; name: (id: string) => 
     );
   }
   if (match.disputed_by) {
-    lines.push(
-      `Disputed by ${name(match.disputed_by)}${match.dispute_note ? `: “${match.dispute_note}”` : ""}. A club admin will decide.`,
-    );
+    const note = match.dispute_note ? `: “${match.dispute_note}”` : ".";
+    lines.push(`Disputed by ${name(match.disputed_by)}${note}`);
+    if (match.status === "disputed") lines.push("A club admin will decide.");
   }
   const outcome = outcomeNote(match, name);
   if (outcome) lines.push(outcome);

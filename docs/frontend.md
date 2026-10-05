@@ -176,7 +176,9 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Delete account | `/profile/delete` (modal) | `DELETE /me` | built |
 | Club admin: banned members | `/admin` | `GET /players?status=banned`, `POST /admin/players/{id}/unban` | built |
 | Player: ban or lift a ban (admins) | `/players/[id]` | `POST /admin/players/{id}/ban`, `…/unban` | built |
-| Admin: leagues, disputes | `/admin/*` | `/admin/*` | F7 |
+| Club admin: disputes | `/admin` | `GET /matches?all=true&status=disputed` | built |
+| Match: settle, walk over, cancel (admins) | `/matches/[id]`, `/admin/matches/[id]/resolve` (modal) | `POST /admin/matches/{id}/resolve`, `…/walkover`, `POST /matches/{id}/cancel` | built |
+| Admin: leagues | `/admin/*` | `/admin/leagues/*` | F7 |
 
 ## 7. Data conventions
 
@@ -265,6 +267,13 @@ may moderate admins).
 - **Moderation.** A member's profile shows a "Banned" badge and, to admins who outrank them,
   "Ban from the club" (asks first) or "Lift the ban". The hub lists banned members
   (`GET /players?status=banned`, admins only, decision 93) with "Lift the ban" on each.
+- **Rulings.** The hub lists the club's disputed matches. On a match page an "As club admin"
+  card (rules in `features/admin/rulings.ts`) offers: for a dispute, set the score (a modal with
+  the report form and its checks), order a replay or void it; for an unplayed league match, a
+  walkover to a chosen side; for any unplayed match the admin doesn't play in, cancelling. Each
+  takes an optional note for the players, which the match then shows as the ruling. An admin
+  who plays in the match is told another admin or the owner decides it (owners may referee their
+  own, so a one-admin club is never stuck).
 
 ### Match requests
 

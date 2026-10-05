@@ -4,6 +4,8 @@ import { useApi } from "@/api/client";
 import { unwrap, useCursorList } from "@/api/paging";
 import { ModerationButton } from "@/features/admin/ModerationButton";
 import { isAdmin } from "@/features/admin/roles";
+import { MatchCard } from "@/features/matches/MatchCard";
+import { nameLookup } from "@/features/players/names";
 import { PlayerRow } from "@/features/players/PlayerRow";
 import { useSignedIn } from "@/session/SessionProvider";
 import { space } from "@/theme/tokens";
@@ -26,8 +28,44 @@ export default function Admin() {
   }
   return (
     <Screen>
+      <Disputes />
       <BannedMembers />
     </Screen>
+  );
+}
+
+/** Disputed matches across the club, each waiting for an admin's decision. */
+function Disputes() {
+  const me = useSignedIn().player_id;
+  const { $api } = useApi();
+  const disputed = $api.useQuery("get", "/api/v1/matches", {
+    params: { query: { all: true, status: "disputed", limit: 100 } },
+  });
+  const items = disputed.data?.items ?? [];
+  const name = nameLookup(
+    items.flatMap((match) => match.names),
+    me,
+  );
+  return (
+    <Section title="Disputes">
+      {disputed.isPending ? (
+        <LoadingState />
+      ) : disputed.error ? (
+        <ErrorState error={disputed.error} onRetry={() => void disputed.refetch()} />
+      ) : items.length === 0 ? (
+        <Text tone="textMuted">No disputed matches.</Text>
+      ) : (
+        items.map((match) => (
+          <MatchCard
+            key={match.id}
+            match={match}
+            me={me}
+            name={name}
+            now={new Date(disputed.dataUpdatedAt)}
+          />
+        ))
+      )}
+    </Section>
   );
 }
 
