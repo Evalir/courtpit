@@ -101,8 +101,16 @@ the path; a signed-out link waits for sign-in (return-to).
   (`session/returnTo.ts`, decision 92). Home, sign-in, verify and the delete screen are no
   destinations.
 - **Passwords.** A signed-in player can set or change a password from Profile
-  (`PUT /auth/password`); email codes keep working.
-- **Not yet:** password sign-in on the sign-in screen, Apple and Google.
+  (`PUT /auth/password`) and then sign in with it ("Use my password",
+  `POST /auth/password/login`); email codes keep working.
+- **Apple and Google** (native builds, decision 100). "Continue with Apple" shows on iOS where
+  `expo-apple-authentication` is available, with a random nonce sent both to Apple and to
+  `POST /auth/oidc/apple`. "Continue with Google" (`@react-native-google-signin/google-signin`)
+  shows when the build has `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (and, on iOS,
+  `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` plus `COURTPIT_GOOGLE_IOS_URL_SCHEME` for the config
+  plugin); its ID token's audience is the web client id, which the server must accept
+  (`COURTPIT_GOOGLE_CLIENT_IDS`). Backing out of either is silent. The web app offers codes and
+  passwords only.
 
 ## 5. Theming (white-label)
 

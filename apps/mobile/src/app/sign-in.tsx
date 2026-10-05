@@ -4,7 +4,10 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApi } from "@/api/client";
-import { describeError } from "@/api/errors";
+import { describeError, errorCode } from "@/api/errors";
+import { ProviderButtons } from "@/features/auth/ProviderButtons";
+import { deviceLabel } from "@/session/device";
+import { useSession } from "@/session/SessionProvider";
 import { CommunityMark } from "@/tenant/CommunityMark";
 import { useCommunity } from "@/tenant/TenantProvider";
 import { createStyles } from "@/theme/ThemeProvider";
@@ -16,18 +19,28 @@ import { TextField } from "@/ui/TextField";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Step 1 of sign-in: the email address. A code is the only way in (spec §6). */
+/**
+ * Sign-in: an emailed code (the default, which also creates accounts), a password the player
+ * set, or Apple / Google where the build supports them (spec §6).
+ */
 export default function SignIn() {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const community = useCommunity();
   const { $api } = useApi();
+  const { signIn } = useSession();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [usePassword, setUsePassword] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const request = $api.useMutation("post", "/api/v1/auth/otp/request", {
     onSuccess: (_data, variables) =>
       router.push({ pathname: "/verify", params: { email: variables.body.email } }),
   });
+  const login = $api.useMutation("post", "/api/v1/auth/password/login", {
+    onSuccess: (auth) => signIn(auth),
+  });
+  const error = usePassword ? login.error : request.error;
 
   const submit = () => {
     const address = email.trim();
@@ -35,7 +48,11 @@ export default function SignIn() {
       setInvalid(true);
       return;
     }
-    request.mutate({ body: { email: address } });
+    if (usePassword) {
+      login.mutate({ body: { email: address, password, device_label: deviceLabel } });
+    } else {
+      request.mutate({ body: { email: address } });
+    }
   };
 
   return (
@@ -73,19 +90,49 @@ export default function SignIn() {
               autoComplete="email"
               inputMode="email"
               textContentType="emailAddress"
-              returnKeyType="send"
-              error={
-                invalid
-                  ? "Enter an email address like name@example.com."
-                  : request.error
-                    ? describeError(request.error)
-                    : null
-              }
+              returnKeyType={usePassword ? "next" : "send"}
+              error={invalid ? "Enter an email address like name@example.com." : null}
             />
-            <Button label="Email me a code" block loading={request.isPending} onPress={submit} />
+            {usePassword ? (
+              <TextField
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                onSubmitEditing={submit}
+                secureTextEntry
+                autoComplete="current-password"
+                textContentType="password"
+                returnKeyType="go"
+              />
+            ) : null}
+            {error ? (
+              <Text tone="danger">
+                {usePassword && errorCode(error) === "unauthorized"
+                  ? "That email and password don’t match. Forgot it? Use an emailed code."
+                  : describeError(error)}
+              </Text>
+            ) : null}
+            <Button
+              label={usePassword ? "Sign in" : "Email me a code"}
+              block
+              loading={usePassword ? login.isPending : request.isPending}
+              onPress={submit}
+            />
+            <Button
+              label={usePassword ? "Email me a code instead" : "Use my password"}
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                setUsePassword(!usePassword);
+                setInvalid(false);
+              }}
+            />
+            <ProviderButtons />
           </Card>
           <Text variant="caption" tone="textMuted" align="center">
-            We’ll email you a 6-digit code. New here? The same code creates your account.
+            {usePassword
+              ? "Set a password from your profile after signing in with a code."
+              : "We’ll email you a 6-digit code. New here? The same code creates your account."}
           </Text>
         </View>
       </ScrollView>
