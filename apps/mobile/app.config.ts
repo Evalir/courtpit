@@ -9,10 +9,14 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * - `COURTPIT_BUNDLE_ID`  iOS bundle identifier and Android package
  * - `COURTPIT_SCHEME`     deep-link scheme
  * - `COURTPIT_EAS_PROJECT_ID` the EAS project, which push tokens are issued for
+ * - `COURTPIT_WEB_HOST`   the community's web host (`riverside.courtpit.app`): its https links
+ *                         open in the app (universal links / app links, decision 99)
  *
  * The community slug and API origin are `EXPO_PUBLIC_*` variables read by the bundle itself
  * (`src/api/config.ts`), so they also apply to the web build.
  */
+const webHost = process.env.COURTPIT_WEB_HOST;
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: process.env.COURTPIT_APP_NAME ?? "Courtpit (dev)",
@@ -25,9 +29,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: process.env.COURTPIT_BUNDLE_ID ?? "app.courtpit.dev",
     supportsTablet: true,
+    ...(webHost ? { associatedDomains: [`applinks:${webHost}`, `webcredentials:${webHost}`] } : {}),
   },
   android: {
     package: process.env.COURTPIT_BUNDLE_ID ?? "app.courtpit.dev",
+    ...(webHost
+      ? {
+          intentFilters: [
+            {
+              action: "VIEW",
+              autoVerify: true,
+              data: [{ scheme: "https", host: webHost }],
+              category: ["BROWSABLE", "DEFAULT"],
+            },
+          ],
+        }
+      : {}),
   },
   web: {
     // A single-page app: the server hands the same index.html to every community host.

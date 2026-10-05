@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use courtpit_server::{
     AppState, Config,
     app::openapi,
+    applinks::{self, AndroidApp, AppLinks},
     auth::rate_limit::rate_limit_notice,
     backup,
     communities::{NewCommunity, create_community},
@@ -46,6 +47,8 @@ enum Command {
     Migrate(db::DbConfig),
     /// Create a community (tenant), optionally with its owner.
     CreateCommunity(CreateCommunityArgs),
+    /// Set the apps that open a community's links (universal links / app links).
+    SetAppLinks(SetAppLinksArgs),
     /// Print the OpenAPI document as JSON (needs no database or configuration).
     Openapi {
         /// Write the document to this file instead of stdout.
@@ -96,6 +99,24 @@ struct CreateCommunityArgs {
     owner_email: Option<String>,
 }
 
+#[derive(Debug, clap::Args)]
+struct SetAppLinksArgs {
+    #[command(flatten)]
+    db: db::DbConfig,
+    /// The community's slug.
+    #[arg(long)]
+    slug: String,
+    /// iOS app id, `{team id}.{bundle id}` (repeat for several).
+    #[arg(long = "ios-app-id")]
+    ios: Vec<String>,
+    /// Android application id.
+    #[arg(long)]
+    android_package: Option<String>,
+    /// SHA-256 fingerprint of the Android signing certificate (repeat for several).
+    #[arg(long = "android-sha256", requires = "android_package")]
+    android_sha256: Vec<String>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -133,6 +154,27 @@ async fn main() -> anyhow::Result<()> {
                     .map(|player| format!(", owner player {player}"))
                     .unwrap_or_default()
             );
+            Ok(())
+        }
+        Command::SetAppLinks(args) => {
+            let pool = db::connect(&args.db).await?;
+            let links = AppLinks {
+                ios: args.ios,
+                android: args
+                    .android_package
+                    .map(|package| AndroidApp {
+                        package,
+                        sha256_cert_fingerprints: args.android_sha256,
+                    })
+                    .into_iter()
+                    .collect(),
+            };
+            anyhow::ensure!(
+                applinks::store(&pool, &args.slug, &links).await?,
+                "no community with slug `{}`",
+                args.slug
+            );
+            println!("app links set for {}", args.slug);
             Ok(())
         }
         Command::Seed(args) => {
