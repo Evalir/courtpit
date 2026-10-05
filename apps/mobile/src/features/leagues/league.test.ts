@@ -43,6 +43,17 @@ describe("leagueTiming", () => {
     ).toBe("Registration closes 20 Oct 2026");
   });
 
+  it("reads a deadline at midnight as the end of the day before", () => {
+    const closes = new Date(2026, 10, 21).toISOString(); // local midnight starting 21 Nov
+    const open = {
+      ...league,
+      status: "registration" as const,
+      registration_opens_at: "2026-10-01T12:00:00Z",
+      registration_closes_at: closes,
+    };
+    expect(leagueTiming(open, NOW, "en-GB")).toBe("Registration closes 20 Nov 2026");
+  });
+
   it("explains a cancellation", () => {
     expect(
       leagueTiming({ ...league, status: "cancelled", cancel_reason: "too few entries" }, NOW),
