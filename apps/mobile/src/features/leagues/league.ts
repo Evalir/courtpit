@@ -1,6 +1,6 @@
 import type { components } from "@courtpit/api-client";
 
-import { formatDate } from "@/features/format";
+import { formatDate, formatLastDay } from "@/features/format";
 import type { BadgeTone } from "@/ui/Badge";
 
 export type LeagueView = components["schemas"]["LeagueView"];
@@ -27,17 +27,18 @@ export const leagueOrder: readonly LeagueStatus[] = [
 /** The one date that matters for a league right now. */
 export function leagueTiming(league: LeagueView, now: Date, locale?: string): string {
   const date = (iso: string) => formatDate(iso, locale);
+  const lastDay = (iso: string) => formatLastDay(iso, locale);
   switch (league.status) {
     case "draft":
       return "Not published yet";
     case "registration":
       return new Date(league.registration_opens_at) > now
         ? `Registration opens ${date(league.registration_opens_at)}`
-        : `Registration closes ${date(league.registration_closes_at)}`;
+        : `Registration closes ${lastDay(league.registration_closes_at)}`;
     case "active":
-      return `${date(league.starts_at)} – ${date(league.ends_at)}`;
+      return `${date(league.starts_at)} – ${lastDay(league.ends_at)}`;
     case "finished":
-      return `Finished ${date(league.ends_at)}`;
+      return `Finished ${lastDay(league.ends_at)}`;
     case "cancelled":
       return league.cancel_reason ?? "Cancelled";
   }

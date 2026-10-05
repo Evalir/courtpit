@@ -1,15 +1,18 @@
+import { router } from "expo-router";
 import { View } from "react-native";
 
 import { useApi } from "@/api/client";
 import { unwrap, useCursorList } from "@/api/paging";
 import { ModerationButton } from "@/features/admin/ModerationButton";
 import { isAdmin } from "@/features/admin/roles";
+import { formatDate } from "@/features/format";
 import { MatchCard } from "@/features/matches/MatchCard";
 import { nameLookup } from "@/features/players/names";
 import { PlayerRow } from "@/features/players/PlayerRow";
 import { useSignedIn } from "@/session/SessionProvider";
 import { space } from "@/theme/tokens";
 import { Button } from "@/ui/Button";
+import { Card } from "@/ui/Card";
 import { Screen, Section } from "@/ui/Screen";
 import { EmptyState, ErrorState, LoadingState } from "@/ui/States";
 import { Text } from "@/ui/Text";
@@ -28,9 +31,41 @@ export default function Admin() {
   }
   return (
     <Screen>
+      <Leagues />
       <Disputes />
       <BannedMembers />
     </Screen>
+  );
+}
+
+/** Starting a league, and the drafts waiting to be published. */
+function Leagues() {
+  const { $api } = useApi();
+  const drafts = $api.useQuery("get", "/api/v1/leagues", {
+    params: { query: { status: "draft", limit: 50 } },
+  });
+  return (
+    <Section title="Leagues">
+      <Button
+        label="Create a league"
+        icon="add-outline"
+        onPress={() => router.push("/admin/leagues/new")}
+      />
+      {(drafts.data?.items ?? []).map((league) => (
+        <Card
+          key={league.id}
+          accessibilityLabel={`${league.name}, ${league.published_at ? "published" : "draft"}`}
+          onPress={() => router.push({ pathname: "/leagues/[id]", params: { id: league.id } })}
+        >
+          <Text variant="subheading">{league.name}</Text>
+          <Text variant="label" tone="textMuted">
+            {league.published_at
+              ? `Published · registration opens ${formatDate(league.registration_opens_at)}`
+              : "Draft · not published"}
+          </Text>
+        </Card>
+      ))}
+    </Section>
   );
 }
 

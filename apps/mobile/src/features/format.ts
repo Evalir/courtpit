@@ -35,6 +35,14 @@ export function formatDate(iso: string, locale?: string): string {
   }).format(new Date(iso));
 }
 
+/**
+ * The last day a period ending at `iso` covers: a deadline at midnight belongs to the day
+ * before it ("registration closes 20 Nov" for 21 Nov 00:00), anything later to its own day.
+ */
+export function formatLastDay(iso: string, locale?: string): string {
+  return formatDate(new Date(Date.parse(iso) - 1).toISOString(), locale);
+}
+
 /** A UTR to two decimals ("6.25"), or "—" when unknown. */
 export function formatUtr(utr: number | null | undefined): string {
   return utr === null || utr === undefined ? "—" : utr.toFixed(2);

@@ -178,7 +178,9 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Player: ban or lift a ban (admins) | `/players/[id]` | `POST /admin/players/{id}/ban`, `…/unban` | built |
 | Club admin: disputes | `/admin` | `GET /matches?all=true&status=disputed` | built |
 | Match: settle, walk over, cancel (admins) | `/matches/[id]`, `/admin/matches/[id]/resolve` (modal) | `POST /admin/matches/{id}/resolve`, `…/walkover`, `POST /matches/{id}/cancel` | built |
-| Admin: leagues | `/admin/*` | `/admin/leagues/*` | F7 |
+| Club admin: create a league, drafts | `/admin`, `/admin/leagues/new` (modal) | `POST /admin/leagues`, `GET /leagues?status=draft` | built |
+| League: edit, publish, cancel (admins) | `/leagues/[id]`, `/admin/leagues/[id]/edit` (modal) | `PATCH /admin/leagues/{id}`, `…/publish`, `…/cancel` | built |
+| League: pair solo entries, unresolved matches, finish (admins) | `/leagues/[id]` | `POST /admin/leagues/{id}/pair`, `GET …/unresolved`, `POST …/finish` | F7 |
 
 ## 7. Data conventions
 
@@ -274,6 +276,14 @@ may moderate admins).
   takes an optional note for the players, which the match then shows as the ruling. An admin
   who plays in the match is told another admin or the owner decides it (owners may referee their
   own, so a one-admin club is never stuck).
+- **Leagues.** "Create a league" (`/admin/leagues/new`) makes a draft: name, discipline, the
+  season it continues from (promotion seeds the boxes), four dates picked on a month calendar
+  (`ui/DateField`), box sizes and the format (club default, or its own: sets, deciding set,
+  tiebreaks, golden point). Days are local: registration opens at the start of its first day
+  and closes at the end of its last; the season likewise (decision 95). The form checks the
+  server's rules (`features/admin/leagueForm.ts`) and an edit sends only what changed. A
+  league page shows admins Publish (drafts), Edit (until registration opens) and Cancel; the
+  hub lists drafts.
 
 ### Match requests
 

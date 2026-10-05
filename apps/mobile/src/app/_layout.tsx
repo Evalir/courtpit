@@ -111,6 +111,14 @@ function RootNavigator() {
           <Stack.Screen name="rankings/me" options={{ title: "Points history" }} />
           <Stack.Screen name="admin/index" options={{ title: "Club admin" }} />
           <Stack.Screen
+            name="admin/leagues/new"
+            options={{ title: "New league", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="admin/leagues/[id]/edit"
+            options={{ title: "Edit league", presentation: "modal" }}
+          />
+          <Stack.Screen
             name="admin/matches/[id]/resolve"
             options={{ title: "Settle the dispute", presentation: "modal" }}
           />

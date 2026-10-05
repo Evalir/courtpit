@@ -3,7 +3,8 @@ import { useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 
 import { useApi } from "@/api/client";
-import { disciplineLabel, formatDate } from "@/features/format";
+import { disciplineLabel, formatDate, formatLastDay } from "@/features/format";
+import { AdminLeagueActions } from "@/features/admin/AdminLeagueActions";
 import { EntryPanel } from "@/features/leagues/EntryPanel";
 import { describeFormat, leagueBadge, leagueTiming, ownBoxFirst } from "@/features/leagues/league";
 import { nameLookup, sideName } from "@/features/players/names";
@@ -70,11 +71,11 @@ export default function League() {
       <Card>
         <Fact
           label="Registration"
-          value={`${formatDate(data.registration_opens_at)} – ${formatDate(data.registration_closes_at)}`}
+          value={`${formatDate(data.registration_opens_at)} – ${formatLastDay(data.registration_closes_at)}`}
         />
         <Fact
           label="Season"
-          value={`${formatDate(data.starts_at)} – ${formatDate(data.ends_at)}`}
+          value={`${formatDate(data.starts_at)} – ${formatLastDay(data.ends_at)}`}
         />
         <Fact label="Format" value={describeFormat(data.match_format)} />
         <Fact
@@ -82,6 +83,7 @@ export default function League() {
           value={`${data.box_min_size}–${data.box_max_size} entries, round robin`}
         />
       </Card>
+      <AdminLeagueActions league={data} />
       <EntryPanel league={data} now={now} />
       {started ? (
         standings.isPending ? (
