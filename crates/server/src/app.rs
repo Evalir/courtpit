@@ -5,12 +5,13 @@ use std::{sync::Arc, time::Duration};
 use axum::{
     Json, Router,
     extract::Request,
-    http::HeaderName,
+    http::{HeaderName, HeaderValue, header},
     routing::{any, get},
 };
 use sqlx::PgPool;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
 use utoipa::{Modify, OpenApi};
@@ -210,11 +211,42 @@ async fn no_such_route() -> ApiError {
     ApiError::NotFound("route")
 }
 
+/// Adds the security headers every response carries, API and web app alike, unless a handler
+/// set its own (decision 104). HSTS only when served over HTTPS (`cookie_secure`), so a
+/// plain-HTTP development server never pins a browser to HTTPS.
+fn with_security_headers(app: Router<AppState>, https: bool) -> Router<AppState> {
+    let headers = [
+        (
+            header::STRICT_TRANSPORT_SECURITY,
+            https.then_some("max-age=63072000; includeSubDomains"),
+        ),
+        (header::X_CONTENT_TYPE_OPTIONS, Some("nosniff")),
+        (
+            header::REFERRER_POLICY,
+            Some("strict-origin-when-cross-origin"),
+        ),
+        // Clickjacking: `frame-ancestors` for current browsers, `X-Frame-Options` for older
+        // ones. No script policy: the web app is not verified against one.
+        (
+            header::CONTENT_SECURITY_POLICY,
+            Some("frame-ancestors 'none'"),
+        ),
+        (header::X_FRAME_OPTIONS, Some("DENY")),
+    ];
+    headers.into_iter().fold(app, |app, (name, value)| {
+        app.layer(SetResponseHeaderLayer::if_not_present(
+            name,
+            value.map(HeaderValue::from_static),
+        ))
+    })
+}
+
 /// The complete application router, ready to serve. With a `web` app, every path outside the
 /// API serves it (see [`WebApp`]).
 pub fn router(state: AppState, web: Option<WebApp>) -> Router {
     let (api, openapi) = api_router();
     let client_ip_source = state.config.client_ip_source.clone();
+    let https = state.config.cookie_secure;
     let openapi = Arc::new(openapi);
     let request_id = HeaderName::from_static("x-request-id");
     let api = api
@@ -238,7 +270,8 @@ pub fn router(state: AppState, web: Option<WebApp>) -> Router {
         Some(web) => api.fallback(move |request: Request| web.clone().respond(request)),
         None => api,
     };
-    app.layer(PropagateRequestIdLayer::new(request_id.clone()))
+    with_security_headers(app, https)
+        .layer(PropagateRequestIdLayer::new(request_id.clone()))
         .layer(TraceLayer::new_for_http())
         .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
         .layer(client_ip_source.into_extension())

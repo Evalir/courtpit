@@ -212,6 +212,7 @@ fly machine run \
   --restart no \
   --vm-size shared-cpu-1x --vm-memory 512 \
   --metadata racquetcollective_role=tick \
+  --env RACQUETCOLLECTIVE_ENV=production \
   --env RACQUETCOLLECTIVE_LOG_FORMAT=json \
   --env RACQUETCOLLECTIVE_MAILER=resend \
   --env RACQUETCOLLECTIVE_BASE_DOMAIN=racquetcollective.app \
@@ -272,7 +273,9 @@ with the `X-RacquetCollective-Community: <slug>` header, which takes precedence 
 
 **Per-community custom domains** (e.g. `tennis.example.org`): add the certificate, have the
 club point the name at the app (`CNAME` to `my-racquetcollective.fly.dev`, or `A`/`AAAA` to the same
-addresses), and register it on the community:
+addresses), and register it on the community. Use a dedicated name, not the club's apex
+(`example.org`): responses carry HSTS with `includeSubDomains`, which would make browsers refuse
+plain HTTP on every one of the club's subdomains for two years.
 
 ```sh
 fly certs add tennis.example.org
@@ -341,6 +344,11 @@ The runtime copies the export to `/app/web` and sets `RACQUETCOLLECTIVE_WEB_DIR=
 - Content-hashed files under `/_expo/static/` and `/assets/` are cached for a year
   (`immutable`); everything else is `no-cache`, so a deploy reaches users on their next load.
 - Unknown `/api/…` paths answer with the usual JSON `not_found` error, never the app.
+- Every response, the API's included, carries `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and
+  `Content-Security-Policy: frame-ancestors 'none'` (the app cannot be framed), plus
+  `Strict-Transport-Security` (two years, subdomains included) while
+  `RACQUETCOLLECTIVE_COOKIE_SECURE` is on (decision 104).
 
 The export is built without `EXPO_PUBLIC_COMMUNITY`, so one image serves every community: the
 browser's `Host` (`{slug}.racquetcollective.app` or a custom domain, section 8) picks the community and the

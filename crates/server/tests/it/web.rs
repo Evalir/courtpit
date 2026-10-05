@@ -6,7 +6,10 @@ use axum::http::{StatusCode, header};
 use racquetcollective_server::{Config, web::WebApp};
 use uuid::Uuid;
 
-use crate::common::{Res, TestApp, test_config};
+use crate::{
+    common::{Res, TestApp, test_config},
+    health::assert_security_headers,
+};
 
 /// A throwaway export: the app shell, a hashed bundle with its gzip twin, and a favicon.
 pub(crate) struct Export(PathBuf);
@@ -83,6 +86,30 @@ async fn app_routes_get_the_shell_and_files_are_served_as_they_are() {
         assert_eq!(res.status, StatusCode::NOT_FOUND, "{path}");
         assert!(header_of(&res, header::CACHE_CONTROL).is_empty());
     }
+}
+
+#[tokio::test]
+async fn the_web_app_carries_security_headers() {
+    let export = Export::new();
+    let app = TestApp::spawn_with(Config {
+        cookie_secure: true,
+        ..export.config()
+    })
+    .await;
+    for (path, status) in [
+        ("/", StatusCode::OK),
+        ("/verify?email=ana%40example.com", StatusCode::OK),
+        ("/favicon.ico", StatusCode::OK),
+        ("/_expo/static/js/web/entry-abc123.js", StatusCode::OK),
+        ("/_expo/static/js/web/entry-old.js", StatusCode::NOT_FOUND),
+    ] {
+        let res = app.get(path).send().await;
+        assert_eq!(res.status, status, "{path}");
+        assert_security_headers(&res, true);
+    }
+    // `nosniff` makes browsers refuse a script served under any other type.
+    let res = app.get("/_expo/static/js/web/entry-abc123.js").send().await;
+    assert!(header_of(&res, header::CONTENT_TYPE).contains("javascript"));
 }
 
 #[tokio::test]

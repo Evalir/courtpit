@@ -133,7 +133,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 utoipa = { version = "5", features = ["uuid", "chrono", "decimal_float"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 utoipa-axum = "0.2"
-tower-http = { version = "0.6", features = ["fs", "trace", "request-id", "util"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "request-id", "set-header", "util"] }
 
 # Password and token hashing are deliberately expensive / hot; keep tests fast.
 [profile.dev.package.argon2]

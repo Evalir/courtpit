@@ -42,6 +42,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: process.env.RACQUETCOLLECTIVE_BUNDLE_ID ?? "app.racquetcollective.dev",
     supportsTablet: true,
     usesAppleSignIn: true,
+    // Only HTTPS and the OS's own crypto, which are exempt: App Store Connect then skips the
+    // export-compliance question on every upload (docs/release.md).
+    infoPlist: { ITSAppUsesNonExemptEncryption: false },
     ...(webHost ? { associatedDomains: [`applinks:${webHost}`, `webcredentials:${webHost}`] } : {}),
   },
   android: {

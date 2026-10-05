@@ -104,6 +104,11 @@ npx eas submit --profile riverside --platform ios       # App Store Connect (ask
 npx eas submit --profile riverside --platform android   # Play: needs a submit profile
 ```
 
+Export compliance: `app.config.ts` sets `ITSAppUsesNonExemptEncryption` to `false` in the iOS
+`Info.plist`, since the app's only encryption is HTTPS and the OS's own (exempt). App Store
+Connect then skips the encryption question for every build. If the app ever adds encryption
+of its own beyond that, change the key and answer the question again.
+
 For Android, save the Play service account key to `apps/mobile/secrets/` (git-ignored) and add a
 `submit` profile like `demo`'s. Start on the `internal` track; promote in the Play Console.
 
