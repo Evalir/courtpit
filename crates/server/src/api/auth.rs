@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use subtle::ConstantTimeEq;
 
-use crate::extract::ApiJson;
 use crate::{
     ApiError, ApiResult, AppState, Tenant,
     auth::{
@@ -24,6 +23,7 @@ use crate::{
         secrets::{hash_code, new_code},
         wants_cookie,
     },
+    extract::ApiJson,
     mailer::Email,
     models::PlayerRole,
 };
@@ -39,10 +39,8 @@ const MAX_PASSWORD_LEN: usize = 256;
 
 /// Trims and validates an email address (RFC 5322 addr-spec with a dotted domain).
 pub(crate) fn normalize_email(raw: &str) -> Result<String, ApiError> {
-    let options = Options::default()
-        .with_required_tld()
-        .without_display_text()
-        .without_domain_literal();
+    let options =
+        Options::default().with_required_tld().without_display_text().without_domain_literal();
     EmailAddress::parse_with_options(raw.trim(), options)
         .map(|email| email.as_str().to_owned())
         .map_err(|_| ApiError::validation("invalid email address"))
@@ -111,11 +109,7 @@ pub async fn request_otp(
     .await?;
     let code_id = Uuid::now_v7();
     let code = new_code();
-    let purpose = if verified_at.is_some() {
-        "login"
-    } else {
-        "verify"
-    };
+    let purpose = if verified_at.is_some() { "login" } else { "verify" };
     let _ = sqlx::query(
         "INSERT INTO email_codes (id, user_id, code_hash, purpose, expires_at)
          VALUES ($1, $2, $3, $4::email_code_purpose, now() + make_interval(mins => $5))",
@@ -217,9 +211,7 @@ pub async fn verify_otp(
     if code_row.expires_at <= Utc::now() || code_row.attempts >= MAX_CODE_ATTEMPTS {
         return Err(ApiError::InvalidCredentials);
     }
-    let matches: bool = hash_code(code_row.id, &body.code)
-        .ct_eq(&code_row.code_hash)
-        .into();
+    let matches: bool = hash_code(code_row.id, &body.code).ct_eq(&code_row.code_hash).into();
     if !matches {
         let _ = sqlx::query(
             "UPDATE email_codes SET attempts = attempts + 1,
@@ -245,15 +237,7 @@ pub async fn verify_otp(
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
-    finish_login(
-        &state,
-        &tenant,
-        user_id,
-        &email,
-        body.device_label.as_deref(),
-        &headers,
-    )
-    .await
+    finish_login(&state, &tenant, user_id, &email, body.device_label.as_deref(), &headers).await
 }
 
 /// Joins the community if needed, opens a session and renders it (cookie or body).
@@ -331,9 +315,7 @@ pub async fn password_login(
 ) -> ApiResult<Response> {
     let email = normalize_email(&body.email)?;
     state.limiter.check(&format!("login-ip:{ip}"))?;
-    state
-        .limiter
-        .check(&format!("login-email:{}", email.to_lowercase()))?;
+    state.limiter.check(&format!("login-email:{}", email.to_lowercase()))?;
     let user: Option<LoginRow> = sqlx::query_as(
         "SELECT id, email, password_hash, email_verified_at FROM users
          WHERE lower(email) = lower($1) AND deleted_at IS NULL",
@@ -341,12 +323,8 @@ pub async fn password_login(
     .bind(&email)
     .fetch_optional(&state.db)
     .await?;
-    let Some(LoginRow {
-        id: user_id,
-        email,
-        password_hash: Some(phc),
-        email_verified_at: Some(_),
-    }) = user
+    let Some(LoginRow { id: user_id, email, password_hash: Some(phc), email_verified_at: Some(_) }) =
+        user
     else {
         return Err(ApiError::InvalidCredentials);
     };
@@ -355,15 +333,7 @@ pub async fn password_login(
         .await
         .map_err(|err| ApiError::Internal(err.into()))?
         .map_err(|_| ApiError::InvalidCredentials)?;
-    finish_login(
-        &state,
-        &tenant,
-        user_id,
-        &email,
-        body.device_label.as_deref(),
-        &headers,
-    )
-    .await
+    finish_login(&state, &tenant, user_id, &email, body.device_label.as_deref(), &headers).await
 }
 
 /// Body of `PUT /auth/password`.

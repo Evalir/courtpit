@@ -11,11 +11,7 @@ use uuid::Uuid;
 use crate::common::{Session, TestApp};
 
 async fn get(app: &TestApp, viewer: &Session, path: &str) -> Value {
-    app.get(path)
-        .as_(viewer)
-        .send()
-        .await
-        .expect(StatusCode::OK)
+    app.get(path).as_(viewer).send().await.expect(StatusCode::OK)
 }
 
 /// Every player's display name in `community`, by id.
@@ -26,9 +22,7 @@ async fn display_names(app: &TestApp, community: Uuid) -> HashMap<String, String
             .fetch_all(&app.db)
             .await
             .unwrap();
-    rows.into_iter()
-        .map(|(id, name)| (id.to_string(), name))
-        .collect()
+    rows.into_iter().map(|(id, name)| (id.to_string(), name)).collect()
 }
 
 /// The ids a view lists under `keys` (arrays or single ids; nulls skipped), in order.
@@ -52,17 +46,11 @@ fn assert_names(view: &Value, expected: &[String], display: &HashMap<String, Str
     let mut seen = HashSet::new();
     let expected: Vec<&String> = expected.iter().filter(|id| seen.insert(*id)).collect();
     let names = view["names"].as_array().unwrap();
-    let listed: Vec<&str> = names
-        .iter()
-        .map(|name| name["id"].as_str().unwrap())
-        .collect();
+    let listed: Vec<&str> = names.iter().map(|name| name["id"].as_str().unwrap()).collect();
     assert_eq!(listed, expected, "names follow the view's ids: {view}");
     for name in names {
         let id = name["id"].as_str().unwrap();
-        assert_eq!(
-            name["display_name"].as_str(),
-            display.get(id).map(String::as_str)
-        );
+        assert_eq!(name["display_name"].as_str(), display.get(id).map(String::as_str));
     }
 }
 
@@ -72,13 +60,7 @@ async fn match_lists_and_details_name_everyone_they_mention() {
     let summary = seed(&app.state, "demo").await.unwrap();
     let owner = app.login(&summary.owner_email, "demo").await;
     let display = display_names(&app, summary.community_id).await;
-    let keys = [
-        "side_a",
-        "side_b",
-        "reported_by",
-        "disputed_by",
-        "resolved_by",
-    ];
+    let keys = ["side_a", "side_b", "reported_by", "disputed_by", "resolved_by"];
 
     let page = get(&app, &owner, "/api/v1/matches?all=true&limit=100").await;
     let matches = page["items"].as_array().unwrap();
@@ -88,16 +70,9 @@ async fn match_lists_and_details_name_everyone_they_mention() {
     }
 
     // A single match also names whoever proposed a time.
-    let reported = matches
-        .iter()
-        .find(|view| view["status"] == "reported")
-        .unwrap();
-    let detail = get(
-        &app,
-        &owner,
-        &format!("/api/v1/matches/{}", reported["id"].as_str().unwrap()),
-    )
-    .await;
+    let reported = matches.iter().find(|view| view["status"] == "reported").unwrap();
+    let detail =
+        get(&app, &owner, &format!("/api/v1/matches/{}", reported["id"].as_str().unwrap())).await;
     let mut expected = ids(&detail, &keys);
     expected.extend(
         detail["proposals"]
@@ -129,12 +104,7 @@ async fn standings_entries_and_requests_name_their_players() {
             .to_owned()
     };
 
-    let boxes = get(
-        &app,
-        &owner,
-        &format!("/api/v1/leagues/{}/standings", league("active")),
-    )
-    .await;
+    let boxes = get(&app, &owner, &format!("/api/v1/leagues/{}/standings", league("active"))).await;
     let lines: Vec<&Value> = boxes
         .as_array()
         .unwrap()
@@ -169,30 +139,16 @@ async fn standings_entries_and_requests_name_their_players() {
     )
     .bind(summary.community_id)
     .bind(
-        ids(pending, &entry_keys)
-            .iter()
-            .map(|id| id.parse::<Uuid>().unwrap())
-            .collect::<Vec<_>>(),
+        ids(pending, &entry_keys).iter().map(|id| id.parse::<Uuid>().unwrap()).collect::<Vec<_>>(),
     )
     .fetch_one(&app.db)
     .await
     .unwrap();
     let bystander = app.login(&bystander_email, "demo").await;
     let seen = get(&app, &bystander, &path).await;
-    let seen = seen
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|entry| entry["id"] == pending["id"])
-        .unwrap();
+    let seen = seen.as_array().unwrap().iter().find(|entry| entry["id"] == pending["id"]).unwrap();
     assert!(seen["invited_partner_id"].is_null());
-    assert!(
-        !seen["names"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|name| name["id"] == invited.as_str())
-    );
+    assert!(!seen["names"].as_array().unwrap().iter().any(|name| name["id"] == invited.as_str()));
 
     let requests = get(&app, &owner, "/api/v1/match-requests").await;
     for request in requests["items"].as_array().unwrap() {

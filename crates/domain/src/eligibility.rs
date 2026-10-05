@@ -148,10 +148,7 @@ mod tests {
             assert_eq!(FemaleMale.check(&[gender]).is_ok(), female_male);
             assert_eq!(AnyTwoDistinct.check(&[gender]).is_ok(), any_two);
         }
-        assert_eq!(
-            FemaleMale.check(&[Other]),
-            Err(MixedError::Solo { rule: FemaleMale })
-        );
+        assert_eq!(FemaleMale.check(&[Other]), Err(MixedError::Solo { rule: FemaleMale }));
     }
 
     #[test]
@@ -176,24 +173,13 @@ mod tests {
 
     #[test]
     fn errors_say_why() {
-        assert_eq!(
-            FemaleMale.check(&[Female, Other]),
-            Err(MixedError::Pair { rule: FemaleMale })
-        );
+        assert_eq!(FemaleMale.check(&[Female, Other]), Err(MixedError::Pair { rule: FemaleMale }));
         assert_eq!(
             AnyTwoDistinct.check(&[Other, Undisclosed]),
-            Err(MixedError::Pair {
-                rule: AnyTwoDistinct
-            })
+            Err(MixedError::Pair { rule: AnyTwoDistinct })
         );
-        assert_eq!(
-            AnyTwoDistinct.check(&[Other, Other]),
-            Err(MixedError::SameGender)
-        );
-        assert_eq!(
-            AnyTwoDistinct.check(&[Female, Female]),
-            Err(MixedError::SameGender)
-        );
+        assert_eq!(AnyTwoDistinct.check(&[Other, Other]), Err(MixedError::SameGender));
+        assert_eq!(AnyTwoDistinct.check(&[Female, Female]), Err(MixedError::SameGender));
         let text = |err: MixedError| err.to_string();
         assert!(text(MixedError::Pair { rule: FemaleMale }).contains("one female and one male"));
         assert!(
@@ -201,10 +187,7 @@ mod tests {
             "solo registrants are told what to change"
         );
         assert!(
-            text(MixedError::Solo {
-                rule: AnyTwoDistinct
-            })
-            .contains("undisclosed is not eligible")
+            text(MixedError::Solo { rule: AnyTwoDistinct }).contains("undisclosed is not eligible")
         );
         assert!(text(MixedError::SameGender).contains("different genders"));
     }
@@ -213,30 +196,20 @@ mod tests {
     fn entries_have_one_or_two_players() {
         for rule in [FemaleMale, AnyTwoDistinct] {
             assert_eq!(rule.check(&[]), Err(MixedError::PlayerCount));
-            assert_eq!(
-                rule.check(&[Female, Male, Female]),
-                Err(MixedError::PlayerCount)
-            );
+            assert_eq!(rule.check(&[Female, Male, Female]), Err(MixedError::PlayerCount));
         }
     }
 
     #[test]
     fn rule_json_and_default() {
         assert_eq!(MixedEligibility::default(), FemaleMale);
-        for (text, rule) in [
-            ("\"female_male\"", FemaleMale),
-            ("\"any_two_distinct\"", AnyTwoDistinct),
-        ] {
-            assert_eq!(
-                serde_json::from_str::<MixedEligibility>(text).unwrap(),
-                rule
-            );
+        for (text, rule) in
+            [("\"female_male\"", FemaleMale), ("\"any_two_distinct\"", AnyTwoDistinct)]
+        {
+            assert_eq!(serde_json::from_str::<MixedEligibility>(text).unwrap(), rule);
             assert_eq!(serde_json::to_string(&rule).unwrap(), text);
         }
         let _ = serde_json::from_str::<MixedEligibility>("\"anyone\"").unwrap_err();
-        assert_eq!(
-            serde_json::to_string(&Undisclosed).unwrap(),
-            "\"undisclosed\""
-        );
+        assert_eq!(serde_json::to_string(&Undisclosed).unwrap(), "\"undisclosed\"");
     }
 }

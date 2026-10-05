@@ -60,10 +60,7 @@ impl MatchStatus {
 
     /// No further transitions are possible.
     pub const fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            Self::Confirmed | Self::Resolved | Self::Walkover | Self::Cancelled
-        )
+        matches!(self, Self::Confirmed | Self::Resolved | Self::Walkover | Self::Cancelled)
     }
 
     /// The result stands and counts for standings and rankings.
@@ -146,15 +143,15 @@ impl MatchState {
             (Self::Proposed | Self::Scheduled, Event::DeclineProposal { proposed_by }) => actor
                 .against(proposed_by, "only the other side can decline a proposal")
                 .map(|()| self),
-            (Self::Proposed | Self::Scheduled, Event::Walkover) => actor
-                .officiating("only an admin awards walkovers")
-                .map(|()| Self::Walkover),
+            (Self::Proposed | Self::Scheduled, Event::Walkover) => {
+                actor.officiating("only an admin awards walkovers").map(|()| Self::Walkover)
+            }
             (Self::Proposed | Self::Scheduled, Event::Cancel) => {
                 actor.may_cancel(kind).map(|()| Self::Cancelled)
             }
-            (Self::Proposed | Self::Scheduled, Event::Report) => actor
-                .player("only players report scores")
-                .map(|by| Self::Reported { by }),
+            (Self::Proposed | Self::Scheduled, Event::Report) => {
+                actor.player("only players report scores").map(|by| Self::Reported { by })
+            }
             (Self::Reported { by }, Event::Confirm) => {
                 actor.against(by, ANSWER_REPORT).map(|()| Self::Confirmed)
             }
@@ -167,10 +164,7 @@ impl MatchState {
             (Self::Disputed, Event::Resolve(resolution)) => actor
                 .exactly(Actor::Admin, "only an admin resolves disputes")
                 .map(|()| resolution.outcome()),
-            _ => Err(TransitionError::InvalidState {
-                from: self.status(),
-                event: event.name(),
-            }),
+            _ => Err(TransitionError::InvalidState { from: self.status(), event: event.name() }),
         }
     }
 }
@@ -216,11 +210,7 @@ impl Actor {
 
     /// Passes only for `who`.
     fn exactly(self, who: Self, msg: &'static str) -> Result<(), TransitionError> {
-        if self == who {
-            Ok(())
-        } else {
-            Err(TransitionError::Forbidden(msg))
-        }
+        if self == who { Ok(()) } else { Err(TransitionError::Forbidden(msg)) }
     }
 
     /// Passes for an admin or the system, never a player.
@@ -235,12 +225,12 @@ impl Actor {
     const fn may_cancel(self, kind: MatchKind) -> Result<(), TransitionError> {
         match (self, kind) {
             (Self::Admin, _) | (Self::Player(_), MatchKind::Friendly) => Ok(()),
-            (Self::Player(_), MatchKind::Competitive) => Err(TransitionError::Forbidden(
-                "only an admin can cancel a league match",
-            )),
-            (Self::System, _) => Err(TransitionError::Forbidden(
-                "the system does not cancel matches",
-            )),
+            (Self::Player(_), MatchKind::Competitive) => {
+                Err(TransitionError::Forbidden("only an admin can cancel a league match"))
+            }
+            (Self::System, _) => {
+                Err(TransitionError::Forbidden("the system does not cancel matches"))
+            }
         }
     }
 }
@@ -445,18 +435,13 @@ mod tests {
                 }
             }
         }
-        assert!(
-            allowed > 40,
-            "matrix should exercise many legal moves, got {allowed}"
-        );
+        assert!(allowed > 40, "matrix should exercise many legal moves, got {allowed}");
     }
 
     #[test]
     fn happy_path() {
         let kind = MatchKind::Competitive;
-        let accept = Event::AcceptProposal {
-            proposed_by: Side::A,
-        };
+        let accept = Event::AcceptProposal { proposed_by: Side::A };
         let state = State::Proposed.step(kind, PLAYER_B, accept).unwrap();
         assert_eq!(state, State::Scheduled);
         let state = state.step(kind, PLAYER_A, Event::Report).unwrap();
@@ -465,10 +450,7 @@ mod tests {
             state.step(kind, PLAYER_A, Event::Confirm),
             Err(TransitionError::Forbidden(ANSWER_REPORT))
         );
-        assert_eq!(
-            state.step(kind, PLAYER_B, Event::Confirm),
-            Ok(State::Confirmed)
-        );
+        assert_eq!(state.step(kind, PLAYER_B, Event::Confirm), Ok(State::Confirmed));
     }
 
     #[test]
@@ -491,10 +473,7 @@ mod tests {
 
     #[test]
     fn terminal_states_accept_nothing() {
-        for state in STATES
-            .into_iter()
-            .filter(|state| state.status().is_terminal())
-        {
+        for state in STATES.into_iter().filter(|state| state.status().is_terminal()) {
             for actor in ACTORS {
                 for event in events() {
                     let _ = state.step(MatchKind::Friendly, actor, event).unwrap_err();
@@ -541,13 +520,7 @@ mod tests {
 
     #[test]
     fn status_json() {
-        assert_eq!(
-            serde_json::to_string(&MatchStatus::Walkover).unwrap(),
-            "\"walkover\""
-        );
-        assert_eq!(
-            serde_json::from_str::<Resolution>("\"replay\"").unwrap(),
-            Resolution::Replay
-        );
+        assert_eq!(serde_json::to_string(&MatchStatus::Walkover).unwrap(), "\"walkover\"");
+        assert_eq!(serde_json::from_str::<Resolution>("\"replay\"").unwrap(), Resolution::Replay);
     }
 }

@@ -79,9 +79,7 @@ pub async fn append(
         .await?;
     }
     if !events.is_empty() {
-        let job = Job::RefreshRankings {
-            community_id: tx.community_id(),
-        };
+        let job = Job::RefreshRankings { community_id: tx.community_id() };
         jobs::enqueue(&mut **tx, job, occurred_at).await?;
     }
     Ok(())
@@ -156,9 +154,7 @@ pub async fn refresh(tx: &mut TenantTx, now: DateTime<Utc>) -> Result<(), ApiErr
 pub async fn refresh_job(state: &AppState, community_id: Uuid) -> anyhow::Result<()> {
     let now = state.clock.now();
     let mut tx = TenantTx::begin(&state.db, community_id).await?;
-    refresh(&mut tx, now)
-        .await
-        .map_err(|err| anyhow::anyhow!("refreshing rankings: {err}"))?;
+    refresh(&mut tx, now).await.map_err(|err| anyhow::anyhow!("refreshing rankings: {err}"))?;
     tx.commit().await?;
     let next = Job::RefreshRankings { community_id };
     jobs::enqueue(&state.db, next, now + Duration::days(1)).await?;

@@ -33,9 +33,8 @@ pub struct RegisterDevice {
 
 /// Expo push tokens look like `ExponentPushToken[...]` (or `ExpoPushToken[...]`).
 fn check_token(token: &str) -> ApiResult<()> {
-    let wrapped = ["ExponentPushToken[", "ExpoPushToken["]
-        .iter()
-        .any(|prefix| token.starts_with(prefix));
+    let wrapped =
+        ["ExponentPushToken[", "ExpoPushToken["].iter().any(|prefix| token.starts_with(prefix));
     if wrapped && token.ends_with(']') && token.len() <= 255 {
         Ok(())
     } else {
@@ -112,11 +111,7 @@ pub struct NotificationPrefs {
 
 impl Default for NotificationPrefs {
     fn default() -> Self {
-        Self {
-            match_updates: true,
-            league_updates: true,
-            reminders: true,
-        }
+        Self { match_updates: true, league_updates: true, reminders: true }
     }
 }
 

@@ -6,10 +6,10 @@ use serde::Deserialize;
 use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
-use crate::extract::{ApiPath, ApiQuery};
 use crate::{
     ApiError, ApiResult, AppState,
     auth::CurrentPlayer,
+    extract::{ApiPath, ApiQuery},
     models::{Page, PageParams, PlayPref, PlayerRole, PlayerStatus, paginate},
     players::{self, PLAYER_COLUMNS, PlayerPublic, PlayerRow},
 };
@@ -50,10 +50,7 @@ pub async fn list_players(
     viewer: CurrentPlayer,
     ApiQuery(query): ApiQuery<DirectoryQuery>,
 ) -> ApiResult<Json<Page<PlayerPublic>>> {
-    let page = PageParams {
-        cursor: query.cursor.clone(),
-        limit: query.limit,
-    };
+    let page = PageParams { cursor: query.cursor.clone(), limit: query.limit };
     let limit = page.limit();
     let status = query.status.unwrap_or(PlayerStatus::Active);
     if status != PlayerStatus::Active {
@@ -84,17 +81,11 @@ pub async fn list_players(
     match query.play_pref {
         Some(PlayPref::Any) | None => {}
         Some(pref) => {
-            let _ = qb
-                .push(" AND p.play_pref IN ('any', ")
-                .push_bind(pref)
-                .push(")");
+            let _ = qb.push(" AND p.play_pref IN ('any', ").push_bind(pref).push(")");
         }
     }
-    if let Some(loc) = query
-        .location
-        .as_deref()
-        .map(str::trim)
-        .filter(|loc_name| !loc_name.is_empty())
+    if let Some(loc) =
+        query.location.as_deref().map(str::trim).filter(|loc_name| !loc_name.is_empty())
     {
         let _ = qb
             .push(
@@ -104,16 +95,9 @@ pub async fn list_players(
             .push_bind(loc.to_owned())
             .push(" || '%')");
     }
-    if let Some(name) = query
-        .search
-        .as_deref()
-        .map(str::trim)
-        .filter(|n| !n.is_empty())
-    {
-        let _ = qb
-            .push(" AND p.display_name ILIKE '%' || ")
-            .push_bind(name.to_owned())
-            .push(" || '%'");
+    if let Some(name) = query.search.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+        let _ =
+            qb.push(" AND p.display_name ILIKE '%' || ").push_bind(name.to_owned()).push(" || '%'");
     }
     let _ = qb.push(" ORDER BY p.id LIMIT ").push_bind(limit + 1);
 
@@ -123,11 +107,7 @@ pub async fn list_players(
     let verified = viewer.user.is_verified();
     let page = paginate(rows, limit, |row| row.id.to_string());
     Ok(Json(Page {
-        items: page
-            .items
-            .into_iter()
-            .map(|row| PlayerPublic::redacted(row, verified))
-            .collect(),
+        items: page.items.into_iter().map(|row| PlayerPublic::redacted(row, verified)).collect(),
         next_cursor: page.next_cursor,
     }))
 }
@@ -165,9 +145,7 @@ async fn set_status(
         return Err(ApiError::validation("you cannot change your own status"));
     }
     let mut tx = admin.tenant.begin(&state.db).await?;
-    let target = players::load(&mut tx, id)
-        .await?
-        .ok_or(ApiError::NotFound("player"))?;
+    let target = players::load(&mut tx, id).await?.ok_or(ApiError::NotFound("player"))?;
     if target.status == PlayerStatus::Deleted {
         return Err(ApiError::conflict("player has deleted their account"));
     }
@@ -177,9 +155,7 @@ async fn set_status(
         PlayerRole::Owner => false,
     };
     if !outranks {
-        return Err(ApiError::forbidden(
-            "cannot moderate a player of equal or higher role",
-        ));
+        return Err(ApiError::forbidden("cannot moderate a player of equal or higher role"));
     }
     let _ = sqlx::query(
         "UPDATE players SET status = $3, updated_at = now() WHERE community_id = $1 AND id = $2",

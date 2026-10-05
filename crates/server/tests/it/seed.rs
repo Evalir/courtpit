@@ -16,11 +16,7 @@ const SINGLES: &str = "Autumn Singles League";
 const DOUBLES: &str = "Winter Doubles League";
 
 async fn count(app: &TestApp, community: Uuid, sql: &str) -> i64 {
-    sqlx::query_scalar(sql)
-        .bind(community)
-        .fetch_one(&app.db)
-        .await
-        .unwrap()
+    sqlx::query_scalar(sql).bind(community).fetch_one(&app.db).await.unwrap()
 }
 
 async fn league_id(app: &TestApp, community: Uuid, name: &str) -> Uuid {
@@ -75,12 +71,7 @@ async fn seeds_branding_people_and_profiles() {
     let tenant = get(&app, &owner, "/api/v1/tenant").await;
     let branding = &tenant["branding"];
     assert_eq!(branding["display_name"], "Riverside Tennis Club");
-    assert!(
-        branding["logo_url"]
-            .as_str()
-            .unwrap()
-            .starts_with("https://")
-    );
+    assert!(branding["logo_url"].as_str().unwrap().starts_with("https://"));
     assert!(branding["colors"]["primary"].is_string() && branding["colors"]["text"].is_string());
     assert!(branding["typography"].is_string());
     assert_eq!(branding["feature_flags"]["doubles"], true);
@@ -93,11 +84,7 @@ async fn seeds_branding_people_and_profiles() {
     assert_eq!(count(&app, community, owners).await, 1);
     let spread = "SELECT count(*) FROM (SELECT min(utr) AS low, max(utr) AS high FROM players
         WHERE community_id = $1) t WHERE low = 3.0 AND high = 8.0";
-    assert_eq!(
-        count(&app, community, spread).await,
-        1,
-        "UTR spans 3.0 to 8.0"
-    );
+    assert_eq!(count(&app, community, spread).await, 1, "UTR spans 3.0 to 8.0");
     for gender in ["female", "male", "other", "undisclosed"] {
         let sql =
             format!("SELECT count(*) FROM players WHERE community_id = $1 AND gender = '{gender}'");
@@ -113,10 +100,7 @@ async fn seeds_branding_people_and_profiles() {
         "jsonb_array_length(preferred_locations) > 1",
     ] {
         let sql = format!("SELECT count(*) FROM players WHERE community_id = $1 AND {varied}");
-        assert!(
-            count(&app, community, &sql).await > 0,
-            "no player with {varied}"
-        );
+        assert!(count(&app, community, &sql).await > 0, "no player with {varied}");
     }
     let prefs = "SELECT count(DISTINCT play_pref) FROM players WHERE community_id = $1";
     assert_eq!(count(&app, community, prefs).await, 3);
@@ -139,10 +123,8 @@ async fn seeds_a_singles_league_mid_season() {
     let view = get(&app, &owner, &format!("/api/v1/leagues/{league}")).await;
     assert_eq!(view["status"], "active");
     let now = app.state.clock.now();
-    let (opens, closes) = (
-        when(&view, "registration_opens_at"),
-        when(&view, "registration_closes_at"),
-    );
+    let (opens, closes) =
+        (when(&view, "registration_opens_at"), when(&view, "registration_closes_at"));
     let (starts, ends) = (when(&view, "starts_at"), when(&view, "ends_at"));
     assert!(opens < closes && closes <= starts && starts < now && now < ends);
     assert!(when(&view, "published_at") <= opens);
@@ -155,11 +137,7 @@ async fn seeds_a_singles_league_mid_season() {
 
     let matches = league_matches(&app, &owner, &league.to_string()).await;
     let with = |status: &str| {
-        matches
-            .iter()
-            .filter(|found| found["status"] == status)
-            .cloned()
-            .collect::<Vec<_>>()
+        matches.iter().filter(|found| found["status"] == status).cloned().collect::<Vec<_>>()
     };
     assert_eq!(matches.len(), 42);
     assert_eq!(with("confirmed").len(), 12);
@@ -176,10 +154,7 @@ async fn seeds_a_singles_league_mid_season() {
 
     let reported = with("reported");
     assert_eq!(reported.len(), 1);
-    assert!(
-        when(&reported[0], "confirm_deadline_at") > now,
-        "still awaiting confirmation"
-    );
+    assert!(when(&reported[0], "confirm_deadline_at") > now, "still awaiting confirmation");
     let auto_confirm =
         "SELECT count(*) FROM jobs j JOIN matches m ON j.payload->>'match_id' = m.id::text
         WHERE j.kind = 'auto_confirm_match' AND j.completed_at IS NULL
@@ -230,17 +205,11 @@ async fn seeds_a_doubles_league_in_registration_requests_and_rankings() {
 
     let entries = get(&app, &owner, &format!("/api/v1/leagues/{league}/entries")).await;
     let entries = entries.as_array().unwrap();
-    let with = |status: &str| {
-        entries
-            .iter()
-            .filter(|entry| entry["status"] == status)
-            .collect::<Vec<_>>()
-    };
+    let with =
+        |status: &str| entries.iter().filter(|entry| entry["status"] == status).collect::<Vec<_>>();
     assert_eq!(with("confirmed").len(), 3);
     assert!(
-        with("confirmed")
-            .iter()
-            .all(|entry| entry["player_ids"].as_array().unwrap().len() == 2)
+        with("confirmed").iter().all(|entry| entry["player_ids"].as_array().unwrap().len() == 2)
     );
     let pending = with("pending_partner");
     assert_eq!(pending.len(), 1);
@@ -250,44 +219,20 @@ async fn seeds_a_doubles_league_in_registration_requests_and_rankings() {
     let requests = get(&app, &owner, "/api/v1/match-requests").await;
     let requests = requests["items"].as_array().unwrap();
     assert_eq!(requests.len(), 2);
-    assert!(
-        requests
-            .iter()
-            .all(|request| when(request, "time_window_start") > now)
-    );
-    let singles = requests
-        .iter()
-        .find(|request| request["discipline"] == "singles")
-        .unwrap();
+    assert!(requests.iter().all(|request| when(request, "time_window_start") > now));
+    let singles = requests.iter().find(|request| request["discipline"] == "singles").unwrap();
     assert_eq!(singles["slots_open"], 1);
-    let doubles = requests
-        .iter()
-        .find(|request| request["discipline"] == "doubles")
-        .unwrap();
+    let doubles = requests.iter().find(|request| request["discipline"] == "doubles").unwrap();
     assert_eq!(doubles["slots_open"], 2, "the creator brought a partner");
     assert_eq!(doubles["players"].as_array().unwrap().len(), 2);
 
-    let board = get(
-        &app,
-        &owner,
-        "/api/v1/rankings?discipline=singles&limit=100",
-    )
-    .await;
+    let board = get(&app, &owner, "/api/v1/rankings?discipline=singles&limit=100").await;
     let rows = board["items"].as_array().unwrap();
-    assert_eq!(
-        summary.counts[4],
-        ("ranked players", i64::try_from(rows.len()).unwrap())
-    );
+    assert_eq!(summary.counts[4], ("ranked players", i64::try_from(rows.len()).unwrap()));
     assert!(!rows.is_empty());
     assert_eq!(rows[0]["rank"], 1);
-    let points: Vec<i64> = rows
-        .iter()
-        .map(|row| row["points_52w"].as_i64().unwrap())
-        .collect();
-    assert!(
-        points.windows(2).all(|pair| pair[0] >= pair[1]),
-        "best first"
-    );
+    let points: Vec<i64> = rows.iter().map(|row| row["points_52w"].as_i64().unwrap()).collect();
+    assert!(points.windows(2).all(|pair| pair[0] >= pair[1]), "best first");
     assert!(points[0] > 0);
 }
 
@@ -304,10 +249,7 @@ async fn reseeding_never_duplicates_and_follows_the_clock() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert!(
-        starts < now && now < ends,
-        "dates are relative to the app clock"
-    );
+    assert!(starts < now && now < ends, "dates are relative to the app clock");
     let counts: Vec<_> = first.counts.iter().map(|(_, count)| *count).collect();
     assert_eq!(counts[..4], [25, 2, 42, 2]);
 
@@ -329,20 +271,12 @@ async fn reseeding_never_duplicates_and_follows_the_clock() {
         let _ = sqlx::query(edit).execute(&app.db).await.unwrap();
     }
     assert_eq!(seed(&app.state, "demo").await.unwrap(), first);
-    assert_eq!(
-        snapshot(&app).await,
-        before,
-        "the deleted request is back, nothing else new"
-    );
-    let name: String = sqlx::query_scalar("SELECT name FROM communities")
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    assert_eq!(snapshot(&app).await, before, "the deleted request is back, nothing else new");
+    let name: String =
+        sqlx::query_scalar("SELECT name FROM communities").fetch_one(&app.db).await.unwrap();
     assert_eq!(name, "Riverside Tennis Club");
-    let branding: Value = sqlx::query_scalar("SELECT branding FROM communities")
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    let branding: Value =
+        sqlx::query_scalar("SELECT branding FROM communities").fetch_one(&app.db).await.unwrap();
     assert_eq!(branding["display_name"], "Riverside Tennis Club");
     let liam =
         "SELECT count(*) FROM players WHERE community_id = $1 AND display_name = 'Liam Carter'
@@ -351,18 +285,10 @@ async fn reseeding_never_duplicates_and_follows_the_clock() {
     let ava =
         "SELECT count(*) FROM players WHERE community_id = $1 AND display_name = 'Ava Thompson'
         AND role = 'admin'";
-    assert_eq!(
-        count(&app, community, ava).await,
-        1,
-        "roles are never demoted"
-    );
+    assert_eq!(count(&app, community, ava).await, 1, "roles are never demoted");
     let withdrawn =
         "SELECT count(*) FROM league_entries WHERE community_id = $1 AND status = 'withdrawn'";
-    assert_eq!(
-        count(&app, community, withdrawn).await,
-        1,
-        "an existing league is left as it is"
-    );
+    assert_eq!(count(&app, community, withdrawn).await, 1, "an existing league is left as it is");
 }
 
 #[tokio::test]

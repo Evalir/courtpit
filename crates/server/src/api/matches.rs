@@ -42,13 +42,9 @@ pub(crate) fn short_text(
     raw: Option<String>,
     max: usize,
 ) -> ApiResult<Option<String>> {
-    let text = raw
-        .map(|text| text.trim().to_owned())
-        .filter(|text| !text.is_empty());
+    let text = raw.map(|text| text.trim().to_owned()).filter(|text| !text.is_empty());
     if text.as_ref().is_some_and(|text| text.chars().count() > max) {
-        return Err(ApiError::validation(format!(
-            "{field} must be at most {max} characters"
-        )));
+        return Err(ApiError::validation(format!("{field} must be at most {max} characters")));
     }
     Ok(text)
 }
@@ -123,10 +119,7 @@ pub async fn create_match(
         let _ = matches::insert_proposal(&mut tx, id, player.id, time, location.as_deref()).await?;
     }
     let found = matches::load(&mut tx, id, false).await?;
-    let event = notify::Event::Challenged {
-        match_id: id,
-        by: player.id,
-    };
+    let event = notify::Event::Challenged { match_id: id, by: player.id };
     let players = notify::everyone_but(&found, player.id);
     notify::tell(&mut tx, players, event, state.clock.now()).await?;
     let view = matches::view_with_proposals(&mut tx, found).await?;
@@ -164,14 +157,10 @@ pub async fn list_matches(
     if query.all {
         player.require_admin()?;
     }
-    let page = PageParams {
-        cursor: query.cursor.clone(),
-        limit: query.limit,
-    };
+    let page = PageParams { cursor: query.cursor.clone(), limit: query.limit };
     let limit = page.limit();
-    let mut qb: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
-        "SELECT {MATCH_COLUMNS} FROM matches WHERE community_id = "
-    ));
+    let mut qb: QueryBuilder<'_, Postgres> =
+        QueryBuilder::new(format!("SELECT {MATCH_COLUMNS} FROM matches WHERE community_id = "));
     let _ = qb.push_bind(player.tenant.id());
     match (query.league_id, query.all) {
         (Some(league), _) => {
@@ -186,9 +175,7 @@ pub async fn list_matches(
         }
     }
     if let Some(status) = query.status {
-        let _ = qb
-            .push(" AND status = ")
-            .push_bind(DbMatchStatus::from(status));
+        let _ = qb.push(" AND status = ").push_bind(DbMatchStatus::from(status));
     }
     if let Some(cursor) = page.uuid_cursor()? {
         let _ = qb.push(" AND id < ").push_bind(cursor);
@@ -199,10 +186,7 @@ pub async fn list_matches(
     let page = paginate(rows, limit, |row| row.id.to_string());
     let items = matches::views(&mut tx, page.items).await?;
     tx.commit().await?;
-    Ok(Json(Page {
-        items,
-        next_cursor: page.next_cursor,
-    }))
+    Ok(Json(Page { items, next_cursor: page.next_cursor }))
 }
 
 /// Loads a match the caller may see, locked for update.
@@ -212,11 +196,7 @@ pub(crate) async fn load_visible(
     player: &CurrentPlayer,
 ) -> ApiResult<MatchRow> {
     let found = matches::load(tx, id, true).await?;
-    if matches::visible_to(&found, player) {
-        Ok(found)
-    } else {
-        Err(ApiError::NotFound("match"))
-    }
+    if matches::visible_to(&found, player) { Ok(found) } else { Err(ApiError::NotFound("match")) }
 }
 
 /// One match with its scheduling proposals.
@@ -277,10 +257,7 @@ pub async fn cancel_match(
     matches::supersede_open_proposals(&mut tx, id).await?;
     let event = match actor {
         Actor::Admin => notify::Event::MatchDecided { match_id: id },
-        _ => notify::Event::MatchCancelled {
-            match_id: id,
-            by: player.id,
-        },
+        _ => notify::Event::MatchCancelled { match_id: id, by: player.id },
     };
     let players = notify::everyone_but(&found, player.id);
     notify::tell(&mut tx, players, event, state.clock.now()).await?;

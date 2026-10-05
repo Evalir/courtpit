@@ -35,9 +35,7 @@ async fn spawn() -> Oidc {
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    drop(tokio::spawn(
-        async move { axum::serve(listener, router).await },
-    ));
+    drop(tokio::spawn(async move { axum::serve(listener, router).await }));
     let url = format!("http://{addr}/jwks");
     let app = TestApp::spawn_with(racquetcollective_server::Config {
         google_client_ids: vec![GOOGLE_AUD.to_owned()],
@@ -58,12 +56,7 @@ fn token(claims: Value) -> String {
 fn token_with_kid(claims: Value, kid: &str) -> String {
     let mut header = Header::new(Algorithm::RS256);
     header.kid = Some(kid.to_owned());
-    encode(
-        &header,
-        &claims,
-        &EncodingKey::from_rsa_pem(KEY_PEM).unwrap(),
-    )
-    .unwrap()
+    encode(&header, &claims, &EncodingKey::from_rsa_pem(KEY_PEM).unwrap()).unwrap()
 }
 
 fn exp() -> i64 {
@@ -178,16 +171,8 @@ async fn bad_tokens_are_rejected() {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(forged.to_string())
     };
     let tampered = format!("{head}.{forged_payload}.{sig}");
-    for bad in [
-        token(wrong_aud),
-        token(wrong_iss),
-        token(expired),
-        tampered,
-        "garbage".into(),
-    ] {
-        let body = sign_in(&oidc, "google", &bad)
-            .await
-            .expect(StatusCode::UNAUTHORIZED);
+    for bad in [token(wrong_aud), token(wrong_iss), token(expired), tampered, "garbage".into()] {
+        let body = sign_in(&oidc, "google", &bad).await.expect(StatusCode::UNAUTHORIZED);
         assert_eq!(body["error"]["code"], "invalid_credentials");
     }
     // Unknown kid triggers exactly one refetch, then fails.
@@ -211,9 +196,7 @@ async fn link_identity_to_signed_in_user() {
         .send()
         .await
         .expect(StatusCode::NO_CONTENT);
-    let body = sign_in(&oidc, "google", &id_token)
-        .await
-        .expect(StatusCode::OK);
+    let body = sign_in(&oidc, "google", &id_token).await.expect(StatusCode::OK);
     assert_eq!(body["user_id"], session.user_id.to_string());
     // Another user cannot claim the same identity.
     let other = oidc.app.login("fay@example.test", "demo").await;
@@ -230,9 +213,7 @@ async fn link_identity_to_signed_in_user() {
 #[tokio::test]
 async fn unknown_or_disabled_provider() {
     let oidc = spawn().await;
-    let _ = sign_in(&oidc, "facebook", "x")
-        .await
-        .expect(StatusCode::NOT_FOUND);
+    let _ = sign_in(&oidc, "facebook", "x").await.expect(StatusCode::NOT_FOUND);
     let app = TestApp::spawn().await;
     let _ = app.community("demo").await;
     let _ = app

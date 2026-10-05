@@ -22,7 +22,8 @@ use crate::{
 
 /// Cookie carrying the session token on web.
 pub const SESSION_COOKIE: &str = "racquetcollective_session";
-/// `X-RacquetCollective-Client: web` asks for the session as an httpOnly cookie instead of in the body.
+/// `X-RacquetCollective-Client: web` asks for the session as an httpOnly cookie instead of in the
+/// body.
 pub const CLIENT_HEADER: &str = "x-racquetcollective-client";
 
 /// Whether the client asked for cookie delivery.
@@ -62,11 +63,8 @@ pub async fn ensure_player(
     user_id: Uuid,
     email: &str,
 ) -> Result<Uuid, sqlx::Error> {
-    let display_name = email
-        .split('@')
-        .next()
-        .filter(|local| !local.is_empty())
-        .unwrap_or("Player");
+    let display_name =
+        email.split('@').next().filter(|local| !local.is_empty()).unwrap_or("Player");
     let _ = sqlx::query(
         "INSERT INTO players (id, community_id, user_id, display_name) VALUES ($1, $2, $3, $4)
          ON CONFLICT (community_id, user_id) DO NOTHING",
@@ -88,9 +86,7 @@ fn bearer_or_cookie(headers: &HeaderMap) -> Option<String> {
     if let Some(Authorization(bearer)) = headers.typed_get::<Authorization<Bearer>>() {
         return Some(bearer.token().to_owned());
     }
-    CookieJar::from_headers(headers)
-        .get(SESSION_COOKIE)
-        .map(|cookie| cookie.value().to_owned())
+    CookieJar::from_headers(headers).get(SESSION_COOKIE).map(|cookie| cookie.value().to_owned())
 }
 
 /// The authenticated user (global identity), from a bearer token or the session cookie.
@@ -204,13 +200,7 @@ impl FromRequestParts<AppState> for CurrentPlayer {
             PlayerStatus::Banned => return Err(ApiError::forbidden("banned from this community")),
             PlayerStatus::Deleted => return Err(ApiError::Unauthorized),
         }
-        Ok(Self {
-            id: row.id,
-            display_name: row.display_name,
-            role: row.role,
-            user,
-            tenant,
-        })
+        Ok(Self { id: row.id, display_name: row.display_name, role: row.role, user, tenant })
     }
 }
 

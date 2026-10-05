@@ -1,5 +1,5 @@
-//! `racquetcollective-server seed`: fills a dev/staging database with a demo community, so the mobile
-//! app and reviewers have something to look at.
+//! `racquetcollective-server seed`: fills a dev/staging database with a demo community, so the
+//! mobile app and reviewers have something to look at.
 //!
 //! Where a code path exists it is the real one: leagues are activated by
 //! [`crate::leagues::lifecycle::advance`] (placement and round-robin schedule), results go
@@ -32,11 +32,7 @@ const CLUB_NAME: &str = "Riverside Tennis Club";
 const LOCATIONS: [&str; 4] = ["Riverside Courts", "Central Park Club", "Hillcrest Tennis Centre", "Harbour Sports Hall"];
 #[rustfmt::skip]
 const RACKETS: [&str; 4] = ["Babolat Pure Drive", "Wilson Blade 98", "Head Speed MP", "Yonex Ezone 100"];
-const STRINGS: [&str; 3] = [
-    "Luxilon ALU Power",
-    "Babolat RPM Blast",
-    "Wilson Natural Gut",
-];
+const STRINGS: [&str; 3] = ["Luxilon ALU Power", "Babolat RPM Blast", "Wilson Natural Gut"];
 
 /// The club's owner: name, UTR in tenths, gender.
 const OWNER: (&str, i64, Gender) = ("Marcus Hale", 56, Gender::Male);
@@ -69,9 +65,7 @@ const SCORES: [&[(u16, u16, bool)]; 6] = [
 /// people and results, so it must never run against a live database.
 pub fn ensure_not_production(env: Option<&str>) -> anyhow::Result<()> {
     let name = env.unwrap_or_default().trim();
-    let production = ["production", "prod"]
-        .iter()
-        .any(|label| name.eq_ignore_ascii_case(label));
+    let production = ["production", "prod"].iter().any(|label| name.eq_ignore_ascii_case(label));
     anyhow::ensure!(
         !production,
         "refusing to seed: RACQUETCOLLECTIVE_ENV is `{name}`; seed is for development and staging only"
@@ -101,9 +95,7 @@ impl fmt::Display for SeedSummary {
             "seeded community {} ({})\n  owner: {}",
             self.slug, self.community_id, self.owner_email
         )?;
-        self.counts
-            .iter()
-            .try_for_each(|(what, count)| write!(out, "\n  {what}: {count}"))
+        self.counts.iter().try_for_each(|(what, count)| write!(out, "\n  {what}: {count}"))
     }
 }
 
@@ -130,37 +122,23 @@ pub async fn seed(state: &AppState, slug: &str) -> anyhow::Result<SeedSummary> {
     .fetch_one(&state.db)
     .await
     .context("upserting community (slug must be lowercase letters, digits and dashes)")?;
-    let tenant = Tenant::load(&state.db, community_id)
-        .await?
-        .context("community vanished after upsert")?;
+    let tenant =
+        Tenant::load(&state.db, community_id).await?.context("community vanished after upsert")?;
     let (owner, players) = upsert_members(state, &tenant).await?;
     let ids = |keep: fn(PlayPref) -> bool| -> Vec<Uuid> {
-        players
-            .iter()
-            .filter(|(_, pref)| keep(*pref))
-            .map(|(id, _)| *id)
-            .collect()
+        players.iter().filter(|(_, pref)| keep(*pref)).map(|(id, _)| *id).collect()
     };
     let doubles = ids(|pref| pref != PlayPref::Singles);
-    let singles: Vec<Uuid> = ids(|pref| pref != PlayPref::Doubles)
-        .into_iter()
-        .skip(2)
-        .take(14)
-        .collect();
-    anyhow::ensure!(
-        singles.len() == 14 && doubles.len() >= 10,
-        "too few demo players"
-    );
+    let singles: Vec<Uuid> =
+        ids(|pref| pref != PlayPref::Doubles).into_iter().skip(2).take(14).collect();
+    anyhow::ensure!(singles.len() == 14 && doubles.len() >= 10, "too few demo players");
 
     let entries: Vec<Entry> = singles.iter().map(|&id| (vec![id], None)).collect();
     if let Some(league) = new_league(state, &tenant, owner, &SINGLES, &entries).await? {
         record_results(state, &tenant, league).await?;
     }
-    let mut entries: Vec<Entry> = doubles
-        .chunks(2)
-        .take(3)
-        .map(|pair| (pair.to_vec(), None))
-        .collect();
+    let mut entries: Vec<Entry> =
+        doubles.chunks(2).take(3).map(|pair| (pair.to_vec(), None)).collect();
     entries.push((vec![doubles[6]], Some(doubles[7])));
     let _ = new_league(state, &tenant, owner, &DOUBLES, &entries).await?;
     open_match_requests(state, &tenant, [singles[4], doubles[8], doubles[9]]).await?;
@@ -181,10 +159,7 @@ fn branding() -> Value {
 }
 
 fn email_of(name: &str) -> String {
-    format!(
-        "{}@example.com",
-        name.to_ascii_lowercase().replace(' ', ".")
-    )
+    format!("{}@example.com", name.to_ascii_lowercase().replace(' ', "."))
 }
 
 /// Upserts the owner and the 24 players with verified emails. Profiles vary with a member's
@@ -217,10 +192,9 @@ async fn upsert_members(
         }
         let strings = STRINGS.get(index % 4).copied();
         let handle = (index % 3 != 2).then(|| name.to_ascii_lowercase().replace(' ', "_"));
-        let socials = handle.as_ref().map_or_else(
-            || json!({}),
-            |tag| json!({ "instagram": format!("@{tag}") }),
-        );
+        let socials = handle
+            .as_ref()
+            .map_or_else(|| json!({}), |tag| json!({ "instagram": format!("@{tag}") }));
         let player: Uuid = sqlx::query_scalar(
             "INSERT INTO players (id, community_id, user_id, display_name, utr, gender, phone,
                 phone_visible, socials, socials_visible, racket, strings, tension_kg, play_pref,
@@ -243,11 +217,7 @@ async fn upsert_members(
         .bind(name)
         .bind(Decimal::new(utr_tenths, 1))
         .bind(gender)
-        .bind(
-            index
-                .is_multiple_of(2)
-                .then(|| format!("+1 555 01{index:02}")),
-        )
+        .bind(index.is_multiple_of(2).then(|| format!("+1 555 01{index:02}")))
         .bind(index.is_multiple_of(4))
         .bind(Json(socials))
         .bind(handle.is_some() && index % 2 == 1)
@@ -256,11 +226,7 @@ async fn upsert_members(
         .bind(strings.map(|_| Decimal::new(220, 1) + Decimal::new(5, 1) * Decimal::from(index % 5)))
         .bind(pref)
         .bind(Json(locations))
-        .bind(if index == 0 {
-            PlayerRole::Owner
-        } else {
-            PlayerRole::Player
-        })
+        .bind(if index == 0 { PlayerRole::Owner } else { PlayerRole::Player })
         .fetch_one(&mut *tx)
         .await
         .context("upserting player")?;
@@ -347,11 +313,8 @@ async fn new_league(
     .execute(&mut *tx)
     .await?;
     for (players, invited) in entries {
-        let status = if invited.is_some() {
-            EntryStatus::PendingPartner
-        } else {
-            EntryStatus::Confirmed
-        };
+        let status =
+            if invited.is_some() { EntryStatus::PendingPartner } else { EntryStatus::Confirmed };
         let _ = sqlx::query(
             "INSERT INTO league_entries (id, community_id, league_id, player_ids, created_by,
                 status, invited_partner_id)
@@ -433,16 +396,8 @@ fn demo_score(variant: usize, winner: Side) -> Score {
     let sets = SCORES[variant % SCORES.len()]
         .iter()
         .map(|&(won, lost, match_tiebreak)| {
-            let (side_a, side_b) = if winner == Side::A {
-                (won, lost)
-            } else {
-                (lost, won)
-            };
-            SetScore {
-                a: side_a,
-                b: side_b,
-                match_tiebreak,
-            }
+            let (side_a, side_b) = if winner == Side::A { (won, lost) } else { (lost, won) };
+            SetScore { a: side_a, b: side_b, match_tiebreak }
         })
         .collect();
     Score { sets }
@@ -450,10 +405,7 @@ fn demo_score(variant: usize, winner: Side) -> Score {
 
 /// The first player of `side`.
 fn lead(row: &MatchRow, side: Side) -> anyhow::Result<Uuid> {
-    row.players(side)
-        .first()
-        .copied()
-        .context("a match side has no players")
+    row.players(side).first().copied().context("a match side has no players")
 }
 
 /// Schedules `row` (a proposal by side A that side B accepts, as the API would), then, unless
@@ -477,9 +429,7 @@ async fn play(
     let location = LOCATIONS[variant % LOCATIONS.len()];
     let proposal =
         matches::insert_proposal(tx, row.id, lead(row, Side::A)?, at, Some(location)).await?;
-    let accept = Event::AcceptProposal {
-        proposed_by: Side::A,
-    };
+    let accept = Event::AcceptProposal { proposed_by: Side::A };
     let status = row.transition(Actor::Player(Side::B), accept)?;
     // The accept endpoint only takes future times, so the played matches mirror what it writes.
     let _ = sqlx::query(
@@ -501,27 +451,14 @@ async fn play(
         return Ok(());
     }
 
-    let side = if variant % 4 == 3 {
-        favourite.other()
-    } else {
-        favourite
-    };
+    let side = if variant % 4 == 3 { favourite.other() } else { favourite };
     let score = demo_score(variant, side);
     let winner = results::check_score(&row.match_format, &score)?.winner;
     let scheduled = matches::load(tx, row.id, true).await?;
     let _ = scheduled.transition(Actor::Player(winner), Event::Report)?;
     let reported_at = at + Duration::hours(2);
     let reporter = lead(row, winner)?;
-    results::record_report(
-        tx,
-        &scheduled,
-        reporter,
-        &score,
-        winner,
-        reported_at,
-        window,
-    )
-    .await?;
+    results::record_report(tx, &scheduled, reporter, &score, winner, reported_at, window).await?;
     let reported = matches::load(tx, row.id, true).await?;
     let loser = Actor::Player(winner.other());
     match fate {
@@ -613,10 +550,7 @@ const COUNTS: [(&str, &str); 5] = [
     ("players", "players WHERE community_id = $1"),
     ("leagues", "leagues WHERE community_id = $1"),
     ("league matches", "matches WHERE community_id = $1"),
-    (
-        "open match requests",
-        "match_requests WHERE community_id = $1 AND status = 'open'",
-    ),
+    ("open match requests", "match_requests WHERE community_id = $1 AND status = 'open'"),
     ("ranked players", "rankings WHERE community_id = $1"),
 ];
 
@@ -625,13 +559,7 @@ async fn summarize(state: &AppState, tenant: &Tenant) -> anyhow::Result<SeedSumm
     let mut counts = Vec::new();
     for (what, from) in COUNTS {
         let sql = format!("SELECT count(*) FROM {from}");
-        counts.push((
-            what,
-            sqlx::query_scalar(&sql)
-                .bind(tenant.id())
-                .fetch_one(&mut *tx)
-                .await?,
-        ));
+        counts.push((what, sqlx::query_scalar(&sql).bind(tenant.id()).fetch_one(&mut *tx).await?));
     }
     tx.commit().await?;
     Ok(SeedSummary {
@@ -661,13 +589,7 @@ mod tests {
 
     #[test]
     fn other_environments_are_allowed() {
-        for env in [
-            None,
-            Some(""),
-            Some("development"),
-            Some("staging"),
-            Some("test"),
-        ] {
+        for env in [None, Some(""), Some("development"), Some("staging"), Some("test")] {
             ensure_not_production(env).unwrap();
         }
     }

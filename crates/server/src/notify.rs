@@ -161,10 +161,7 @@ impl Event {
     /// Whether a player without a device gets this by email: it asks for an answer before a
     /// deadline (an unanswered score confirms itself; an invitation lapses with registration).
     pub const fn emails_without_devices(self) -> bool {
-        matches!(
-            self,
-            Self::ScoreReported { .. } | Self::PartnerInvited { .. }
-        )
+        matches!(self, Self::ScoreReported { .. } | Self::PartnerInvited { .. })
     }
 
     /// The match the news is about, for match events.
@@ -206,11 +203,7 @@ pub async fn tell(
 ) -> anyhow::Result<()> {
     let community_id = tx.community_id();
     for player_id in recipients {
-        let job = Job::Notify {
-            community_id,
-            player_id,
-            event,
-        };
+        let job = Job::Notify { community_id, player_id, event };
         jobs::enqueue(&mut **tx, job, now).await?;
     }
     Ok(())
@@ -236,11 +229,7 @@ pub async fn schedule_reminders(
     let community_id = tx.community_id();
     let event = Event::MatchReminder { match_id: found.id };
     for &player_id in found.side_a_players.iter().chain(&found.side_b_players) {
-        let job = Job::Notify {
-            community_id,
-            player_id,
-            event,
-        };
+        let job = Job::Notify { community_id, player_id, event };
         jobs::enqueue(&mut **tx, job, run_at).await?;
     }
     Ok(())
@@ -448,24 +437,11 @@ async fn compose_match(
     let Some(side) = found.side_of(player) else {
         return Ok(None);
     };
-    let names = Names::load(
-        tx,
-        found
-            .side_a_players
-            .iter()
-            .chain(&found.side_b_players)
-            .copied(),
-    )
-    .await?;
+    let names =
+        Names::load(tx, found.side_a_players.iter().chain(&found.side_b_players).copied()).await?;
     let them = names.joined(found.players(other(side)));
     let url = format!("/matches/{}", found.id);
-    let note = |title: String, body: String| {
-        Some(Note {
-            title,
-            body,
-            url: url.clone(),
-        })
-    };
+    let note = |title: String, body: String| Some(Note { title, body, url: url.clone() });
     let status = found.status();
     Ok(match event {
         Event::ProposalReceived { by, .. } => note(
@@ -483,10 +459,7 @@ async fn compose_match(
         Event::ScoreReported { by, .. } => match (&found.score, status) {
             (Some(score), MatchStatus::Reported) => note(
                 format!("{} reported a score", names.name(by)),
-                format!(
-                    "{} against {them}: confirm it or dispute it.",
-                    score_line(score, side)
-                ),
+                format!("{} against {them}: confirm it or dispute it.", score_line(score, side)),
             ),
             _ => None,
         },
@@ -494,11 +467,9 @@ async fn compose_match(
             format!("{} disputed your score", names.name(by)),
             "A club admin will decide the result.".to_owned(),
         ),
-        Event::MatchDecided { .. } => decided(&found, side, &them).map(|(title, body)| Note {
-            title,
-            body,
-            url: url.clone(),
-        }),
+        Event::MatchDecided { .. } => {
+            decided(&found, side, &them).map(|(title, body)| Note { title, body, url: url.clone() })
+        }
         Event::Challenged { by, .. } => note(
             format!("{} challenged you", names.name(by)),
             "Propose a time, or answer theirs.".to_owned(),
@@ -509,10 +480,7 @@ async fn compose_match(
         ),
         Event::MatchCancelled { by, .. } => note(
             format!("{} cancelled your match", names.name(by)),
-            found
-                .resolution_note
-                .clone()
-                .unwrap_or_else(|| "It won’t be played.".to_owned()),
+            found.resolution_note.clone().unwrap_or_else(|| "It won’t be played.".to_owned()),
         ),
         Event::MatchReminder { .. } => match found.scheduled_at {
             // Still on, and still about a day away (a reschedule may have moved it).
@@ -521,15 +489,9 @@ async fn compose_match(
                     && at > now
                     && at - now <= Duration::hours(REMINDER_HOURS + 6) =>
             {
-                let place = found
-                    .location
-                    .as_ref()
-                    .map(|place| format!(" at {place}"))
-                    .unwrap_or_default();
-                note(
-                    "Match tomorrow".to_owned(),
-                    format!("You play {them}{place}. Good luck!"),
-                )
+                let place =
+                    found.location.as_ref().map(|place| format!(" at {place}")).unwrap_or_default();
+                note("Match tomorrow".to_owned(), format!("You play {them}{place}. Good luck!"))
             }
             _ => None,
         },
@@ -554,21 +516,11 @@ async fn compose_league(
     event: Event,
 ) -> anyhow::Result<Option<Note>> {
     let (league_id, entry_id, by) = match event {
-        Event::PartnerInvited {
-            league_id,
-            entry_id,
-            by,
+        Event::PartnerInvited { league_id, entry_id, by }
+        | Event::PartnerAccepted { league_id, entry_id, by }
+        | Event::PartnerDeclined { league_id, entry_id, by } => {
+            (league_id, Some(entry_id), Some(by))
         }
-        | Event::PartnerAccepted {
-            league_id,
-            entry_id,
-            by,
-        }
-        | Event::PartnerDeclined {
-            league_id,
-            entry_id,
-            by,
-        } => (league_id, Some(entry_id), Some(by)),
         Event::LeagueStarted { league_id } => (league_id, None, None),
         _ => return Ok(None),
     };
@@ -587,13 +539,7 @@ async fn compose_league(
     };
     let names = Names::load(tx, by).await?;
     let url = format!("/leagues/{league_id}");
-    let note = |title: String, body: String| {
-        Some(Note {
-            title,
-            body,
-            url: url.clone(),
-        })
-    };
+    let note = |title: String, body: String| Some(Note { title, body, url: url.clone() });
     Ok(match (event, entry) {
         (Event::PartnerInvited { by, .. }, Some(entry))
             if entry.invited_partner_id == Some(player)
@@ -602,10 +548,7 @@ async fn compose_league(
         {
             note(
                 format!("{} invited you to partner them", names.name(by)),
-                format!(
-                    "{}: accept or decline before registration closes.",
-                    league.name
-                ),
+                format!("{}: accept or decline before registration closes.", league.name),
             )
         }
         (Event::PartnerAccepted { by, .. }, Some(entry))
@@ -621,16 +564,12 @@ async fn compose_league(
         {
             note(
                 format!("{} declined your invitation", names.name(by)),
-                format!(
-                    "{}: invite someone else, or look for a partner.",
-                    league.name
-                ),
+                format!("{}: invite someone else, or look for a partner.", league.name),
             )
         }
-        (Event::LeagueStarted { .. }, _) if league.status == LeagueStatus::Active => note(
-            format!("{} has started", league.name),
-            box_line(tx, league_id, player).await?,
-        ),
+        (Event::LeagueStarted { .. }, _) if league.status == LeagueStatus::Active => {
+            note(format!("{} has started", league.name), box_line(tx, league_id, player).await?)
+        }
         _ => None,
     })
 }
@@ -663,19 +602,13 @@ async fn box_line(tx: &mut TenantTx, league: Uuid, player: Uuid) -> anyhow::Resu
 
 /// The words for an admin's decision, by where it left the match.
 fn decided(found: &MatchRow, side: Side, them: &str) -> Option<(String, String)> {
-    let ruling = found
-        .resolution_note
-        .as_ref()
-        .map(|note| format!(" “{note}”"))
-        .unwrap_or_default();
+    let ruling =
+        found.resolution_note.as_ref().map(|note| format!(" “{note}”")).unwrap_or_default();
     let won = found.winner_side.map(Side::from) == Some(side);
     match found.status() {
         MatchStatus::Resolved => {
-            let score = found
-                .score
-                .as_ref()
-                .map(|score| score_line(score, side))
-                .unwrap_or_default();
+            let score =
+                found.score.as_ref().map(|score| score_line(score, side)).unwrap_or_default();
             Some((
                 "Your disputed match was decided".to_owned(),
                 format!("{score} against {them}.{ruling}"),
@@ -739,21 +672,9 @@ mod tests {
     fn scores_read_from_the_recipients_side() {
         let score = Score {
             sets: vec![
-                SetScore {
-                    a: 6,
-                    b: 4,
-                    match_tiebreak: false,
-                },
-                SetScore {
-                    a: 3,
-                    b: 6,
-                    match_tiebreak: false,
-                },
-                SetScore {
-                    a: 10,
-                    b: 7,
-                    match_tiebreak: true,
-                },
+                SetScore { a: 6, b: 4, match_tiebreak: false },
+                SetScore { a: 3, b: 6, match_tiebreak: false },
+                SetScore { a: 10, b: 7, match_tiebreak: true },
             ],
         };
         assert_eq!(score_line(&score, Side::A), "6–4 3–6 [10–7]");
@@ -762,10 +683,7 @@ mod tests {
 
     #[test]
     fn events_keep_their_wire_shape() {
-        let event = Event::ScoreReported {
-            match_id: Uuid::nil(),
-            by: Uuid::nil(),
-        };
+        let event = Event::ScoreReported { match_id: Uuid::nil(), by: Uuid::nil() };
         let value = serde_json::to_value(event).unwrap();
         assert_eq!(value["type"], "score_reported");
         assert_eq!(serde_json::from_value::<Event>(value).unwrap(), event);

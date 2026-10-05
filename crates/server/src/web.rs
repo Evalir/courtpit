@@ -44,10 +44,7 @@ impl WebApp {
     /// deploy reaches users on their next visit.
     pub async fn respond(self, request: Request) -> Response {
         let path = request.uri().path().to_owned();
-        let names_file = path
-            .rsplit('/')
-            .next()
-            .is_some_and(|segment| segment.contains('.'));
+        let names_file = path.rsplit('/').next().is_some_and(|segment| segment.contains('.'));
         // A missing file is a 404, never the app shell: a stale bundle URL must not cache
         // index.html as JavaScript.
         let mut response = if names_file {

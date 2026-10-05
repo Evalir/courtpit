@@ -88,20 +88,16 @@ impl Job {
     pub fn dedupe_key(&self) -> Option<String> {
         match self {
             Self::Noop {} => None,
-            Self::Notify {
-                player_id, event, ..
-            } => event.dedupe_key(*player_id),
+            Self::Notify { player_id, event, .. } => event.dedupe_key(*player_id),
             Self::AutoConfirmMatch { match_id, .. } => Some(format!("auto_confirm:{match_id}")),
             Self::RefreshRankings { community_id } => {
                 Some(format!("refresh_rankings:{community_id}"))
             }
             Self::AdvanceLeague { league_id, .. } => Some(format!("league:{league_id}")),
             Self::BackupDatabase {} => Some("backup".to_owned()),
-            Self::NotifyLeagueCancelled {
-                league_id,
-                player_id,
-                ..
-            } => Some(format!("league_cancelled:{league_id}:{player_id}")),
+            Self::NotifyLeagueCancelled { league_id, player_id, .. } => {
+                Some(format!("league_cancelled:{league_id}:{player_id}"))
+            }
         }
     }
 
@@ -112,9 +108,8 @@ impl Job {
             .and_then(Value::as_str)
             .context("job serialised without kind")?
             .to_owned();
-        let payload = value
-            .get_mut("payload")
-            .map_or(Value::Object(Default::default()), Value::take);
+        let payload =
+            value.get_mut("payload").map_or(Value::Object(Default::default()), Value::take);
         Ok((kind, payload))
     }
 
@@ -234,31 +229,23 @@ pub async fn claim<'e>(
 async fn execute(state: &AppState, job: Job) -> anyhow::Result<()> {
     match job {
         Job::Noop {} => Ok(()),
-        Job::AutoConfirmMatch {
-            community_id,
-            match_id,
-        } => crate::matches::results::auto_confirm(state, community_id, match_id).await,
+        Job::AutoConfirmMatch { community_id, match_id } => {
+            crate::matches::results::auto_confirm(state, community_id, match_id).await
+        }
         Job::RefreshRankings { community_id } => {
             crate::rankings::refresh_job(state, community_id).await
         }
-        Job::AdvanceLeague {
-            community_id,
-            league_id,
-        } => crate::leagues::lifecycle::advance(state, community_id, league_id).await,
+        Job::AdvanceLeague { community_id, league_id } => {
+            crate::leagues::lifecycle::advance(state, community_id, league_id).await
+        }
         Job::BackupDatabase {} => crate::backup::run(state).await,
-        Job::NotifyLeagueCancelled {
-            community_id,
-            league_id,
-            player_id,
-        } => {
+        Job::NotifyLeagueCancelled { community_id, league_id, player_id } => {
             crate::leagues::notify::league_cancelled(state, community_id, league_id, player_id)
                 .await
         }
-        Job::Notify {
-            community_id,
-            player_id,
-            event,
-        } => crate::notify::send(state, community_id, player_id, event).await,
+        Job::Notify { community_id, player_id, event } => {
+            crate::notify::send(state, community_id, player_id, event).await
+        }
     }
 }
 
@@ -371,18 +358,12 @@ pub async fn tick(state: &AppState, budget: Duration) -> anyhow::Result<TickSumm
     let mut ran = 0;
     while deadline.is_none_or(|end| Instant::now() < end) {
         let Some(claimed) = claim(&state.db, &worker, 1, state.clock.now()).await?.pop() else {
-            return Ok(TickSummary {
-                ran,
-                budget_spent: false,
-            });
+            return Ok(TickSummary { ran, budget_spent: false });
         };
         run_claimed(state, claimed).await?;
         ran += 1;
     }
-    Ok(TickSummary {
-        ran,
-        budget_spent: true,
-    })
+    Ok(TickSummary { ran, budget_spent: true })
 }
 
 /// A worker name unique to this process and run, recorded in `jobs.locked_by`.

@@ -246,11 +246,7 @@ impl Names {
         .bind(&ids)
         .fetch_all(&mut **tx)
         .await?;
-        Ok(Self(
-            rows.into_iter()
-                .map(|row| (row.id, row.display_name))
-                .collect(),
-        ))
+        Ok(Self(rows.into_iter().map(|row| (row.id, row.display_name)).collect()))
     }
 
     /// The name of `id`, or "A former member" when it is not a player here.
@@ -260,10 +256,7 @@ impl Names {
 
     /// The names of `ids` joined with " & " (a doubles side).
     pub fn joined(&self, ids: &[Uuid]) -> String {
-        ids.iter()
-            .map(|&id| self.name(id))
-            .collect::<Vec<_>>()
-            .join(" & ")
+        ids.iter().map(|&id| self.name(id)).collect::<Vec<_>>().join(" & ")
     }
 
     /// References for `ids` in first-seen order, without duplicates or unknown ids.
@@ -274,10 +267,7 @@ impl Names {
                 continue;
             }
             if let Some(name) = self.0.get(&id) {
-                refs.push(PlayerRef {
-                    id,
-                    display_name: name.clone(),
-                });
+                refs.push(PlayerRef { id, display_name: name.clone() });
             }
         }
         refs

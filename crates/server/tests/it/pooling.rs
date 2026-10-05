@@ -40,10 +40,8 @@ async fn concurrent_tenant_transactions_never_cross_communities() {
                 let mut tx = TenantTx::begin(&db, community).await.unwrap();
                 // Let other clients' transactions interleave on the shared connections.
                 tokio::task::yield_now().await;
-                let seen: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM players")
-                    .fetch_all(&mut *tx)
-                    .await
-                    .unwrap();
+                let seen: Vec<Uuid> =
+                    sqlx::query_scalar("SELECT id FROM players").fetch_all(&mut *tx).await.unwrap();
                 assert_eq!(seen.iter().copied().collect::<HashSet<_>>(), players);
                 tokio::task::yield_now().await;
                 let (setting, role): (String, String) = sqlx::query_as(
@@ -97,10 +95,7 @@ async fn transaction_settings_do_not_leak_to_the_next_transaction() {
                 .await
                 .unwrap();
                 assert_eq!(tenant, None, "tenant leaked into the next transaction");
-                assert_ne!(
-                    role, "courtpit_app",
-                    "role leaked into the next transaction"
-                );
+                assert_ne!(role, "courtpit_app", "role leaked into the next transaction");
                 assert_ne!(timeout, "7s", "SET LOCAL leaked into the next transaction");
             }
         }));

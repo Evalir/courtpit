@@ -8,14 +8,8 @@ use crate::common::{Res, TestApp, test_config};
 pub(crate) fn assert_security_headers(res: &Res, https: bool) {
     let get = |name: HeaderName| res.headers.get(name).map(|value| value.to_str().unwrap());
     assert_eq!(get(header::X_CONTENT_TYPE_OPTIONS), Some("nosniff"));
-    assert_eq!(
-        get(header::REFERRER_POLICY),
-        Some("strict-origin-when-cross-origin")
-    );
-    assert_eq!(
-        get(header::CONTENT_SECURITY_POLICY),
-        Some("frame-ancestors 'none'")
-    );
+    assert_eq!(get(header::REFERRER_POLICY), Some("strict-origin-when-cross-origin"));
+    assert_eq!(get(header::CONTENT_SECURITY_POLICY), Some("frame-ancestors 'none'"));
     assert_eq!(get(header::X_FRAME_OPTIONS), Some("DENY"));
     assert_eq!(
         get(header::STRICT_TRANSPORT_SECURITY),
@@ -40,11 +34,7 @@ async fn readyz_checks_database() {
 #[tokio::test]
 async fn openapi_lists_health_endpoints() {
     let app = TestApp::spawn().await;
-    let body = app
-        .get("/api/v1/openapi.json")
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let body = app.get("/api/v1/openapi.json").send().await.expect(StatusCode::OK);
     assert!(body["paths"]["/healthz"]["get"].is_object());
     assert!(body["paths"]["/readyz"]["get"].is_object());
 }
@@ -52,11 +42,7 @@ async fn openapi_lists_health_endpoints() {
 #[tokio::test]
 async fn openapi_route_serves_the_generated_document() {
     let app = TestApp::spawn().await;
-    let served = app
-        .get("/api/v1/openapi.json")
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let served = app.get("/api/v1/openapi.json").send().await.expect(StatusCode::OK);
     let generated = serde_json::to_value(racquetcollective_server::app::openapi()).unwrap();
     assert_eq!(served, generated);
 }
@@ -84,11 +70,7 @@ async fn api_responses_carry_security_headers() {
         assert_security_headers(&res, false);
     }
 
-    let app = TestApp::spawn_with(Config {
-        cookie_secure: true,
-        ..test_config()
-    })
-    .await;
+    let app = TestApp::spawn_with(Config { cookie_secure: true, ..test_config() }).await;
     let res = app.get("/healthz").send().await;
     assert_eq!(res.status, StatusCode::OK);
     assert_security_headers(&res, true);

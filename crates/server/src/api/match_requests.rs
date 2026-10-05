@@ -135,10 +135,7 @@ impl MatchRequestView {
 /// Views of `rows`, with every name loaded in one query.
 async fn views(tx: &mut TenantTx, rows: Vec<RequestRow>) -> ApiResult<Vec<MatchRequestView>> {
     let names = Names::load(tx, rows.iter().flat_map(RequestRow::participants)).await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| MatchRequestView::new(row, &names))
-        .collect())
+    Ok(rows.into_iter().map(|row| MatchRequestView::new(row, &names)).collect())
 }
 
 /// The view of one request.
@@ -207,9 +204,7 @@ pub async fn create_request(
     player.require_verified()?;
     let now = state.clock.now();
     if body.time_window_end <= body.time_window_start {
-        return Err(ApiError::validation(
-            "the time window must end after it starts",
-        ));
+        return Err(ApiError::validation("the time window must end after it starts"));
     }
     if body.time_window_end <= now || body.time_window_end > now + Duration::days(MAX_AHEAD_DAYS) {
         return Err(ApiError::validation(format!(
@@ -283,10 +278,7 @@ pub async fn list_requests(
     player: CurrentPlayer,
     ApiQuery(query): ApiQuery<RequestQuery>,
 ) -> ApiResult<Json<Page<MatchRequestView>>> {
-    let page = PageParams {
-        cursor: query.cursor.clone(),
-        limit: query.limit,
-    };
+    let page = PageParams { cursor: query.cursor.clone(), limit: query.limit };
     let limit = page.limit();
     let mut tx = player.tenant.begin(&state.db).await?;
     let mut qb: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
@@ -298,9 +290,7 @@ pub async fn list_requests(
         .push(" AND r.time_window_end > ")
         .push_bind(state.clock.now());
     if let Some(discipline) = query.discipline {
-        let _ = qb
-            .push(" AND r.discipline = ")
-            .push_bind(DbDiscipline::from(discipline));
+        let _ = qb.push(" AND r.discipline = ").push_bind(DbDiscipline::from(discipline));
     }
     if query.fits_me {
         let _ = qb
@@ -319,10 +309,7 @@ pub async fn list_requests(
         let (end, id) = cursor
             .split_once('|')
             .and_then(|(end_text, id_text)| {
-                Some((
-                    end_text.parse::<DateTime<Utc>>().ok()?,
-                    id_text.parse::<Uuid>().ok()?,
-                ))
+                Some((end_text.parse::<DateTime<Utc>>().ok()?, id_text.parse::<Uuid>().ok()?))
             })
             .ok_or_else(|| ApiError::BadRequest("invalid cursor".into()))?;
         let _ = qb
@@ -332,24 +319,18 @@ pub async fn list_requests(
             .push_bind(id)
             .push(")");
     }
-    let _ = qb
-        .push(" ORDER BY r.time_window_end, r.id LIMIT ")
-        .push_bind(limit + 1);
+    let _ = qb.push(" ORDER BY r.time_window_end, r.id LIMIT ").push_bind(limit + 1);
     let rows: Vec<RequestRow> = qb.build_query_as().fetch_all(&mut *tx).await?;
     let page = paginate(rows, limit, |row| {
         format!(
             "{}|{}",
-            row.time_window_end
-                .to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+            row.time_window_end.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
             row.id
         )
     });
     let items = views(&mut tx, page.items).await?;
     tx.commit().await?;
-    Ok(Json(Page {
-        items,
-        next_cursor: page.next_cursor,
-    }))
+    Ok(Json(Page { items, next_cursor: page.next_cursor }))
 }
 
 /// One match request.
@@ -541,9 +522,7 @@ pub async fn cancel_request(
     let mut tx = player.tenant.begin(&state.db).await?;
     let request = load(&mut tx, id, true).await?;
     if request.created_by != player.id && !player.role.is_admin() {
-        return Err(ApiError::forbidden(
-            "only the creator or an admin can cancel a request",
-        ));
+        return Err(ApiError::forbidden("only the creator or an admin can cancel a request"));
     }
     if request.status != RequestStatus::Open {
         return Err(ApiError::conflict("this request is no longer open"));

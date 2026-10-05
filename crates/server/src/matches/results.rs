@@ -48,10 +48,7 @@ pub async fn record_report(
     .execute(&mut **tx)
     .await?;
     supersede_open_proposals(tx, found.id).await?;
-    let job = Job::AutoConfirmMatch {
-        community_id: tx.community_id(),
-        match_id: found.id,
-    };
+    let job = Job::AutoConfirmMatch { community_id: tx.community_id(), match_id: found.id };
     jobs::enqueue(&mut **tx, job, deadline).await?;
     Ok(())
 }
@@ -70,9 +67,7 @@ pub async fn auto_confirm(
         Err(ApiError::NotFound(_)) => return Ok(()),
         Err(err) => return Err(anyhow::anyhow!("loading match: {err}")),
     };
-    let due = found
-        .confirm_deadline_at
-        .is_some_and(|deadline| deadline <= state.clock.now());
+    let due = found.confirm_deadline_at.is_some_and(|deadline| deadline <= state.clock.now());
     if found.status() != MatchStatus::Reported || !due {
         return Ok(());
     }

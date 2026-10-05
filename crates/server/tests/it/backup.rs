@@ -31,11 +31,7 @@ impl MemoryStore {
     fn with(keys: &[&str]) -> Arc<Self> {
         let store = Self::default();
         for key in keys {
-            let _ = store
-                .objects
-                .lock()
-                .unwrap()
-                .insert((*key).to_owned(), b"old".to_vec());
+            let _ = store.objects.lock().unwrap().insert((*key).to_owned(), b"old".to_vec());
         }
         Arc::new(store)
     }
@@ -59,10 +55,7 @@ impl ObjectStore for MemoryStore {
     fn list<'a>(&'a self, prefix: &'a str) -> StoreFuture<'a, Vec<String>> {
         Box::pin(async move {
             let keys = self.keys();
-            Ok(keys
-                .into_iter()
-                .filter(|key| key.starts_with(prefix))
-                .collect())
+            Ok(keys.into_iter().filter(|key| key.starts_with(prefix)).collect())
         })
     }
 
@@ -83,9 +76,7 @@ impl AsyncRead for Broken {
         _: &mut Context<'_>,
         _: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        Poll::Ready(Err(io::Error::other(
-            "pg_dump exited 1: connection refused",
-        )))
+        Poll::Ready(Err(io::Error::other("pg_dump exited 1: connection refused")))
     }
 }
 
@@ -105,11 +96,7 @@ impl DumpSource for FakeDump {
 
 fn config(hour_utc: u32) -> Config {
     Config {
-        backup: BackupConfig {
-            hour_utc,
-            retention_days: 7,
-            ..BackupConfig::default()
-        },
+        backup: BackupConfig { hour_utc, retention_days: 7, ..BackupConfig::default() },
         ..test_config()
     }
 }
@@ -121,8 +108,7 @@ fn backup_state(app: &TestApp, store: &Arc<MemoryStore>, fails: bool) -> AppStat
 }
 
 fn utc(month: u32, day: u32, hour: u32, min: u32) -> DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, month, day, hour, min, 0)
-        .unwrap()
+    Utc.with_ymd_and_hms(2026, month, day, hour, min, 0).unwrap()
 }
 
 async fn pending(app: &TestApp) -> Vec<(String, DateTime<Utc>)> {
@@ -138,19 +124,19 @@ async fn pending(app: &TestApp) -> Vec<(String, DateTime<Utc>)> {
 async fn the_job_uploads_prunes_and_schedules_the_next_night() {
     let app = TestApp::spawn_with(config(5)).await;
     let store = MemoryStore::with(&[
-        "racquetcollective/2026/09/racquetcollective-20260920T030000Z.dump", // past retention: deleted
+        "racquetcollective/2026/09/racquetcollective-20260920T030000Z.dump", /* past retention:
+                                                                              * deleted */
         "racquetcollective/2026/10/racquetcollective-20261001T030000Z.dump", // recent: kept
         "racquetcollective/notes.txt",                                       // foreign: kept
         "racquetcollective/2026/09/racquetcollective-garbage.dump",          // unparseable: kept
         "racquetcollective/old/racquetcollective-20260920T030000Z.dump",     // wrong layout: kept
-        "other/2026/09/racquetcollective-20260920T030000Z.dump", // outside the prefix: kept
+        "other/2026/09/racquetcollective-20260920T030000Z.dump",             /* outside the
+                                                                              * prefix: kept */
     ]);
     let state = backup_state(&app, &store, false);
     app.clock.set(utc(10, 4, 10, 30));
     // Due at the pinned time, not the wall clock (which passes 10:30 on 2026-10-04).
-    jobs::enqueue(&app.db, Job::BackupDatabase {}, utc(10, 4, 10, 30))
-        .await
-        .unwrap();
+    jobs::enqueue(&app.db, Job::BackupDatabase {}, utc(10, 4, 10, 30)).await.unwrap();
 
     assert_eq!(jobs::run_due(&state, "t").await.unwrap(), 1);
 
@@ -167,10 +153,7 @@ async fn the_job_uploads_prunes_and_schedules_the_next_night() {
             && key.starts_with("racquetcollective/2026/09"))
     );
     // The next run: tomorrow at BACKUP_HOUR_UTC.
-    assert_eq!(
-        pending(&app).await,
-        [("backup_database".to_owned(), utc(10, 5, 5, 0))]
-    );
+    assert_eq!(pending(&app).await, [("backup_database".to_owned(), utc(10, 5, 5, 0))]);
 }
 
 #[tokio::test]
@@ -178,9 +161,7 @@ async fn a_failed_dump_uploads_nothing_and_retries_instead_of_rescheduling() {
     let app = TestApp::spawn_with(config(3)).await;
     let store = MemoryStore::with(&[]);
     let state = backup_state(&app, &store, true);
-    jobs::enqueue(&app.db, Job::BackupDatabase {}, Utc::now())
-        .await
-        .unwrap();
+    jobs::enqueue(&app.db, Job::BackupDatabase {}, Utc::now()).await.unwrap();
     assert_eq!(jobs::run_due(&state, "t").await.unwrap(), 1);
     assert!(store.keys().is_empty());
     let (err, attempts, completed): (Option<String>, i32, bool) =
@@ -196,9 +177,7 @@ async fn a_failed_dump_uploads_nothing_and_retries_instead_of_rescheduling() {
 #[tokio::test]
 async fn without_configuration_the_job_is_a_noop_that_completes() {
     let app = TestApp::spawn().await;
-    jobs::enqueue(&app.db, Job::BackupDatabase {}, Utc::now())
-        .await
-        .unwrap();
+    jobs::enqueue(&app.db, Job::BackupDatabase {}, Utc::now()).await.unwrap();
     assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 1);
     assert!(pending(&app).await.is_empty(), "nothing rescheduled");
     let completed: i64 =
@@ -208,10 +187,7 @@ async fn without_configuration_the_job_is_a_noop_that_completes() {
             .unwrap();
     assert_eq!(completed, 1);
     backup::ensure_scheduled(&app.state).await.unwrap();
-    assert!(
-        pending(&app).await.is_empty(),
-        "not scheduled when disabled"
-    );
+    assert!(pending(&app).await.is_empty(), "not scheduled when disabled");
 }
 
 #[tokio::test]
@@ -234,16 +210,12 @@ async fn scheduling_is_insert_if_absent() {
     let running = jobs::claim(&app.db, "w", 1, app.clock.now()).await.unwrap();
     assert_eq!(running.len(), 1);
     backup::ensure_scheduled(&state).await.unwrap();
-    let total: i64 = sqlx::query_scalar("SELECT count(*) FROM jobs")
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    let total: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM jobs").fetch_one(&app.db).await.unwrap();
     assert_eq!(total, 1);
 
     // Once it has finished without a successor (it failed for good), the next start heals.
-    jobs::finish(&app.db, running[0].id, app.clock.now(), Ok(()))
-        .await
-        .unwrap();
+    jobs::finish(&app.db, running[0].id, app.clock.now(), Ok(())).await.unwrap();
     backup::ensure_scheduled(&state).await.unwrap();
     assert_eq!(pending(&app).await.len(), 1);
 }
@@ -251,19 +223,13 @@ async fn scheduling_is_insert_if_absent() {
 #[tokio::test]
 async fn partial_configuration_is_a_startup_error() {
     let mut config = Config::default();
-    assert!(
-        Backup::from_config(&config).unwrap().is_none(),
-        "off by default"
-    );
+    assert!(Backup::from_config(&config).unwrap().is_none(), "off by default");
 
     config.backup.s3_endpoint = Some("https://acct.r2.cloudflarestorage.com".into());
     config.backup.s3_bucket = Some("  ".into()); // blank counts as unset
     config.backup.s3_access_key = Some("key".into());
     let err = Backup::from_config(&config).unwrap_err().to_string();
-    assert!(
-        err.contains("BACKUP_S3_BUCKET, BACKUP_S3_SECRET_KEY"),
-        "{err}"
-    );
+    assert!(err.contains("BACKUP_S3_BUCKET, BACKUP_S3_SECRET_KEY"), "{err}");
 
     config.backup.s3_bucket = Some("bucket".into());
     config.backup.s3_secret_key = Some("secret".into());

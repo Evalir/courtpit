@@ -34,9 +34,7 @@ async fn open_league(
         return Err(ApiError::NotFound("league"));
     }
     if !league.registration_open(state.clock.now()) {
-        return Err(ApiError::conflict(
-            "registration for this league is not open",
-        ));
+        return Err(ApiError::conflict("registration for this league is not open"));
     }
     Ok(league)
 }
@@ -84,9 +82,7 @@ async fn check_partner(
         None if body.looking_for_partner => {
             entries::check_mixed(tx, &player.tenant, discipline, &[player.id]).await
         }
-        None => Err(ApiError::validation(
-            "name a partner_id or set looking_for_partner",
-        )),
+        None => Err(ApiError::validation("name a partner_id or set looking_for_partner")),
     }
 }
 
@@ -99,11 +95,7 @@ async fn invite(
     player: &CurrentPlayer,
     partner: Option<Uuid>,
 ) -> ApiResult<()> {
-    let event = notify::Event::PartnerInvited {
-        league_id,
-        entry_id,
-        by: player.id,
-    };
+    let event = notify::Event::PartnerInvited { league_id, entry_id, by: player.id };
     notify::tell(tx, partner, event, state.clock.now()).await?;
     Ok(())
 }
@@ -187,10 +179,7 @@ pub async fn list_entries(
     let mut qb: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
         "SELECT {ENTRY_COLUMNS} FROM league_entries WHERE community_id = "
     ));
-    let _ = qb
-        .push_bind(tx.community_id())
-        .push(" AND league_id = ")
-        .push_bind(league_id);
+    let _ = qb.push_bind(tx.community_id()).push(" AND league_id = ").push_bind(league_id);
     let _ = match query.status {
         Some(status) => qb.push(" AND status = ").push_bind(status),
         None => qb.push(" AND status <> 'withdrawn'"),
@@ -270,9 +259,7 @@ pub async fn accept_invite(
         return Err(ApiError::forbidden("you were not invited to this entry"));
     }
     if entry.status != EntryStatus::PendingPartner {
-        return Err(ApiError::conflict(
-            "this entry is no longer waiting for a partner",
-        ));
+        return Err(ApiError::conflict("this entry is no longer waiting for a partner"));
     }
     withdraw_solo(&mut tx, league_id, player.id).await?;
     entries::require_not_entered(&mut tx, league_id, player.id, "you are").await?;
@@ -280,11 +267,7 @@ pub async fn accept_invite(
     let pair = [entry.created_by, player.id];
     entries::check_mixed(&mut tx, &player.tenant, league.discipline(), &pair).await?;
     complete(&mut tx, &entry, player.id).await?;
-    let event = notify::Event::PartnerAccepted {
-        league_id,
-        entry_id,
-        by: player.id,
-    };
+    let event = notify::Event::PartnerAccepted { league_id, entry_id, by: player.id };
     notify::tell(&mut tx, [entry.created_by], event, state.clock.now()).await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
@@ -315,11 +298,7 @@ pub async fn decline_invite(
     .bind(entry_id)
     .execute(&mut *tx)
     .await?;
-    let event = notify::Event::PartnerDeclined {
-        league_id,
-        entry_id,
-        by: player.id,
-    };
+    let event = notify::Event::PartnerDeclined { league_id, entry_id, by: player.id };
     notify::tell(&mut tx, [entry.created_by], event, state.clock.now()).await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
@@ -352,9 +331,7 @@ pub async fn change_partner(
         ));
     }
     if entry.status != EntryStatus::PendingPartner || entry.player_ids.len() != 1 {
-        return Err(ApiError::conflict(
-            "this entry is no longer waiting for a partner",
-        ));
+        return Err(ApiError::conflict("this entry is no longer waiting for a partner"));
     }
     check_partner(&mut tx, &player, league_id, league.discipline(), body).await?;
     let _ = sqlx::query(
@@ -368,15 +345,7 @@ pub async fn change_partner(
     .bind(body.partner_id.is_none())
     .execute(&mut *tx)
     .await?;
-    invite(
-        &state,
-        &mut tx,
-        league_id,
-        entry_id,
-        &player,
-        body.partner_id,
-    )
-    .await?;
+    invite(&state, &mut tx, league_id, entry_id, &player, body.partner_id).await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
     Ok(res)
@@ -434,10 +403,7 @@ pub async fn my_entries(
         let (here, rest): (Vec<_>, Vec<_>) =
             views.into_iter().partition(|entry| entry.league_id == id);
         views = rest;
-        mine.extend(here.into_iter().map(|entry| MyEntry {
-            league: view.clone(),
-            entry,
-        }));
+        mine.extend(here.into_iter().map(|entry| MyEntry { league: view.clone(), entry }));
     }
     Ok(Json(mine))
 }
@@ -465,10 +431,7 @@ pub async fn withdraw(
         return Err(ApiError::conflict("the entry is already withdrawn"));
     }
     let allowed = if player.role.is_admin() {
-        !matches!(
-            league.status,
-            LeagueStatus::Finished | LeagueStatus::Cancelled
-        )
+        !matches!(league.status, LeagueStatus::Finished | LeagueStatus::Cancelled)
     } else {
         league.registration_open(state.clock.now())
     };
@@ -527,9 +490,7 @@ pub async fn pair_entries(
     let second_entry = entries::load(&mut tx, league_id, second).await?;
     for entry in [&first_entry, &second_entry] {
         if entry.status != EntryStatus::PendingPartner || entry.player_ids.len() != 1 {
-            return Err(ApiError::conflict(
-                "both entries must be solo and waiting for a partner",
-            ));
+            return Err(ApiError::conflict("both entries must be solo and waiting for a partner"));
         }
     }
     let pair = [first_entry.created_by, second_entry.created_by];

@@ -9,10 +9,10 @@ use sqlx::{FromRow, Postgres, QueryBuilder, types::Json as SqlJson};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::extract::ApiJson;
 use crate::{
     ApiError, ApiResult, AppState, Tenant,
     auth::{CurrentPlayer, CurrentUser, ensure_player},
+    extract::ApiJson,
     models::{Gender, PlayPref, double_option},
     players::{self, PlayerProfile},
 };
@@ -54,9 +54,7 @@ async fn load_me(state: &AppState, player: &CurrentPlayer) -> ApiResult<Me> {
     .fetch_all(&state.db)
     .await?;
     let mut tx = player.tenant.begin(&state.db).await?;
-    let row = players::load(&mut tx, player.id)
-        .await?
-        .ok_or(ApiError::NotFound("player"))?;
+    let row = players::load(&mut tx, player.id).await?.ok_or(ApiError::NotFound("player"))?;
     tx.commit().await?;
     Ok(Me {
         account: Account {
@@ -119,16 +117,9 @@ pub struct ProfilePatch {
 }
 
 fn short_text(field: &str, value: Option<String>, max: usize) -> ApiResult<Option<String>> {
-    let value = value
-        .map(|text| text.trim().to_owned())
-        .filter(|text| !text.is_empty());
-    if value
-        .as_ref()
-        .is_some_and(|text| text.chars().count() > max)
-    {
-        return Err(ApiError::validation(format!(
-            "{field} must be at most {max} characters"
-        )));
+    let value = value.map(|text| text.trim().to_owned()).filter(|text| !text.is_empty());
+    if value.as_ref().is_some_and(|text| text.chars().count() > max) {
+        return Err(ApiError::validation(format!("{field} must be at most {max} characters")));
     }
     Ok(value)
 }
@@ -161,9 +152,7 @@ pub async fn patch_me(
         let _ = qb.push(", gender = ").push_bind(gender);
     }
     if let Some(phone) = patch.phone {
-        let _ = qb
-            .push(", phone = ")
-            .push_bind(short_text("phone", phone, 32)?);
+        let _ = qb.push(", phone = ").push_bind(short_text("phone", phone, 32)?);
     }
     if let Some(visible) = patch.phone_visible {
         let _ = qb.push(", phone_visible = ").push_bind(visible);
@@ -171,14 +160,10 @@ pub async fn patch_me(
     if let Some(socials) = patch.socials {
         let ok = socials.as_object().is_some_and(|object| {
             object.len() <= 10
-                && object
-                    .values()
-                    .all(|value| value.as_str().is_some_and(|text| text.len() <= 200))
+                && object.values().all(|value| value.as_str().is_some_and(|text| text.len() <= 200))
         });
         if !ok {
-            return Err(ApiError::validation(
-                "socials must be an object of up to 10 strings",
-            ));
+            return Err(ApiError::validation("socials must be an object of up to 10 strings"));
         }
         let _ = qb.push(", socials = ").push_bind(SqlJson(socials));
     }
@@ -186,14 +171,10 @@ pub async fn patch_me(
         let _ = qb.push(", socials_visible = ").push_bind(visible);
     }
     if let Some(racket) = patch.racket {
-        let _ = qb
-            .push(", racket = ")
-            .push_bind(short_text("racket", racket, 80)?);
+        let _ = qb.push(", racket = ").push_bind(short_text("racket", racket, 80)?);
     }
     if let Some(strings) = patch.strings {
-        let _ = qb
-            .push(", strings = ")
-            .push_bind(short_text("strings", strings, 80)?);
+        let _ = qb.push(", strings = ").push_bind(short_text("strings", strings, 80)?);
     }
     if let Some(tension) = patch.tension_kg {
         if tension.is_some_and(|kg| kg < Decimal::from(10) || kg > Decimal::from(35)) {
@@ -210,18 +191,10 @@ pub async fn patch_me(
             .map(|location| location.trim().to_owned())
             .filter(|location| !location.is_empty())
             .collect();
-        if locations.len() > 10
-            || locations
-                .iter()
-                .any(|location| location.chars().count() > 80)
-        {
-            return Err(ApiError::validation(
-                "up to 10 locations of at most 80 characters",
-            ));
+        if locations.len() > 10 || locations.iter().any(|location| location.chars().count() > 80) {
+            return Err(ApiError::validation("up to 10 locations of at most 80 characters"));
         }
-        let _ = qb
-            .push(", preferred_locations = ")
-            .push_bind(SqlJson(locations));
+        let _ = qb.push(", preferred_locations = ").push_bind(SqlJson(locations));
     }
     let _ = qb
         .push(" WHERE community_id = ")

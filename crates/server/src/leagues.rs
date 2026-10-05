@@ -92,20 +92,16 @@ impl LeagueRow {
 
     /// The league's format, or the community default.
     pub fn format(&self, tenant: &Tenant) -> Result<MatchFormat, ApiError> {
-        self.match_format.as_ref().map_or_else(
-            || crate::api::matches::community_format(tenant),
-            |format| Ok(format.0),
-        )
+        self.match_format
+            .as_ref()
+            .map_or_else(|| crate::api::matches::community_format(tenant), |format| Ok(format.0))
     }
 
     /// The community's scoring config (`communities.scoring_config`) with this league's
     /// overrides merged in.
     pub fn scoring(&self, community_scoring: &Value) -> Result<ScoringConfig, ApiError> {
-        scoring_with(
-            community_scoring,
-            self.scoring_overrides.as_ref().map(|j| &j.0),
-        )
-        .map_err(|err| ApiError::Internal(anyhow::anyhow!("league scoring config: {err}")))
+        scoring_with(community_scoring, self.scoring_overrides.as_ref().map(|j| &j.0))
+            .map_err(|err| ApiError::Internal(anyhow::anyhow!("league scoring config: {err}")))
     }
 
     /// Box size limits for placement.
@@ -231,9 +227,6 @@ mod tests {
     fn merge_is_deep_and_replaces_leaves() {
         let mut base = json!({ "a": { "x": 1, "y": 2 }, "b": [1, 2], "c": "keep" });
         merge_json(&mut base, &json!({ "a": { "y": 3, "z": 4 }, "b": [9] }));
-        assert_eq!(
-            base,
-            json!({ "a": { "x": 1, "y": 3, "z": 4 }, "b": [9], "c": "keep" })
-        );
+        assert_eq!(base, json!({ "a": { "x": 1, "y": 3, "z": 4 }, "b": [9], "c": "keep" }));
     }
 }

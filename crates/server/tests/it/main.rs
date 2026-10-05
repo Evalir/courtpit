@@ -1,8 +1,5 @@
 //! Integration tests. One binary (`it`) with a module per area keeps link times down.
-#![expect(
-    clippy::unwrap_used,
-    reason = "a failed harness step should abort the test"
-)]
+#![expect(clippy::unwrap_used, reason = "a failed harness step should abort the test")]
 
 mod applinks;
 mod auth;

@@ -110,9 +110,7 @@ impl OidcVerifier {
                 .unwrap_or_default(),
             apple,
             google,
-            keys: Cache::builder()
-                .time_to_live(Duration::from_secs(3600))
-                .build(),
+            keys: Cache::builder().time_to_live(Duration::from_secs(3600)).build(),
         }
     }
 
@@ -164,9 +162,7 @@ impl OidcVerifier {
     ) -> Result<IdClaims, ApiError> {
         let cfg = self.provider(provider);
         if cfg.client_ids.is_empty() {
-            return Err(ApiError::validation(format!(
-                "{provider:?} sign-in is not enabled"
-            )));
+            return Err(ApiError::validation(format!("{provider:?} sign-in is not enabled")));
         }
         let header = decode_header(id_token).map_err(|_| ApiError::InvalidCredentials)?;
         if header.alg != Algorithm::RS256 {

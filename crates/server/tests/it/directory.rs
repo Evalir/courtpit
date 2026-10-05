@@ -44,12 +44,7 @@ async fn directory_filters_and_paginates() {
             .map(|player| player["display_name"].as_str().unwrap().to_owned())
             .collect()
     };
-    let all = app
-        .get("/api/v1/players")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let all = app.get("/api/v1/players").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(names(&all), ["bo", "cy", "dee"], "caller excluded");
     let band = app
         .get("/api/v1/players?utr_min=4&utr_max=8")
@@ -58,27 +53,14 @@ async fn directory_filters_and_paginates() {
         .await
         .expect(StatusCode::OK);
     assert_eq!(names(&band), ["bo", "cy"]);
-    let singles = app
-        .get("/api/v1/players?play_pref=singles")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let singles =
+        app.get("/api/v1/players?play_pref=singles").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(names(&singles), ["bo", "cy"], "`any` matches singles");
-    let loc = app
-        .get("/api/v1/players?location=retiro")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let loc =
+        app.get("/api/v1/players?location=retiro").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(names(&loc), ["bo"]);
 
-    let p1 = app
-        .get("/api/v1/players?limit=2")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let p1 = app.get("/api/v1/players?limit=2").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(names(&p1), ["bo", "cy"]);
     let cursor = p1["next_cursor"].as_str().unwrap();
     let p2 = app
@@ -105,12 +87,7 @@ async fn unverified_players_are_hidden_and_gated() {
         .execute(&app.db)
         .await
         .unwrap();
-    let all = app
-        .get("/api/v1/players")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let all = app.get("/api/v1/players").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(all["items"].as_array().unwrap().len(), 0);
     let _ = app
         .get(&format!("/api/v1/players/{}", bo.player_id))
@@ -134,12 +111,7 @@ async fn contact_details_need_opt_in_and_verified_viewer() {
     assert!(hidden["phone"].is_null() && hidden["socials"].is_null());
     assert!(hidden.get("gender").is_none(), "gender is never exposed");
 
-    let _ = patch(
-        &app,
-        &bo,
-        json!({ "phone_visible": true, "socials_visible": true }),
-    )
-    .await;
+    let _ = patch(&app, &bo, json!({ "phone_visible": true, "socials_visible": true })).await;
     let shown = app.get(&url).as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(shown["phone"], "+34 611");
     assert_eq!(shown["socials"]["instagram"], "@bo");
@@ -157,12 +129,7 @@ async fn contact_details_need_opt_in_and_verified_viewer() {
 async fn admin_ban_and_unban() {
     let (app, ana, bo) = setup().await;
     let url = format!("/api/v1/admin/players/{}/ban", bo.player_id);
-    let _ = app
-        .post(&url)
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::FORBIDDEN);
+    let _ = app.post(&url).as_(&ana).send().await.expect(StatusCode::FORBIDDEN);
     let _ = app
         .get("/api/v1/players?status=banned")
         .as_(&ana)
@@ -170,32 +137,13 @@ async fn admin_ban_and_unban() {
         .await
         .expect(StatusCode::FORBIDDEN);
     app.make_admin(&ana).await;
-    let _ = app
-        .post(&url)
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::NO_CONTENT);
-    let _ = app
-        .get("/api/v1/me")
-        .as_(&bo)
-        .send()
-        .await
-        .expect(StatusCode::FORBIDDEN);
-    let listed = app
-        .get("/api/v1/players")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let _ = app.post(&url).as_(&ana).send().await.expect(StatusCode::NO_CONTENT);
+    let _ = app.get("/api/v1/me").as_(&bo).send().await.expect(StatusCode::FORBIDDEN);
+    let listed = app.get("/api/v1/players").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(listed["items"].as_array().unwrap().len(), 0);
     // Admins find banned members to lift the ban; the profile says so.
-    let banned = app
-        .get("/api/v1/players?status=banned")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let banned =
+        app.get("/api/v1/players?status=banned").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(banned["items"][0]["id"], json!(bo.player_id));
     assert_eq!(banned["items"][0]["status"], "banned");
     let profile = app
@@ -218,28 +166,13 @@ async fn admin_ban_and_unban() {
         .send()
         .await
         .expect(StatusCode::NO_CONTENT);
-    let _ = app
-        .get("/api/v1/me")
-        .as_(&bo)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let _ = app.get("/api/v1/me").as_(&bo).send().await.expect(StatusCode::OK);
 }
 
 #[tokio::test]
 async fn deleted_accounts_leave_the_directory() {
     let (app, ana, bo) = setup().await;
-    let _ = app
-        .delete("/api/v1/me")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::NO_CONTENT);
-    let listed = app
-        .get("/api/v1/players")
-        .as_(&bo)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let _ = app.delete("/api/v1/me").as_(&ana).send().await.expect(StatusCode::NO_CONTENT);
+    let listed = app.get("/api/v1/players").as_(&bo).send().await.expect(StatusCode::OK);
     assert_eq!(listed["items"].as_array().unwrap().len(), 0);
 }

@@ -9,7 +9,6 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::extract::{ApiJson, ApiPath};
 use crate::{
     ApiError, ApiResult, AppState, Tenant,
     api::auth::finish_login,
@@ -17,6 +16,7 @@ use crate::{
         ClientIp, CurrentUser,
         oidc::{IdClaims, Provider},
     },
+    extract::{ApiJson, ApiPath},
 };
 
 /// Body for OIDC sign-in and linking.
@@ -36,10 +36,7 @@ async fn verified_claims(
     body: &OidcLogin,
 ) -> ApiResult<(Provider, IdClaims)> {
     let provider: Provider = provider.parse()?;
-    let claims = state
-        .oidc
-        .verify(provider, &body.id_token, body.nonce.as_deref())
-        .await?;
+    let claims = state.oidc.verify(provider, &body.id_token, body.nonce.as_deref()).await?;
     Ok((provider, claims))
 }
 
@@ -113,10 +110,7 @@ pub async fn oidc_login(
         user
     };
     if claims.email_verified
-        && claims
-            .email
-            .as_deref()
-            .is_some_and(|stored| stored.eq_ignore_ascii_case(&email))
+        && claims.email.as_deref().is_some_and(|stored| stored.eq_ignore_ascii_case(&email))
     {
         let _ = sqlx::query(
             "UPDATE users SET email_verified_at = coalesce(email_verified_at, now()) WHERE id = $1",
@@ -126,15 +120,7 @@ pub async fn oidc_login(
         .await?;
     }
     tx.commit().await?;
-    finish_login(
-        &state,
-        &tenant,
-        user_id,
-        &email,
-        body.device_label.as_deref(),
-        &headers,
-    )
-    .await
+    finish_login(&state, &tenant, user_id, &email, body.device_label.as_deref(), &headers).await
 }
 
 async fn insert_identity(
@@ -164,9 +150,7 @@ async fn insert_identity(
         .fetch_one(&mut *conn)
         .await?;
         if owner != user_id {
-            return Err(ApiError::conflict(
-                "this identity is linked to another account",
-            ));
+            return Err(ApiError::conflict("this identity is linked to another account"));
         }
     }
     Ok(())

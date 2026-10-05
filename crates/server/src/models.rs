@@ -109,9 +109,7 @@ impl PageParams {
         self.cursor
             .as_deref()
             .map(|cursor| {
-                cursor
-                    .parse()
-                    .map_err(|_| crate::ApiError::BadRequest("invalid cursor".into()))
+                cursor.parse().map_err(|_| crate::ApiError::BadRequest("invalid cursor".into()))
             })
             .transpose()
     }
@@ -126,10 +124,7 @@ pub fn paginate<T>(mut rows: Vec<T>, limit: i64, key: impl Fn(&T) -> String) -> 
     } else {
         None
     };
-    Page {
-        items: rows,
-        next_cursor,
-    }
+    Page { items: rows, next_cursor }
 }
 
 /// Deserializes a present field (even `null`) as `Some(..)`, so PATCH bodies can tell

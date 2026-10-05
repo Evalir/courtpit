@@ -10,12 +10,7 @@ async fn otp_login_creates_verified_membership() {
     let app = TestApp::spawn().await;
     let _ = app.community("demo").await;
     let session = app.login("ana@example.test", "demo").await;
-    let body = app
-        .get("/api/v1/auth/session")
-        .as_(&session)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let body = app.get("/api/v1/auth/session").as_(&session).send().await.expect(StatusCode::OK);
     assert_eq!(body["email"], "ana@example.test");
     assert_eq!(body["email_verified"], true);
     assert_eq!(body["role"], "player");
@@ -132,13 +127,9 @@ async fn code_requests_are_rate_limited_per_email_and_ip() {
     })
     .await;
     let _ = app.community("demo").await;
-    for (i, expected) in [
-        StatusCode::ACCEPTED,
-        StatusCode::ACCEPTED,
-        StatusCode::TOO_MANY_REQUESTS,
-    ]
-    .into_iter()
-    .enumerate()
+    for (i, expected) in [StatusCode::ACCEPTED, StatusCode::ACCEPTED, StatusCode::TOO_MANY_REQUESTS]
+        .into_iter()
+        .enumerate()
     {
         let _ = app
             .post("/api/v1/auth/otp/request")
@@ -238,24 +229,12 @@ async fn logout_revokes_the_session() {
     let app = TestApp::spawn().await;
     let _ = app.community("demo").await;
     let session = app.login("gus@example.test", "demo").await;
-    let _ = app
-        .post("/api/v1/auth/logout")
-        .as_(&session)
-        .send()
-        .await
-        .expect(StatusCode::NO_CONTENT);
-    let _ = app
-        .get("/api/v1/auth/session")
-        .as_(&session)
-        .send()
-        .await
-        .expect(StatusCode::UNAUTHORIZED);
-    let _ = app
-        .post("/api/v1/auth/logout")
-        .as_(&session)
-        .send()
-        .await
-        .expect(StatusCode::UNAUTHORIZED);
+    let _ =
+        app.post("/api/v1/auth/logout").as_(&session).send().await.expect(StatusCode::NO_CONTENT);
+    let _ =
+        app.get("/api/v1/auth/session").as_(&session).send().await.expect(StatusCode::UNAUTHORIZED);
+    let _ =
+        app.post("/api/v1/auth/logout").as_(&session).send().await.expect(StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -276,12 +255,8 @@ async fn membership_is_per_community_and_bans_apply() {
         .execute(&app.db)
         .await
         .unwrap();
-    let _ = app
-        .get("/api/v1/auth/session")
-        .as_(&session)
-        .send()
-        .await
-        .expect(StatusCode::FORBIDDEN);
+    let _ =
+        app.get("/api/v1/auth/session").as_(&session).send().await.expect(StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -293,10 +268,6 @@ async fn expired_sessions_are_rejected() {
         .execute(&app.db)
         .await
         .unwrap();
-    let _ = app
-        .get("/api/v1/auth/session")
-        .as_(&session)
-        .send()
-        .await
-        .expect(StatusCode::UNAUTHORIZED);
+    let _ =
+        app.get("/api/v1/auth/session").as_(&session).send().await.expect(StatusCode::UNAUTHORIZED);
 }

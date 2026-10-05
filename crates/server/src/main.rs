@@ -24,13 +24,7 @@ use racquetcollective_server::{
 )]
 struct Cli {
     /// Log output format.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_LOG_FORMAT",
-        value_enum,
-        default_value_t,
-        global = true
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_LOG_FORMAT", value_enum, default_value_t, global = true)]
     log_format: telemetry::LogFormat,
     #[command(subcommand)]
     command: Command,
@@ -64,11 +58,7 @@ struct TickArgs {
     #[command(flatten)]
     config: Config,
     /// Stop starting new jobs after this many seconds (a running job is always finished).
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_TICK_MAX_SECONDS",
-        default_value_t = 300
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_TICK_MAX_SECONDS", default_value_t = 300)]
     max_seconds: u64,
 }
 
@@ -183,10 +173,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Seed(args) => {
             seed::ensure_not_production(std::env::var("RACQUETCOLLECTIVE_ENV").ok().as_deref())?;
             let pool = db::connect(&args.db).await?;
-            let config = Config {
-                db: args.db,
-                ..Config::default()
-            };
+            let config = Config { db: args.db, ..Config::default() };
             let state = AppState::from_config(config, pool)?;
             println!("{}", seed::seed(&state, &args.slug).await?);
             Ok(())
@@ -224,13 +211,11 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         jobs::spawn_loop(state.clone(), every, stop_rx)
     });
     let app = router(state, web);
-    let served = axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await
-    .context("serving HTTP");
+    let served =
+        axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
+            .with_graceful_shutdown(shutdown_signal())
+            .await
+            .context("serving HTTP");
     let _ = stop_tx.send(true);
     if let Some(handle) = job_loop {
         let _ = handle.await;
@@ -244,11 +229,7 @@ async fn tick(args: TickArgs) -> anyhow::Result<()> {
     backup::ensure_scheduled(&state).await?;
     let budget = std::time::Duration::from_secs(args.max_seconds);
     let summary = jobs::tick(&state, budget).await?;
-    tracing::info!(
-        ran = summary.ran,
-        budget_spent = summary.budget_spent,
-        "tick finished"
-    );
+    tracing::info!(ran = summary.ran, budget_spent = summary.budget_spent, "tick finished");
     Ok(())
 }
 

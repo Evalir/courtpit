@@ -103,14 +103,7 @@ pub struct RoundPointsPct {
 
 impl Default for RoundPointsPct {
     fn default() -> Self {
-        Self {
-            winner: 100,
-            final_: 60,
-            semi: 36,
-            quarter: 18,
-            r16: 9,
-            r32: 4,
-        }
+        Self { winner: 100, final_: 60, semi: 36, quarter: 18, r16: 9, r32: 4 }
     }
 }
 
@@ -181,10 +174,7 @@ impl Outcome {
     /// The outcome of a validated score.
     #[must_use]
     pub fn from_summary(summary: &ScoreSummary) -> Self {
-        Self::Played {
-            winner: summary.winner,
-            straight: summary.straight_sets(),
-        }
+        Self::Played { winner: summary.winner, straight: summary.straight_sets() }
     }
 
     /// The winning side.
@@ -202,9 +192,7 @@ impl LeagueMatchPoints {
     pub const fn points(&self, outcome: Outcome) -> (u32, u32) {
         let (win, loss) = match outcome {
             Outcome::Played { straight: true, .. } => (self.win_straight, self.loss_straight),
-            Outcome::Played {
-                straight: false, ..
-            } => (self.win_deciding, self.loss_deciding),
+            Outcome::Played { straight: false, .. } => (self.win_deciding, self.loss_deciding),
             Outcome::Walkover { .. } => (self.walkover_win, self.walkover_loss),
         };
         match outcome.winner() {
@@ -218,23 +206,13 @@ impl SeasonPoints {
     /// Points for finishing at `position` (1-based) in a box of `tier`.
     #[must_use]
     pub fn points(&self, position: usize, tier: u32) -> u32 {
-        let Some(&base) = position
-            .checked_sub(1)
-            .and_then(|i| self.position_points.get(i))
-        else {
+        let Some(&base) = position.checked_sub(1).and_then(|i| self.position_points.get(i)) else {
             return 0;
         };
         let multiplier = self.tier_multiplier.get(&tier).copied().unwrap_or_else(|| {
-            self.tier_multiplier
-                .values()
-                .copied()
-                .fold(f64::INFINITY, f64::min)
+            self.tier_multiplier.values().copied().fold(f64::INFINITY, f64::min)
         });
-        let multiplier = if multiplier.is_finite() {
-            multiplier.max(0.0)
-        } else {
-            1.0
-        };
+        let multiplier = if multiplier.is_finite() { multiplier.max(0.0) } else { 1.0 };
         // Points are small integers; rounding to the nearest is the documented behaviour.
         #[expect(
             clippy::cast_possible_truncation,
@@ -394,10 +372,7 @@ mod tests {
         };
         assert_eq!(
             summarize(vec![SetScore::games(6, 1), SetScore::games(6, 2)]),
-            Outcome::Played {
-                winner: Side::A,
-                straight: true
-            }
+            Outcome::Played { winner: Side::A, straight: true }
         );
         assert_eq!(
             summarize(vec![
@@ -405,10 +380,7 @@ mod tests {
                 SetScore::games(2, 6),
                 SetScore::tiebreak(5, 10)
             ]),
-            Outcome::Played {
-                winner: Side::B,
-                straight: false
-            }
+            Outcome::Played { winner: Side::B, straight: false }
         );
     }
 
@@ -422,11 +394,7 @@ mod tests {
         assert_eq!(season.points(3, 3), 25);
         assert_eq!(season.points(1, 4), 35);
         assert_eq!(season.points(4, 4), 12, "35 * 0.35 = 12.25");
-        assert_eq!(
-            season.points(1, 9),
-            35,
-            "unlisted tier uses the smallest multiplier"
-        );
+        assert_eq!(season.points(1, 9), 35, "unlisted tier uses the smallest multiplier");
         assert_eq!(season.points(8, 1), 5);
         assert_eq!(season.points(9, 1), 0, "past the table");
         assert_eq!(season.points(0, 1), 0);
@@ -439,33 +407,18 @@ mod tests {
         assert_eq!(tournament.points(RoundReached::Final, 8), 60);
         assert_eq!(tournament.points(RoundReached::Semi, 16), 54);
         assert_eq!(tournament.points(RoundReached::Quarter, 32), 45);
-        assert_eq!(
-            tournament.points(RoundReached::R16, 32),
-            23,
-            "22.5 rounds up"
-        );
+        assert_eq!(tournament.points(RoundReached::R16, 32), 23, "22.5 rounds up");
         assert_eq!(tournament.points(RoundReached::R32, 32), 10);
         assert_eq!(tournament.points(RoundReached::Earlier, 32), 0);
-        assert_eq!(
-            tournament.points(RoundReached::Winner, 24),
-            150,
-            "falls back to 16"
-        );
-        assert_eq!(
-            tournament.points(RoundReached::Winner, 4),
-            100,
-            "smaller than all: 8"
-        );
+        assert_eq!(tournament.points(RoundReached::Winner, 24), 150, "falls back to 16");
+        assert_eq!(tournament.points(RoundReached::Winner, 4), 100, "smaller than all: 8");
         assert_eq!(tournament.points(RoundReached::Winner, 64), 250);
     }
 
     #[test]
     fn match_events_give_each_partner_full_points() {
         let ids: Vec<PlayerId> = (0..4).map(|i| PlayerId(Uuid::from_u128(i))).collect();
-        let outcome = Outcome::Played {
-            winner: Side::B,
-            straight: false,
-        };
+        let outcome = Outcome::Played { winner: Side::B, straight: false };
         let events = league_match_events(
             &LeagueMatchPoints::default(),
             Discipline::Mixed,
@@ -473,37 +426,20 @@ mod tests {
             &ids[2..],
             outcome,
         );
-        let pts: Vec<(PlayerId, u32)> = events
-            .iter()
-            .map(|event| (event.player, event.points))
-            .collect();
-        assert_eq!(
-            pts,
-            vec![(ids[0], 1), (ids[1], 1), (ids[2], 2), (ids[3], 2)]
-        );
-        assert!(
-            events
-                .iter()
-                .all(|event| event.discipline == Discipline::Mixed
-                    && event.source == RankingSource::LeagueMatch)
-        );
+        let pts: Vec<(PlayerId, u32)> =
+            events.iter().map(|event| (event.player, event.points)).collect();
+        assert_eq!(pts, vec![(ids[0], 1), (ids[1], 1), (ids[2], 2), (ids[3], 2)]);
+        assert!(events.iter().all(|event| event.discipline == Discipline::Mixed
+            && event.source == RankingSource::LeagueMatch));
     }
 
     #[test]
     fn mixed_pooling_maps_disciplines() {
         let separate = ScoringConfig::default();
-        let pooled = ScoringConfig {
-            mixed_pooling: MixedPooling::Doubles,
-            ..ScoringConfig::default()
-        };
-        assert_eq!(
-            separate.ranking_discipline(Discipline::Mixed),
-            Discipline::Mixed
-        );
-        assert_eq!(
-            pooled.ranking_discipline(Discipline::Mixed),
-            Discipline::Doubles
-        );
+        let pooled =
+            ScoringConfig { mixed_pooling: MixedPooling::Doubles, ..ScoringConfig::default() };
+        assert_eq!(separate.ranking_discipline(Discipline::Mixed), Discipline::Mixed);
+        assert_eq!(pooled.ranking_discipline(Discipline::Mixed), Discipline::Doubles);
         for discipline in [Discipline::Singles, Discipline::Doubles] {
             assert_eq!(pooled.ranking_discipline(discipline), discipline);
         }

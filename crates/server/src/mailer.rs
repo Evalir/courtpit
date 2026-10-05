@@ -34,18 +34,12 @@ pub struct LogMailer {
 impl LogMailer {
     /// All messages sent so far.
     pub fn sent(&self) -> Vec<Email> {
-        self.outbox
-            .lock()
-            .map(|outbox| outbox.clone())
-            .unwrap_or_default()
+        self.outbox.lock().map(|outbox| outbox.clone()).unwrap_or_default()
     }
 
     /// The most recent message to `to` (case-insensitive).
     pub fn last_to(&self, to: &str) -> Option<Email> {
-        self.sent()
-            .into_iter()
-            .rev()
-            .find(|email| email.to.eq_ignore_ascii_case(to))
+        self.sent().into_iter().rev().find(|email| email.to.eq_ignore_ascii_case(to))
     }
 }
 
@@ -71,7 +65,8 @@ pub struct ResendMailer {
 }
 
 impl ResendMailer {
-    /// Creates a mailer sending as `from` (e.g. `Racquet Collective <no-reply@racquetcollective.app>`).
+    /// Creates a mailer sending as `from` (e.g. `Racquet Collective
+    /// <no-reply@racquetcollective.app>`).
     pub fn new(api_key: String, from: String) -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -133,11 +128,7 @@ mod tests {
     use super::*;
 
     fn email() -> Email {
-        Email {
-            to: "Ana@Example.test".into(),
-            subject: "Your code".into(),
-            text: "123456".into(),
-        }
+        Email { to: "Ana@Example.test".into(), subject: "Your code".into(), text: "123456".into() }
     }
 
     #[tokio::test]
@@ -172,20 +163,16 @@ mod tests {
             .with_state(seen.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        drop(tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap()
-        }));
+        drop(tokio::spawn(async move { axum::serve(listener, app).await.unwrap() }));
         (format!("http://{addr}/emails"), seen)
     }
 
     #[tokio::test]
     async fn resend_mailer_posts_the_message() {
         let (endpoint, seen) = fake_resend(200).await;
-        let mailer = ResendMailer::new(
-            "re_key".into(),
-            "Racquet Collective <no-reply@x.test>".into(),
-        )
-        .with_endpoint(endpoint);
+        let mailer =
+            ResendMailer::new("re_key".into(), "Racquet Collective <no-reply@x.test>".into())
+                .with_endpoint(endpoint);
         mailer.send(&email()).await.unwrap();
         let seen = seen.lock().unwrap();
         let (auth, body) = &seen[0];

@@ -20,10 +20,7 @@ fn token(name: &str) -> String {
 
 async fn register(app: &TestApp, session: &Session, name: &str) {
     let _ = app
-        .req(
-            axum::http::Method::PUT,
-            &format!("/api/v1/me/devices/{}", token(name)),
-        )
+        .req(axum::http::Method::PUT, &format!("/api/v1/me/devices/{}", token(name)))
         .as_(session)
         .json(json!({ "platform": "ios" }))
         .send()
@@ -63,12 +60,7 @@ async fn pushes(app: &TestApp, seen: &mut usize) -> Vec<(String, String, String,
 }
 
 async fn post(app: &TestApp, session: &Session, path: &str, body: Value) -> Value {
-    app.post(path)
-        .as_(session)
-        .json(body)
-        .send()
-        .await
-        .expect(StatusCode::OK)
+    app.post(path).as_(session).json(body).send().await.expect(StatusCode::OK)
 }
 
 #[tokio::test]
@@ -110,16 +102,8 @@ async fn devices_register_move_between_members_and_are_forgotten() {
 #[tokio::test]
 async fn preferences_default_on_and_silence_a_category() {
     let (app, ana, bo) = setup().await;
-    let prefs = app
-        .get("/api/v1/me/notifications")
-        .as_(&bo)
-        .send()
-        .await
-        .expect(StatusCode::OK);
-    assert_eq!(
-        prefs,
-        json!({ "match_updates": true, "league_updates": true, "reminders": true })
-    );
+    let prefs = app.get("/api/v1/me/notifications").as_(&bo).send().await.expect(StatusCode::OK);
+    assert_eq!(prefs, json!({ "match_updates": true, "league_updates": true, "reminders": true }));
     let off = json!({ "match_updates": false, "league_updates": true, "reminders": true });
     let saved = app
         .req(axum::http::Method::PUT, "/api/v1/me/notifications")
@@ -131,10 +115,7 @@ async fn preferences_default_on_and_silence_a_category() {
     assert_eq!(saved, off);
     let mut seen = 0;
     let _ = singles(&app, &ana, &bo).await;
-    assert!(
-        pushes(&app, &mut seen).await.is_empty(),
-        "Bo turned match updates off"
-    );
+    assert!(pushes(&app, &mut seen).await.is_empty(), "Bo turned match updates off");
 }
 
 #[tokio::test]
@@ -169,13 +150,9 @@ async fn each_step_of_a_match_tells_the_other_side() {
     );
 
     let proposal = proposed["proposals"][0]["id"].as_str().unwrap();
-    let _ = post(
-        &app,
-        &ana,
-        &format!("/api/v1/matches/{id}/proposals/{proposal}/accept"),
-        json!({}),
-    )
-    .await;
+    let _ =
+        post(&app, &ana, &format!("/api/v1/matches/{id}/proposals/{proposal}/accept"), json!({}))
+            .await;
     let sent = pushes(&app, &mut seen).await;
     assert_eq!(sent[0].0, token("bo"));
     assert_eq!(sent[0].1, "Ana accepted your time");
@@ -188,13 +165,7 @@ async fn each_step_of_a_match_tells_the_other_side() {
     // Read from Ana's side: she won 6–3 6–4.
     assert_eq!(sent[0].2, "6–3 6–4 against Bo: confirm it or dispute it.");
 
-    let _ = post(
-        &app,
-        &ana,
-        &format!("/api/v1/matches/{id}/dispute"),
-        json!({}),
-    )
-    .await;
+    let _ = post(&app, &ana, &format!("/api/v1/matches/{id}/dispute"), json!({})).await;
     let sent = pushes(&app, &mut seen).await;
     assert_eq!(sent[0].0, token("bo"));
     assert_eq!(sent[0].1, "Ana disputed your score");
@@ -224,19 +195,11 @@ async fn cancelling_and_filled_requests_notify_the_others() {
     let created = singles(&app, &ana, &bo).await;
     let id = created["id"].as_str().unwrap();
     let _ = pushes(&app, &mut seen).await;
-    let _ = post(
-        &app,
-        &ana,
-        &format!("/api/v1/matches/{id}/cancel"),
-        json!({ "note": "Rain" }),
-    )
-    .await;
+    let _ =
+        post(&app, &ana, &format!("/api/v1/matches/{id}/cancel"), json!({ "note": "Rain" })).await;
     let sent = pushes(&app, &mut seen).await;
     assert_eq!(sent.len(), 1);
-    assert_eq!(
-        (sent[0].1.as_str(), sent[0].2.as_str()),
-        ("Ana cancelled your match", "Rain")
-    );
+    assert_eq!((sent[0].1.as_str(), sent[0].2.as_str()), ("Ana cancelled your match", "Rain"));
 
     let request = app
         .post("/api/v1/match-requests")
@@ -250,21 +213,13 @@ async fn cancelling_and_filled_requests_notify_the_others() {
         .await
         .expect(StatusCode::CREATED);
     let request_id = request["id"].as_str().unwrap();
-    let filled = post(
-        &app,
-        &bo,
-        &format!("/api/v1/match-requests/{request_id}/join"),
-        json!({}),
-    )
-    .await;
+    let filled =
+        post(&app, &bo, &format!("/api/v1/match-requests/{request_id}/join"), json!({})).await;
     let sent = pushes(&app, &mut seen).await;
     assert_eq!(sent.len(), 1, "the joiner who filled it already knows");
     assert_eq!(sent[0].0, token("ana"));
     assert_eq!(sent[0].1, "Your match request is full");
-    assert_eq!(
-        sent[0].3,
-        format!("/matches/{}", filled["match_id"].as_str().unwrap())
-    );
+    assert_eq!(sent[0].3, format!("/matches/{}", filled["match_id"].as_str().unwrap()));
 }
 
 #[tokio::test]
@@ -281,26 +236,16 @@ async fn players_without_devices_get_scores_to_confirm_by_email() {
     let mut seen = 0;
     assert!(pushes(&app, &mut seen).await.is_empty());
     assert!(
-        app.mailer
-            .last_to(&ana.email)
-            .unwrap()
-            .subject
-            .contains("sign-in code"),
+        app.mailer.last_to(&ana.email).unwrap().subject.contains("sign-in code"),
         "a challenge is not worth an email"
     );
     let _ = report(&app, &bo, id, straight_sets_a()).await;
     let _ = pushes(&app, &mut seen).await;
     let mail = app.mailer.last_to(&ana.email).unwrap();
     assert_eq!(mail.subject, "demo club: Bo reported a score");
-    assert!(
-        mail.text
-            .contains("3–6 4–6 against Bo: confirm it or dispute it.")
-    );
+    assert!(mail.text.contains("3–6 4–6 against Bo: confirm it or dispute it."));
     assert!(mail.text.contains("confirms itself after 3 days"));
-    assert!(
-        mail.text
-            .contains(&format!("https://demo.racquetcollective.app/matches/{id}"))
-    );
+    assert!(mail.text.contains(&format!("https://demo.racquetcollective.app/matches/{id}")));
 }
 
 #[tokio::test]
@@ -332,10 +277,7 @@ async fn entry_action(app: &TestApp, session: &Session, league: &str, entry: &Va
     let _ = post(
         app,
         session,
-        &format!(
-            "/api/v1/leagues/{league}/entries/{}/{action}",
-            entry["id"].as_str().unwrap()
-        ),
+        &format!("/api/v1/leagues/{league}/entries/{}/{action}", entry["id"].as_str().unwrap()),
         json!({}),
     )
     .await;
@@ -379,20 +321,14 @@ async fn partner_invitations_and_their_answers_are_told() {
     let _ = post(
         &app,
         &ana,
-        &format!(
-            "/api/v1/leagues/{league}/entries/{}/partner",
-            entry["id"].as_str().unwrap()
-        ),
+        &format!("/api/v1/leagues/{league}/entries/{}/partner", entry["id"].as_str().unwrap()),
         json!({ "partner_id": cy.player_id }),
     )
     .await;
     assert!(pushes(&app, &mut seen).await.is_empty());
     let mail = app.mailer.last_to(&cy.email).unwrap();
     assert_eq!(mail.subject, "demo club: Ana invited you to partner them");
-    assert!(
-        mail.text
-            .contains(&format!("https://demo.racquetcollective.app{url}"))
-    );
+    assert!(mail.text.contains(&format!("https://demo.racquetcollective.app{url}")));
 
     entry_action(&app, &cy, &league, &entry, "accept").await;
     let sent = pushes(&app, &mut seen).await;
@@ -452,13 +388,9 @@ async fn players_are_reminded_the_day_before_and_reschedules_move_it() {
                 .as_str()
                 .unwrap()
                 .to_owned();
-            let _ = post(
-                app,
-                &bo,
-                &format!("/api/v1/matches/{id}/proposals/{open}/accept"),
-                json!({}),
-            )
-            .await;
+            let _ =
+                post(app, &bo, &format!("/api/v1/matches/{id}/proposals/{open}/accept"), json!({}))
+                    .await;
         }
     };
     let mut seen = 0;
@@ -467,14 +399,9 @@ async fn players_are_reminded_the_day_before_and_reschedules_move_it() {
     schedule(5).await;
     let _ = pushes(&app, &mut seen).await;
 
-    app.clock
-        .set(Utc::now() + Duration::days(2) + Duration::minutes(1));
-    assert!(
-        pushes(&app, &mut seen).await.is_empty(),
-        "the old reminder moved"
-    );
-    app.clock
-        .set(Utc::now() + Duration::days(4) + Duration::minutes(1));
+    app.clock.set(Utc::now() + Duration::days(2) + Duration::minutes(1));
+    assert!(pushes(&app, &mut seen).await.is_empty(), "the old reminder moved");
+    app.clock.set(Utc::now() + Duration::days(4) + Duration::minutes(1));
     let mut sent = pushes(&app, &mut seen).await;
     sent.sort();
     assert_eq!(sent.len(), 2);
@@ -493,13 +420,9 @@ async fn players_are_reminded_the_day_before_and_reschedules_move_it() {
         .await
         .expect(StatusCode::CREATED);
     let open = proposed["proposals"][0]["id"].as_str().unwrap();
-    let _ = post(
-        &app,
-        &ana,
-        &format!("/api/v1/matches/{other_id}/proposals/{open}/accept"),
-        json!({}),
-    )
-    .await;
+    let _ =
+        post(&app, &ana, &format!("/api/v1/matches/{other_id}/proposals/{open}/accept"), json!({}))
+            .await;
     let _ = pushes(&app, &mut seen).await;
     app.clock.set(app.clock.now() + Duration::hours(5));
     assert!(pushes(&app, &mut seen).await.is_empty());

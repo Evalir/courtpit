@@ -47,14 +47,9 @@ pub async fn advance(state: &AppState, community_id: Uuid, league_id: Uuid) -> a
     let stepped = step(&mut tx, &tenant, &league, now)
         .await
         .map_err(|err| anyhow::anyhow!("advancing league {league_id}: {err}"))?;
-    let wake = stepped
-        .retry_at
-        .or_else(|| next_wake(&league, stepped.status, now));
+    let wake = stepped.retry_at.or_else(|| next_wake(&league, stepped.status, now));
     if let Some(at) = wake {
-        let job = Job::AdvanceLeague {
-            community_id,
-            league_id,
-        };
+        let job = Job::AdvanceLeague { community_id, league_id };
         jobs::enqueue(&mut *tx, job, at).await?;
     }
     tx.commit().await?;
@@ -97,18 +92,12 @@ async fn step(
                             league = %league.id, unresolved = open.count, retry_at = %at,
                             "season end deferred: matches still reported or disputed"
                         );
-                        return Ok(Stepped {
-                            status,
-                            retry_at: Some(at),
-                        });
+                        return Ok(Stepped { status, retry_at: Some(at) });
                     }
                 }
             }
             _ => {
-                return Ok(Stepped {
-                    status,
-                    retry_at: None,
-                });
+                return Ok(Stepped { status, retry_at: None });
             }
         };
     }
@@ -197,16 +186,10 @@ async fn activate(
     }
     schedule(tx, tenant, league, &entries, boxes).await?;
     set_status(tx, league.id, LeagueStatus::Active).await?;
-    let players: Vec<Uuid> = entries
-        .iter()
-        .flat_map(|entry| entry.player_ids.iter().copied())
-        .collect();
-    let event = notify::Event::LeagueStarted {
-        league_id: league.id,
-    };
-    notify::tell(tx, players, event, now)
-        .await
-        .map_err(ApiError::Internal)?;
+    let players: Vec<Uuid> =
+        entries.iter().flat_map(|entry| entry.player_ids.iter().copied()).collect();
+    let event = notify::Event::LeagueStarted { league_id: league.id };
+    notify::tell(tx, players, event, now).await.map_err(ApiError::Internal)?;
     tracing::info!(league = %league.id, entries = entries.len(), "league activated");
     Ok(LeagueStatus::Active)
 }

@@ -50,10 +50,7 @@ pub struct LogPusher {
 impl LogPusher {
     /// All messages sent so far.
     pub fn sent(&self) -> Vec<PushMessage> {
-        self.outbox
-            .lock()
-            .map(|outbox| outbox.clone())
-            .unwrap_or_default()
+        self.outbox.lock().map(|outbox| outbox.clone()).unwrap_or_default()
     }
 }
 
@@ -147,10 +144,7 @@ impl Ticket {
         if self.status == "ok" {
             return Delivery::Sent;
         }
-        let error = self
-            .details
-            .as_ref()
-            .and_then(|details| details.error.as_deref());
+        let error = self.details.as_ref().and_then(|details| details.error.as_deref());
         if error == Some("DeviceNotRegistered") {
             return Delivery::Unregistered;
         }
@@ -228,9 +222,7 @@ mod tests {
             .with_state(seen.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        drop(tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap()
-        }));
+        drop(tokio::spawn(async move { axum::serve(listener, app).await.unwrap() }));
         (format!("http://{addr}/push"), seen)
     }
 
@@ -239,10 +231,7 @@ mod tests {
         let (url, seen) = fake_expo().await;
         let pusher = ExpoPusher::new(Some("secret".to_owned())).with_endpoint(url);
         let deliveries = pusher
-            .send(&[
-                message("ExponentPushToken[a]"),
-                message("ExponentPushToken[gone]"),
-            ])
+            .send(&[message("ExponentPushToken[a]"), message("ExponentPushToken[gone]")])
             .await
             .unwrap();
         assert_eq!(deliveries, [Delivery::Sent, Delivery::Unregistered]);
@@ -256,9 +245,8 @@ mod tests {
     async fn expo_sends_in_chunks_of_a_hundred() {
         let (url, seen) = fake_expo().await;
         let pusher = ExpoPusher::new(None).with_endpoint(url);
-        let messages: Vec<PushMessage> = std::iter::repeat_with(|| message("ExponentPushToken[a]"))
-            .take(150)
-            .collect();
+        let messages: Vec<PushMessage> =
+            std::iter::repeat_with(|| message("ExponentPushToken[a]")).take(150).collect();
         let deliveries = pusher.send(&messages).await.unwrap();
         assert_eq!(deliveries.len(), 150);
         let seen = seen.lock().unwrap();
@@ -270,10 +258,7 @@ mod tests {
     #[tokio::test]
     async fn the_log_pusher_records_and_flags_unregistered_tokens() {
         let pusher = LogPusher::default();
-        let deliveries = pusher
-            .send(&[message("a"), message("unregistered-b")])
-            .await
-            .unwrap();
+        let deliveries = pusher.send(&[message("a"), message("unregistered-b")]).await.unwrap();
         assert_eq!(deliveries, [Delivery::Sent, Delivery::Unregistered]);
         assert_eq!(pusher.sent().len(), 2);
     }

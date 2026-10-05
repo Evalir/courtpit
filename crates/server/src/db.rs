@@ -33,37 +33,27 @@ pub struct DbConfig {
     #[arg(long, env = "RACQUETCOLLECTIVE_DB_POOLED", default_value_t = false, action = clap::ArgAction::Set)]
     pub db_pooled: bool,
     /// Maximum pool size.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_DB_MAX_CONNECTIONS",
-        default_value_t = 10
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_DB_MAX_CONNECTIONS", default_value_t = 10)]
     pub db_max_connections: u32,
 }
 
 impl DbConfig {
     /// URL for work that needs a real session: the direct URL when set, else `DATABASE_URL`.
     pub fn session_url(&self) -> &str {
-        self.database_direct_url
-            .as_deref()
-            .unwrap_or(&self.database_url)
+        self.database_direct_url.as_deref().unwrap_or(&self.database_url)
     }
 }
 
 /// Opens the application pool on `DATABASE_URL`.
 pub async fn connect(cfg: &DbConfig) -> anyhow::Result<PgPool> {
     let options: PgConnectOptions = cfg.database_url.parse().context("parsing DATABASE_URL")?;
-    connect_with(
-        pooled_options(options, cfg.db_pooled),
-        cfg.db_max_connections,
-    )
-    .await
+    connect_with(pooled_options(options, cfg.db_pooled), cfg.db_max_connections).await
 }
 
 /// Opens a small pool on [`DbConfig::session_url`] for session-level work (migrations).
 ///
-/// Refuses when `RACQUETCOLLECTIVE_DB_POOLED=true` and no direct URL is set: the only URL left is the
-/// pooler's, which cannot hold the session advisory lock migrations rely on.
+/// Refuses when `RACQUETCOLLECTIVE_DB_POOLED=true` and no direct URL is set: the only URL left is
+/// the pooler's, which cannot hold the session advisory lock migrations rely on.
 pub async fn connect_direct(cfg: &DbConfig) -> anyhow::Result<PgPool> {
     if cfg.db_pooled && cfg.database_direct_url.is_none() {
         anyhow::bail!(
@@ -80,11 +70,7 @@ pub async fn connect_direct(cfg: &DbConfig) -> anyhow::Result<PgPool> {
 /// Prepares connect options for a transaction pooler: no statement cache, so no named prepared
 /// statements outlive a transaction on a server connection that another client may get next.
 pub fn pooled_options(options: PgConnectOptions, pooled: bool) -> PgConnectOptions {
-    if pooled {
-        options.statement_cache_capacity(0)
-    } else {
-        options
-    }
+    if pooled { options.statement_cache_capacity(0) } else { options }
 }
 
 /// Opens a connection pool from explicit options.
@@ -120,10 +106,7 @@ mod tests {
         let both = config(Some("postgres://u:p@direct.invalid/db"), true);
         assert_eq!(both.session_url(), "postgres://u:p@direct.invalid/db");
         let only_pooled = config(None, false);
-        assert_eq!(
-            only_pooled.session_url(),
-            "postgres://u:p@pooler.invalid/db"
-        );
+        assert_eq!(only_pooled.session_url(), "postgres://u:p@pooler.invalid/db");
     }
 
     #[tokio::test]
