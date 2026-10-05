@@ -114,6 +114,13 @@ export default function Profile() {
         />
       ) : null}
       <Button
+        label="Notifications"
+        variant="secondary"
+        icon="notifications-outline"
+        block
+        onPress={() => router.push("/profile/notifications")}
+      />
+      <Button
         label={account.has_password ? "Change password" : "Set a password"}
         variant="secondary"
         icon="key-outline"

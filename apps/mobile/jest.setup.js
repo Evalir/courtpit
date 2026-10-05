@@ -16,3 +16,16 @@ jest.mock("./src/api/queryClient", () => {
     },
   };
 });
+
+// Push needs a device; tests run without one and with nothing tapped.
+jest.mock("expo-notifications", () => ({
+  setNotificationHandler: jest.fn(),
+  getPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: true })),
+  requestPermissionsAsync: jest.fn(async () => ({ granted: false })),
+  getExpoPushTokenAsync: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
+  getLastNotificationResponse: jest.fn(() => null),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  AndroidImportance: { DEFAULT: 3 },
+}));
+jest.mock("expo-device", () => ({ isDevice: false }));

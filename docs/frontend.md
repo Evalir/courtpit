@@ -174,6 +174,7 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Password | `/profile/password` (modal) | `PUT /auth/password` | built |
 | Download my data | `/profile` | `GET /me/export` (web: a JSON download; native: the share sheet) | built |
 | Delete account | `/profile/delete` (modal) | `DELETE /me` | built |
+| Notifications | `/profile/notifications`, a prompt on Home | `GET/PUT /me/notifications`, `PUT/DELETE /me/devices/{token}` | built |
 | Club admin: banned members | `/admin` | `GET /players?status=banned`, `POST /admin/players/{id}/unban` | built |
 | Player: ban or lift a ban (admins) | `/players/[id]` | `POST /admin/players/{id}/ban`, `…/unban` | built |
 | Club admin: disputes | `/admin` | `GET /matches?all=true&status=disputed` | built |
@@ -258,6 +259,23 @@ viewer's entry, with the number of complete entries beside the heading.
   `DELETE /me`, then signs the device out.
 - Modals close with `closeModal(fallback)`: back when there is history, else the fallback
   (a modal opened straight from a link has nothing behind it).
+
+### Notifications
+
+Push is native-only (`session/push.ts`; `push.web.ts` is a no-op, decision 97).
+
+- **Asking.** The app never asks at launch. Home shows "Know when it’s your move" while the
+  system would still ask; "Turn on" asks, "Not now" snoozes it for 30 days (kept in
+  SecureStore). A device that already allows push registers silently after sign-in.
+- **Registering.** The Expo push token (for the build's EAS project, `COURTPIT_EAS_PROJECT_ID`)
+  goes to `PUT /me/devices/{token}`; signing out deletes it first, so the next person on the
+  device doesn't get the last one's news. Android gets a "Matches and leagues" channel.
+- **Tapping** a notification opens its `data.url` (`/matches/<id>`), checked like any link
+  (`returnPathOf`); signed out, it waits for sign-in (return-to). The notification that launched
+  the app is handled once. Foreground notifications show as banners.
+- **Preferences** (`/profile/notifications`): match updates, league updates and reminders, saved
+  as they are toggled, and whether this device shows notifications, with "Turn on" or "Open
+  settings". On the web it explains that a score waiting for an answer arrives by email.
 
 ### Club admin
 
