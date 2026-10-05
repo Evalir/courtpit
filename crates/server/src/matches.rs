@@ -559,10 +559,7 @@ impl MatchView {
 /// Views of several matches (a list page), with every name loaded in one query.
 pub async fn views(tx: &mut TenantTx, rows: Vec<MatchRow>) -> Result<Vec<MatchView>, ApiError> {
     let names = Names::load(tx, rows.iter().flat_map(MatchRow::mentioned)).await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| MatchView::new(row, &names))
-        .collect())
+    Ok(rows.into_iter().map(|row| MatchView::new(row, &names)).collect())
 }
 
 /// A match with its proposals, for single-match responses.

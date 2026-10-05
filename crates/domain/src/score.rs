@@ -116,10 +116,7 @@ impl MatchFormat {
         if !(1..=9).contains(&self.games_per_set) {
             return Err(FormatError::GamesPerSet);
         }
-        if self
-            .tiebreak_at
-            .is_some_and(|games| games != self.games_per_set)
-        {
+        if self.tiebreak_at.is_some_and(|games| games != self.games_per_set) {
             return Err(FormatError::TiebreakAt);
         }
         Ok(())
@@ -135,10 +132,7 @@ impl MatchFormat {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-#[expect(
-    clippy::min_ident_chars,
-    reason = "`a` and `b` are the wire field names of the score API"
-)]
+#[expect(clippy::min_ident_chars, reason = "`a` and `b` are the wire field names of the score API")]
 pub struct SetScore {
     /// Games (or points) won by side A.
     pub a: u16,
@@ -152,28 +146,16 @@ pub struct SetScore {
 impl SetScore {
     /// A normal set.
     pub const fn games(side_a: u16, side_b: u16) -> Self {
-        Self {
-            a: side_a,
-            b: side_b,
-            match_tiebreak: false,
-        }
+        Self { a: side_a, b: side_b, match_tiebreak: false }
     }
 
     /// A match tiebreak.
     pub const fn tiebreak(side_a: u16, side_b: u16) -> Self {
-        Self {
-            a: side_a,
-            b: side_b,
-            match_tiebreak: true,
-        }
+        Self { a: side_a, b: side_b, match_tiebreak: true }
     }
 
     const fn winner_and_loser(&self) -> (Side, u16, u16) {
-        if self.a >= self.b {
-            (Side::A, self.a, self.b)
-        } else {
-            (Side::B, self.b, self.a)
-        }
+        if self.a >= self.b { (Side::A, self.a, self.b) } else { (Side::B, self.b, self.a) }
     }
 }
 
@@ -285,13 +267,8 @@ pub fn validate_score(format: &MatchFormat, score: &Score) -> Result<ScoreSummar
     let to_win = format.sets_to_win;
     let games = u16::from(format.games_per_set);
     let tiebreak = format.tiebreak_at.is_some();
-    let mut summary = ScoreSummary {
-        winner: Side::A,
-        sets_a: 0,
-        sets_b: 0,
-        games_a: 0,
-        games_b: 0,
-    };
+    let mut summary =
+        ScoreSummary { winner: Side::A, sets_a: 0, sets_b: 0, games_a: 0, games_b: 0 };
 
     for (i, set) in score.sets.iter().enumerate() {
         let n = i + 1;
@@ -300,12 +277,8 @@ pub fn validate_score(format: &MatchFormat, score: &Score) -> Result<ScoreSummar
         }
         let deciding = summary.sets_a == to_win - 1 && summary.sets_b == to_win - 1;
         let (winner, won, lost) = set.winner_and_loser();
-        let invalid = |kind| ScoreError::InvalidSet {
-            set: n,
-            games_a: set.a,
-            games_b: set.b,
-            kind,
-        };
+        let invalid =
+            |kind| ScoreError::InvalidSet { set: n, games_a: set.a, games_b: set.b, kind };
         match (deciding, format.final_set) {
             (true, FinalSet::MatchTiebreak10) => {
                 if !set.match_tiebreak {
@@ -323,11 +296,7 @@ pub fn validate_score(format: &MatchFormat, score: &Score) -> Result<ScoreSummar
             }
             _ => {
                 if !valid_set(games, tiebreak, won, lost) {
-                    return Err(invalid(if tiebreak {
-                        "tiebreak set"
-                    } else {
-                        "advantage set"
-                    }));
+                    return Err(invalid(if tiebreak { "tiebreak set" } else { "advantage set" }));
                 }
             }
         }
@@ -347,9 +316,7 @@ pub fn validate_score(format: &MatchFormat, score: &Score) -> Result<ScoreSummar
         (true, _) => Side::A,
         (_, true) => Side::B,
         _ => {
-            return Err(ScoreError::Incomplete {
-                sets_to_win: to_win,
-            });
+            return Err(ScoreError::Incomplete { sets_to_win: to_win });
         }
     };
     Ok(summary)
@@ -418,18 +385,10 @@ mod tests {
         SetScore::tiebreak(side_a, side_b)
     }
     fn check(format: &MatchFormat, sets: &[SetScore]) -> Result<ScoreSummary, ScoreError> {
-        validate_score(
-            format,
-            &Score {
-                sets: sets.to_vec(),
-            },
-        )
+        validate_score(format, &Score { sets: sets.to_vec() })
     }
     fn best_of_3_full() -> MatchFormat {
-        MatchFormat {
-            final_set: FinalSet::FullSet,
-            ..MatchFormat::default()
-        }
+        MatchFormat { final_set: FinalSet::FullSet, ..MatchFormat::default() }
     }
 
     #[test]
@@ -444,35 +403,17 @@ mod tests {
     fn every_legal_tiebreak_set_score() {
         let format = best_of_3_full();
         for lost in 0..=4 {
-            assert!(
-                check(&format, &[games(6, lost), games(6, lost)]).is_ok(),
-                "6-{lost}"
-            );
-            assert!(
-                check(&format, &[games(lost, 6), games(lost, 6)]).is_ok(),
-                "{lost}-6"
-            );
+            assert!(check(&format, &[games(6, lost), games(6, lost)]).is_ok(), "6-{lost}");
+            assert!(check(&format, &[games(lost, 6), games(lost, 6)]).is_ok(), "{lost}-6");
         }
         let _ = check(&format, &[games(7, 5), games(7, 6)]).unwrap();
-        assert_eq!(
-            check(&format, &[games(5, 7), games(6, 7)]).unwrap().winner,
-            Side::B
-        );
+        assert_eq!(check(&format, &[games(5, 7), games(6, 7)]).unwrap().winner, Side::B);
     }
 
     #[test]
     fn illegal_tiebreak_set_scores() {
         let format = best_of_3_full();
-        for (side_a, side_b) in [
-            (6, 5),
-            (6, 6),
-            (7, 4),
-            (8, 6),
-            (7, 7),
-            (5, 3),
-            (0, 0),
-            (7, 3),
-        ] {
+        for (side_a, side_b) in [(6, 5), (6, 6), (7, 4), (8, 6), (7, 7), (5, 3), (0, 0), (7, 3)] {
             let err = check(&format, &[games(side_a, side_b), games(6, 0)]).unwrap_err();
             assert!(
                 matches!(err, ScoreError::InvalidSet { set: 1, .. }),
@@ -483,10 +424,7 @@ mod tests {
 
     #[test]
     fn advantage_sets_need_two_clear_games() {
-        let format = MatchFormat {
-            tiebreak_at: None,
-            ..best_of_3_full()
-        };
+        let format = MatchFormat { tiebreak_at: None, ..best_of_3_full() };
         for (side_a, side_b) in [(6, 4), (7, 5), (8, 6), (12, 10)] {
             assert!(
                 check(&format, &[games(side_a, side_b), games(6, 0)]).is_ok(),
@@ -505,23 +443,13 @@ mod tests {
     fn match_tiebreak_decider() {
         let format = MatchFormat::default();
         let summary = check(&format, &[games(6, 4), games(3, 6), tb(10, 7)]).unwrap();
-        assert_eq!(
-            (summary.winner, summary.sets_a, summary.sets_b),
-            (Side::A, 2, 1)
-        );
+        assert_eq!((summary.winner, summary.sets_a, summary.sets_b), (Side::A, 2, 1));
         assert!(!summary.straight_sets());
-        assert_eq!(
-            (summary.games_a, summary.games_b),
-            (10, 10),
-            "tiebreak counts as one game"
-        );
+        assert_eq!((summary.games_a, summary.games_b), (10, 10), "tiebreak counts as one game");
         let _ = check(&format, &[games(6, 4), games(3, 6), tb(11, 13)]).unwrap();
         for (side_a, side_b) in [(10, 9), (9, 7), (12, 9), (10, 10)] {
             let err = check(&format, &[games(6, 4), games(3, 6), tb(side_a, side_b)]).unwrap_err();
-            assert!(
-                matches!(err, ScoreError::InvalidSet { set: 3, .. }),
-                "{side_a}-{side_b}"
-            );
+            assert!(matches!(err, ScoreError::InvalidSet { set: 3, .. }), "{side_a}-{side_b}");
         }
     }
 
@@ -546,71 +474,36 @@ mod tests {
     fn full_final_set() {
         let format = best_of_3_full();
         assert_eq!(
-            check(&format, &[games(4, 6), games(6, 4), games(6, 7)])
-                .unwrap()
-                .winner,
+            check(&format, &[games(4, 6), games(6, 4), games(6, 7)]).unwrap().winner,
             Side::B
         );
     }
 
     #[test]
     fn single_pro_set_to_eight() {
-        let format = MatchFormat {
-            sets_to_win: 1,
-            final_set: FinalSet::ProSet8,
-            ..MatchFormat::default()
-        };
+        let format =
+            MatchFormat { sets_to_win: 1, final_set: FinalSet::ProSet8, ..MatchFormat::default() };
         for (side_a, side_b) in [(8, 0), (8, 6), (9, 7), (9, 8)] {
-            assert!(
-                check(&format, &[games(side_a, side_b)]).is_ok(),
-                "{side_a}-{side_b}"
-            );
+            assert!(check(&format, &[games(side_a, side_b)]).is_ok(), "{side_a}-{side_b}");
         }
         for (side_a, side_b) in [(6, 4), (8, 7), (10, 8), (9, 6)] {
-            assert!(
-                check(&format, &[games(side_a, side_b)]).is_err(),
-                "{side_a}-{side_b}"
-            );
+            assert!(check(&format, &[games(side_a, side_b)]).is_err(), "{side_a}-{side_b}");
         }
-        let adv = MatchFormat {
-            tiebreak_at: None,
-            ..format
-        };
+        let adv = MatchFormat { tiebreak_at: None, ..format };
         let _ = check(&adv, &[games(10, 8)]).unwrap();
         let _ = check(&adv, &[games(9, 8)]).unwrap_err();
     }
 
     #[test]
     fn best_of_five() {
-        let format = MatchFormat {
-            sets_to_win: 3,
-            ..best_of_3_full()
-        };
-        assert!(
-            check(&format, &[games(6, 4), games(6, 4), games(6, 4)])
-                .unwrap()
-                .straight_sets()
-        );
-        let summary = check(
-            &format,
-            &[games(6, 4), games(3, 6), games(6, 4), games(6, 4)],
-        )
-        .unwrap();
-        assert_eq!(
-            (summary.sets_a, summary.sets_b, summary.loser_sets()),
-            (3, 1, 1)
-        );
-        let summary = check(
-            &format,
-            &[
-                games(6, 4),
-                games(4, 6),
-                games(6, 4),
-                games(4, 6),
-                games(5, 7),
-            ],
-        )
-        .unwrap();
+        let format = MatchFormat { sets_to_win: 3, ..best_of_3_full() };
+        assert!(check(&format, &[games(6, 4), games(6, 4), games(6, 4)]).unwrap().straight_sets());
+        let summary =
+            check(&format, &[games(6, 4), games(3, 6), games(6, 4), games(6, 4)]).unwrap();
+        assert_eq!((summary.sets_a, summary.sets_b, summary.loser_sets()), (3, 1, 1));
+        let summary =
+            check(&format, &[games(6, 4), games(4, 6), games(6, 4), games(4, 6), games(5, 7)])
+                .unwrap();
         assert_eq!(summary.winner, Side::B);
         assert!(matches!(
             check(&format, &[games(6, 4), games(6, 4)]).unwrap_err(),
@@ -635,29 +528,13 @@ mod tests {
     #[test]
     fn bad_formats() {
         for format in [
-            MatchFormat {
-                sets_to_win: 0,
-                ..MatchFormat::default()
-            },
-            MatchFormat {
-                sets_to_win: 4,
-                ..MatchFormat::default()
-            },
-            MatchFormat {
-                games_per_set: 0,
-                tiebreak_at: None,
-                ..MatchFormat::default()
-            },
-            MatchFormat {
-                tiebreak_at: Some(5),
-                ..MatchFormat::default()
-            },
+            MatchFormat { sets_to_win: 0, ..MatchFormat::default() },
+            MatchFormat { sets_to_win: 4, ..MatchFormat::default() },
+            MatchFormat { games_per_set: 0, tiebreak_at: None, ..MatchFormat::default() },
+            MatchFormat { tiebreak_at: Some(5), ..MatchFormat::default() },
         ] {
             assert!(
-                matches!(
-                    check(&format, &[games(6, 0), games(6, 0)]),
-                    Err(ScoreError::Format(_))
-                ),
+                matches!(check(&format, &[games(6, 0), games(6, 0)]), Err(ScoreError::Format(_))),
                 "{format:?}"
             );
         }
@@ -689,15 +566,8 @@ mod tests {
             r#"{"sets_to_win": 2, "games_per_set": 6, "tiebreak_at": 6, "final_set": "full_set"}"#,
         )
         .unwrap();
-        assert_eq!(
-            format.deuce,
-            Deuce::Advantage,
-            "stored formats without the key"
-        );
-        let golden = MatchFormat {
-            deuce: Deuce::GoldenPoint,
-            ..format
-        };
+        assert_eq!(format.deuce, Deuce::Advantage, "stored formats without the key");
+        let golden = MatchFormat { deuce: Deuce::GoldenPoint, ..format };
         let json = serde_json::to_value(golden).unwrap();
         assert_eq!(json["deuce"], "golden_point");
         assert_eq!(serde_json::from_value::<MatchFormat>(json).unwrap(), golden);
@@ -709,34 +579,18 @@ mod tests {
 
     #[test]
     fn golden_point_does_not_change_legal_scores() {
-        let golden = |format: MatchFormat| MatchFormat {
-            deuce: Deuce::GoldenPoint,
-            ..format
-        };
-        let adv_sets = MatchFormat {
-            tiebreak_at: None,
-            ..best_of_3_full()
-        };
+        let golden = |format: MatchFormat| MatchFormat { deuce: Deuce::GoldenPoint, ..format };
+        let adv_sets = MatchFormat { tiebreak_at: None, ..best_of_3_full() };
         let cases: [(MatchFormat, &[SetScore]); 6] = [
-            (
-                MatchFormat::default(),
-                &[games(6, 4), games(3, 6), tb(10, 8)],
-            ),
-            (
-                MatchFormat::default(),
-                &[games(6, 4), games(3, 6), tb(10, 9)],
-            ),
+            (MatchFormat::default(), &[games(6, 4), games(3, 6), tb(10, 8)]),
+            (MatchFormat::default(), &[games(6, 4), games(3, 6), tb(10, 9)]),
             (best_of_3_full(), &[games(7, 6), games(7, 5)]),
             (best_of_3_full(), &[games(6, 5), games(6, 0)]),
             (adv_sets, &[games(12, 10), games(6, 4)]),
             (adv_sets, &[games(7, 6), games(6, 4)]),
         ];
         for (format, sets) in cases {
-            assert_eq!(
-                check(&format, sets),
-                check(&golden(format), sets),
-                "{sets:?}"
-            );
+            assert_eq!(check(&format, sets), check(&golden(format), sets), "{sets:?}");
         }
     }
 }

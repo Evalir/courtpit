@@ -37,11 +37,13 @@ pub struct PlayerRow {
     /// Contact phone number, if set.
     pub phone: Option<String>,
     /// Whether the phone number is shown to other players.
-    pub phone_visible: bool,
+    #[sqlx(rename = "phone_visible", try_from = "bool")]
+    pub phone_visibility: Visibility,
     /// Social handles keyed by network.
     pub socials: Json<Value>,
     /// Whether social handles are shown to other players.
-    pub socials_visible: bool,
+    #[sqlx(rename = "socials_visible", try_from = "bool")]
+    pub socials_visibility: Visibility,
     /// Racket model, if set.
     pub racket: Option<String>,
     /// String setup, if set.
@@ -60,6 +62,29 @@ pub struct PlayerRow {
     pub created_at: DateTime<Utc>,
     /// Whether the account email is verified.
     pub email_verified: bool,
+}
+
+/// Whether a player shows a contact detail to other members (a boolean column; verified
+/// viewers only, see [`PlayerPublic::redacted`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Visibility {
+    /// Shown to other members.
+    Shown,
+    /// Not shown to other members.
+    Hidden,
+}
+
+impl Visibility {
+    /// Whether the detail is shown.
+    pub const fn is_shown(self) -> bool {
+        matches!(self, Self::Shown)
+    }
+}
+
+impl From<bool> for Visibility {
+    fn from(shown: bool) -> Self {
+        if shown { Self::Shown } else { Self::Hidden }
+    }
 }
 
 /// Loads one player of the transaction's community.
@@ -122,9 +147,9 @@ impl From<PlayerRow> for PlayerProfile {
             utr: row.utr,
             gender: row.gender,
             phone: row.phone,
-            phone_visible: row.phone_visible,
+            phone_visible: row.phone_visibility.is_shown(),
             socials: row.socials.0,
-            socials_visible: row.socials_visible,
+            socials_visible: row.socials_visibility.is_shown(),
             racket: row.racket,
             strings: row.strings,
             tension_kg: row.tension_kg,
@@ -173,8 +198,8 @@ pub struct PlayerPublic {
 impl PlayerPublic {
     /// Redacts `p` for a viewer; `viewer_verified` gates contact details.
     pub fn redacted(row: PlayerRow, viewer_verified: bool) -> Self {
-        let show_phone = viewer_verified && row.phone_visible;
-        let show_socials = viewer_verified && row.socials_visible;
+        let show_phone = viewer_verified && row.phone_visibility.is_shown();
+        let show_socials = viewer_verified && row.socials_visibility.is_shown();
         Self {
             id: row.id,
             display_name: row.display_name,
@@ -246,11 +271,7 @@ impl Names {
         .bind(&ids)
         .fetch_all(&mut **tx)
         .await?;
-        Ok(Self(
-            rows.into_iter()
-                .map(|row| (row.id, row.display_name))
-                .collect(),
-        ))
+        Ok(Self(rows.into_iter().map(|row| (row.id, row.display_name)).collect()))
     }
 
     /// The name of `id`, or "A former member" when it is not a player here.
@@ -260,10 +281,7 @@ impl Names {
 
     /// The names of `ids` joined with " & " (a doubles side).
     pub fn joined(&self, ids: &[Uuid]) -> String {
-        ids.iter()
-            .map(|&id| self.name(id))
-            .collect::<Vec<_>>()
-            .join(" & ")
+        ids.iter().map(|&id| self.name(id)).collect::<Vec<_>>().join(" & ")
     }
 
     /// References for `ids` in first-seen order, without duplicates or unknown ids.
@@ -274,10 +292,7 @@ impl Names {
                 continue;
             }
             if let Some(name) = self.0.get(&id) {
-                refs.push(PlayerRef {
-                    id,
-                    display_name: name.clone(),
-                });
+                refs.push(PlayerRef { id, display_name: name.clone() });
             }
         }
         refs

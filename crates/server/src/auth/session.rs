@@ -22,15 +22,28 @@ use crate::{
 
 /// Cookie carrying the session token on web.
 pub const SESSION_COOKIE: &str = "racquetcollective_session";
-/// `X-RacquetCollective-Client: web` asks for the session as an httpOnly cookie instead of in the body.
+/// `X-RacquetCollective-Client: web` asks for the session as an httpOnly cookie instead of in the
+/// body.
 pub const CLIENT_HEADER: &str = "x-racquetcollective-client";
 
-/// Whether the client asked for cookie delivery.
-pub fn wants_cookie(headers: &HeaderMap) -> bool {
-    headers
-        .get(CLIENT_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.eq_ignore_ascii_case("web"))
+/// How a new session reaches the client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionDelivery {
+    /// An httpOnly cookie, for the web app (it asks with [`CLIENT_HEADER`]).
+    Cookie,
+    /// The token in the response body, for native apps.
+    Body,
+}
+
+impl SessionDelivery {
+    /// [`SessionDelivery::Cookie`] when the client sent `X-RacquetCollective-Client: web`.
+    pub fn from_headers(headers: &HeaderMap) -> Self {
+        let web = headers
+            .get(CLIENT_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.eq_ignore_ascii_case("web"));
+        if web { Self::Cookie } else { Self::Body }
+    }
 }
 
 /// Creates a session; returns the plaintext token (never stored) and its expiry.
@@ -62,11 +75,8 @@ pub async fn ensure_player(
     user_id: Uuid,
     email: &str,
 ) -> Result<Uuid, sqlx::Error> {
-    let display_name = email
-        .split('@')
-        .next()
-        .filter(|local| !local.is_empty())
-        .unwrap_or("Player");
+    let display_name =
+        email.split('@').next().filter(|local| !local.is_empty()).unwrap_or("Player");
     let _ = sqlx::query(
         "INSERT INTO players (id, community_id, user_id, display_name) VALUES ($1, $2, $3, $4)
          ON CONFLICT (community_id, user_id) DO NOTHING",
@@ -88,9 +98,7 @@ fn bearer_or_cookie(headers: &HeaderMap) -> Option<String> {
     if let Some(Authorization(bearer)) = headers.typed_get::<Authorization<Bearer>>() {
         return Some(bearer.token().to_owned());
     }
-    CookieJar::from_headers(headers)
-        .get(SESSION_COOKIE)
-        .map(|cookie| cookie.value().to_owned())
+    CookieJar::from_headers(headers).get(SESSION_COOKIE).map(|cookie| cookie.value().to_owned())
 }
 
 /// The authenticated user (global identity), from a bearer token or the session cookie.
@@ -204,13 +212,7 @@ impl FromRequestParts<AppState> for CurrentPlayer {
             PlayerStatus::Banned => return Err(ApiError::forbidden("banned from this community")),
             PlayerStatus::Deleted => return Err(ApiError::Unauthorized),
         }
-        Ok(Self {
-            id: row.id,
-            display_name: row.display_name,
-            role: row.role,
-            user,
-            tenant,
-        })
+        Ok(Self { id: row.id, display_name: row.display_name, role: row.role, user, tenant })
     }
 }
 

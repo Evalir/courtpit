@@ -41,11 +41,7 @@ pub fn round_robin<T: Copy>(participants: &[T]) -> Vec<Vec<Pairing<T>>> {
             if let (Some(x), Some(y)) = (x, y) {
                 // Alternate the fixed participant's side by round, the others by position.
                 let flip = if i == 0 { round % 2 == 1 } else { i % 2 == 1 };
-                pairs.push(if flip {
-                    Pairing { a: y, b: x }
-                } else {
-                    Pairing { a: x, b: y }
-                });
+                pairs.push(if flip { Pairing { a: y, b: x } } else { Pairing { a: x, b: y } });
             }
         }
         rounds.push(pairs);
@@ -63,10 +59,7 @@ pub fn bracket_positions(size: usize) -> Vec<usize> {
     let mut seeds = vec![1];
     while seeds.len() < size {
         let total = seeds.len() * 2 + 1;
-        seeds = seeds
-            .iter()
-            .flat_map(|&seed| [seed, total - seed])
-            .collect();
+        seeds = seeds.iter().flat_map(|&seed| [seed, total - seed]).collect();
     }
     seeds
 }
@@ -81,10 +74,7 @@ pub fn single_elimination<T: Copy>(seeded: &[T]) -> Vec<(Option<T>, Option<T>)> 
     }
     let size = seeded.len().next_power_of_two();
     let at = |seed: usize| seeded.get(seed - 1).copied();
-    bracket_positions(size)
-        .chunks(2)
-        .map(|pair| (at(pair[0]), at(pair[1])))
-        .collect()
+    bracket_positions(size).chunks(2).map(|pair| (at(pair[0]), at(pair[1]))).collect()
 }
 
 #[cfg(test)]
@@ -112,10 +102,7 @@ mod tests {
             let mut playing = HashSet::new();
             for pairing in round {
                 assert_ne!(pairing.a, pairing.b);
-                assert!(
-                    playing.insert(pairing.a) && playing.insert(pairing.b),
-                    "twice in a round"
-                );
+                assert!(playing.insert(pairing.a) && playing.insert(pairing.b), "twice in a round");
                 let key = (pairing.a.min(pairing.b), pairing.a.max(pairing.b));
                 assert!(seen.insert(key), "pair {key:?} repeated (n={n})");
                 *side_a.entry(pairing.a).or_default() += 1;
@@ -126,16 +113,9 @@ mod tests {
                 }
             }
         }
-        assert_eq!(
-            seen.len() as u32,
-            n * n.saturating_sub(1) / 2,
-            "every pair once"
-        );
+        assert_eq!(seen.len() as u32, n * n.saturating_sub(1) / 2, "every pair once");
         if n % 2 == 1 && n > 1 {
-            assert!(
-                people.iter().all(|x| byes.get(x) == Some(&1)),
-                "one bye each"
-            );
+            assert!(people.iter().all(|x| byes.get(x) == Some(&1)), "one bye each");
         } else {
             assert!(byes.is_empty());
         }
@@ -160,10 +140,7 @@ mod tests {
     fn round_robin_is_deterministic() {
         assert_eq!(round_robin(&[1, 2, 3, 4, 5]), round_robin(&[1, 2, 3, 4, 5]));
         let four = round_robin(&['a', 'b', 'c', 'd']);
-        assert_eq!(
-            four[0],
-            vec![Pairing { a: 'a', b: 'd' }, Pairing { a: 'c', b: 'b' }]
-        );
+        assert_eq!(four[0], vec![Pairing { a: 'a', b: 'd' }, Pairing { a: 'c', b: 'b' }]);
     }
 
     #[test]
@@ -188,24 +165,14 @@ mod tests {
         assert_eq!(draw.len(), 4, "padded to 8");
         assert_eq!(
             draw,
-            vec![
-                (Some(10), None),
-                (Some(40), Some(50)),
-                (Some(20), None),
-                (Some(30), None),
-            ]
+            vec![(Some(10), None), (Some(40), Some(50)), (Some(20), None), (Some(30), None),]
         );
-        let byes = draw
-            .iter()
-            .filter(|(side_a, side_b)| side_a.is_none() || side_b.is_none())
-            .count();
+        let byes =
+            draw.iter().filter(|(side_a, side_b)| side_a.is_none() || side_b.is_none()).count();
         assert_eq!(byes, 3);
         assert!(single_elimination::<u8>(&[1]).is_empty());
         assert_eq!(single_elimination(&[1, 2]), vec![(Some(1), Some(2))]);
         let full = single_elimination(&(1..=8).collect::<Vec<_>>());
-        assert!(
-            full.iter()
-                .all(|(side_a, side_b)| side_a.is_some() && side_b.is_some())
-        );
+        assert!(full.iter().all(|(side_a, side_b)| side_a.is_some() && side_b.is_some()));
     }
 }

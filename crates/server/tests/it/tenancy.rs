@@ -10,12 +10,7 @@ use crate::common::TestApp;
 async fn tenant_resolves_from_header() {
     let app = TestApp::spawn().await;
     let _ = app.community("demo").await;
-    let body = app
-        .get("/api/v1/tenant")
-        .community("demo")
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let body = app.get("/api/v1/tenant").community("demo").send().await.expect(StatusCode::OK);
     assert_eq!(body["slug"], "demo");
     assert_eq!(body["branding"]["display_name"], "demo club");
     assert_eq!(body["branding"]["colors"], serde_json::json!({}));
@@ -57,31 +52,19 @@ async fn tenant_resolves_from_custom_domain() {
 #[tokio::test]
 async fn unknown_and_missing_tenant() {
     let app = TestApp::spawn().await;
-    let body = app
-        .get("/api/v1/tenant")
-        .community("nope")
-        .send()
-        .await
-        .expect(StatusCode::NOT_FOUND);
+    let body =
+        app.get("/api/v1/tenant").community("nope").send().await.expect(StatusCode::NOT_FOUND);
     assert_eq!(body["error"]["code"], "not_found");
-    let body = app
-        .get("/api/v1/tenant")
-        .send()
-        .await
-        .expect(StatusCode::BAD_REQUEST);
+    let body = app.get("/api/v1/tenant").send().await.expect(StatusCode::BAD_REQUEST);
     assert_eq!(body["error"]["code"], "bad_request");
 }
 
 #[tokio::test]
 async fn create_community_with_owner() {
     let app = TestApp::spawn().await;
-    let created = app
-        .community_with_owner("owned", Some("Owner@Example.test"))
-        .await;
+    let created = app.community_with_owner("owned", Some("Owner@Example.test")).await;
     let player = created.owner_player_id.unwrap();
-    let mut tx = TenantTx::begin(&app.db, created.community.id)
-        .await
-        .unwrap();
+    let mut tx = TenantTx::begin(&app.db, created.community.id).await.unwrap();
     let role: String = sqlx::query_scalar("SELECT role::text FROM players WHERE id = $1")
         .bind(player)
         .fetch_one(&mut *tx)
@@ -126,10 +109,8 @@ async fn rls_isolates_communities() {
     let beta_player = add_player(&app, beta, "b@example.test").await;
 
     let mut tx = TenantTx::begin(&app.db, alpha).await.unwrap();
-    let visible: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM players")
-        .fetch_all(&mut *tx)
-        .await
-        .unwrap();
+    let visible: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM players").fetch_all(&mut *tx).await.unwrap();
     assert_eq!(visible, vec![alpha_player]);
 
     let updated = sqlx::query("UPDATE players SET display_name = 'pwned' WHERE id = $1")

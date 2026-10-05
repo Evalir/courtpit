@@ -41,10 +41,8 @@ pub async fn league_cancelled(
     let Some(recipient) = recipient else {
         return Ok(());
     };
-    let reason = recipient
-        .cancel_reason
-        .map(|reason| format!("\n\nReason: {reason}"))
-        .unwrap_or_default();
+    let reason =
+        recipient.cancel_reason.map(|reason| format!("\n\nReason: {reason}")).unwrap_or_default();
     let email = Email {
         to: recipient.email,
         subject: format!("League cancelled: {}", recipient.league_name),

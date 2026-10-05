@@ -44,31 +44,17 @@ pub async fn report_score(
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(score): ApiJson<Score>,
 ) -> ApiResult<Json<MatchView>> {
-    let window = Duration::days(
-        CommunitySettings::of(&player.tenant)
-            .confirm_window_days
-            .into(),
-    );
+    let window = Duration::days(CommunitySettings::of(&player.tenant).confirm_window_days.into());
     let mut tx = player.tenant.begin(&state.db).await?;
     let found = load_visible(&mut tx, id, &player).await?;
     let actor = matches::player_actor(&found, &player)?;
     let _ = found.transition(actor, Event::Report)?;
     let summary = results::check_score(&found.match_format, &score)?;
     let now = state.clock.now();
-    results::record_report(
-        &mut tx,
-        &found,
-        player.id,
-        &score,
-        summary.winner,
-        now,
-        window,
-    )
-    .await?;
-    let event = notify::Event::ScoreReported {
-        match_id: id,
-        by: player.id,
-    };
+    let report =
+        results::ScoreReport { by: player.id, score: &score, winner: summary.winner, at: now };
+    results::record_report(&mut tx, &found, &report, window).await?;
+    let event = notify::Event::ScoreReported { match_id: id, by: player.id };
     notify::tell(&mut tx, notify::other_side(&found, player.id), event, now).await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
@@ -133,10 +119,7 @@ pub async fn dispute_score(
     .bind(note)
     .execute(&mut *tx)
     .await?;
-    let event = notify::Event::ScoreDisputed {
-        match_id: id,
-        by: player.id,
-    };
+    let event = notify::Event::ScoreDisputed { match_id: id, by: player.id };
     let reporters = notify::other_side(&found, player.id);
     notify::tell(&mut tx, reporters, event, state.clock.now()).await?;
     let res = respond(&mut tx, id).await?;
@@ -183,9 +166,7 @@ pub async fn resolve_match(
             return Err(ApiError::validation("resolution `score` needs a score"));
         }
         (_, Some(_)) => {
-            return Err(ApiError::validation(
-                "a score only goes with resolution `score`",
-            ));
+            return Err(ApiError::validation("a score only goes with resolution `score`"));
         }
         (_, None) => (None, None),
     };
@@ -209,13 +190,8 @@ pub async fn resolve_match(
     .await?;
     record_result(&state, &mut tx, id).await?;
     let players = notify::everyone_but(&found, admin.id);
-    notify::tell(
-        &mut tx,
-        players,
-        notify::Event::MatchDecided { match_id: id },
-        state.clock.now(),
-    )
-    .await?;
+    notify::tell(&mut tx, players, notify::Event::MatchDecided { match_id: id }, state.clock.now())
+        .await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)
@@ -263,13 +239,8 @@ pub async fn walkover_match(
     .await?;
     record_result(&state, &mut tx, id).await?;
     let players = notify::everyone_but(&found, admin.id);
-    notify::tell(
-        &mut tx,
-        players,
-        notify::Event::MatchDecided { match_id: id },
-        state.clock.now(),
-    )
-    .await?;
+    notify::tell(&mut tx, players, notify::Event::MatchDecided { match_id: id }, state.clock.now())
+        .await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)

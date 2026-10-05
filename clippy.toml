@@ -1,5 +1,6 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+allow-dbg-in-tests = true
 
 # Flag values that are expensive to move on the stack: large error enums returned by value
 # fatten every `Result` in a call chain (`clippy::result_large_err` fires above this).
@@ -12,3 +13,12 @@ too-many-lines-threshold = 100
 # `sqlx` forces `tracing/log` on, so every `tracing` event macro expands to two paths and
 # costs several points; 30 keeps a handful of log lines from tripping the lint on its own.
 cognitive-complexity-threshold = 30
+
+# Type-driven design thresholds.
+too-many-arguments-threshold = 5
+max-fn-params-bools = 1
+max-struct-bools = 2
+type-complexity-threshold = 200
+avoid-breaking-exported-api = false
+
+doc-valid-idents = ["..", "ETag", "OpenAPI", "SigV4"]

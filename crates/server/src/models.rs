@@ -109,9 +109,7 @@ impl PageParams {
         self.cursor
             .as_deref()
             .map(|cursor| {
-                cursor
-                    .parse()
-                    .map_err(|_| crate::ApiError::BadRequest("invalid cursor".into()))
+                cursor.parse().map_err(|_| crate::ApiError::BadRequest("invalid cursor".into()))
             })
             .transpose()
     }
@@ -126,18 +124,48 @@ pub fn paginate<T>(mut rows: Vec<T>, limit: i64, key: impl Fn(&T) -> String) -> 
     } else {
         None
     };
-    Page {
-        items: rows,
-        next_cursor,
+    Page { items: rows, next_cursor }
+}
+
+/// A nullable field of a PATCH body: absent keeps the stored value, `null` clears it, and a
+/// value replaces it. Fields of this type need `#[serde(default)]` (absent is [`Patch::Keep`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Patch<T> {
+    /// The field was absent: leave the stored value as it is.
+    #[default]
+    Keep,
+    /// The field was `null`: clear the stored value.
+    Clear,
+    /// The field had a value: store it.
+    Set(T),
+}
+
+impl<T> Patch<T> {
+    /// Whether the field was absent.
+    pub const fn is_keep(&self) -> bool {
+        matches!(self, Self::Keep)
+    }
+
+    /// The new value: `Some` for [`Patch::Set`], `None` otherwise.
+    pub fn into_value(self) -> Option<T> {
+        match self {
+            Self::Set(value) => Some(value),
+            Self::Keep | Self::Clear => None,
+        }
+    }
+
+    /// The value after applying this patch to the stored one, which `current` returns.
+    pub fn apply(self, current: impl FnOnce() -> Option<T>) -> Option<T> {
+        match self {
+            Self::Keep => current(),
+            Self::Clear => None,
+            Self::Set(value) => Some(value),
+        }
     }
 }
 
-/// Deserializes a present field (even `null`) as `Some(..)`, so PATCH bodies can tell
-/// "absent" (`None`) from "set to null" (`Some(None)`).
-pub fn double_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer).map(Some)
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Patch<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Option::<T>::deserialize(deserializer).map(|value| value.map_or(Self::Clear, Self::Set))
+    }
 }

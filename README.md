@@ -59,7 +59,7 @@ Deploying (Fly.io + Neon + Cloudflare R2): [`docs/deploy.md`](docs/deploy.md).
 ## Checks
 
 ```sh
-cargo fmt --all -- --check
+cargo +nightly fmt --all -- --check  # rustfmt.toml uses nightly options
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace          # integration tests need DATABASE_URL
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items

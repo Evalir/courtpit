@@ -38,10 +38,7 @@ async fn creation_is_validated() {
         <[Session; 3]>::try_from(players(&app, "demo", &["ana", "bo", "cy"]).await).unwrap();
     let stranger = app.login("zed@example.test", "other").await;
     for (body, why) in [
-        (
-            json!({ "discipline": "singles", "opponent_ids": [] }),
-            "no opponent",
-        ),
+        (json!({ "discipline": "singles", "opponent_ids": [] }), "no opponent"),
         (
             json!({ "discipline": "singles", "opponent_ids": [bo.player_id, cy.player_id] }),
             "two opponents in singles",
@@ -58,27 +55,14 @@ async fn creation_is_validated() {
             json!({ "discipline": "doubles", "partner_id": bo.player_id, "opponent_ids": [bo.player_id, cy.player_id] }),
             "duplicate player",
         ),
-        (
-            json!({ "discipline": "singles", "opponent_ids": [ana.player_id] }),
-            "playing yourself",
-        ),
+        (json!({ "discipline": "singles", "opponent_ids": [ana.player_id] }), "playing yourself"),
         (
             json!({ "discipline": "singles", "opponent_ids": [stranger.player_id] }),
             "member of another community",
         ),
     ] {
-        let res = app
-            .post("/api/v1/matches")
-            .as_(&ana)
-            .json(body)
-            .send()
-            .await;
-        assert_eq!(
-            res.status,
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "{why}: {:#}",
-            res.body
-        );
+        let res = app.post("/api/v1/matches").as_(&ana).json(body).send().await;
+        assert_eq!(res.status, StatusCode::UNPROCESSABLE_ENTITY, "{why}: {:#}", res.body);
         assert_eq!(res.body["error"]["code"], "validation_failed", "{why}");
     }
 
@@ -115,30 +99,18 @@ async fn friendlies_are_private_to_their_players_and_admins() {
         .send()
         .await
         .expect(StatusCode::NOT_FOUND);
-    let _ = app
-        .get(&format!("/api/v1/matches/{id}"))
-        .as_(&admin)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let _ =
+        app.get(&format!("/api/v1/matches/{id}")).as_(&admin).send().await.expect(StatusCode::OK);
 
     let count = |page: &Value| page["items"].as_array().unwrap().len();
     let mine = |session: &Session| app.get("/api/v1/matches").as_(session).send();
     assert_eq!(count(&mine(&ana).await.expect(StatusCode::OK)), 1);
     assert_eq!(count(&mine(&bo).await.expect(StatusCode::OK)), 2);
     assert_eq!(count(&mine(&admin).await.expect(StatusCode::OK)), 0);
-    let _ = app
-        .get("/api/v1/matches?all=true")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::FORBIDDEN);
-    let all = app
-        .get("/api/v1/matches?all=true&limit=1")
-        .as_(&admin)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let _ =
+        app.get("/api/v1/matches?all=true").as_(&ana).send().await.expect(StatusCode::FORBIDDEN);
+    let all =
+        app.get("/api/v1/matches?all=true&limit=1").as_(&admin).send().await.expect(StatusCode::OK);
     assert_eq!(count(&all), 1);
     let cursor = all["next_cursor"].as_str().unwrap();
     let rest = app
@@ -202,12 +174,7 @@ async fn friendly_mixed_matches_ignore_gender_and_earn_no_points() {
     app.make_admin(&admin).await;
     let [a1, a2, b1, b2] =
         <[Session; 4]>::try_from(players(&app, "demo", &["a1", "a2", "b1", "b2"]).await).unwrap();
-    for (session, gender) in [
-        (&a1, "male"),
-        (&a2, "male"),
-        (&b1, "undisclosed"),
-        (&b2, "other"),
-    ] {
+    for (session, gender) in [(&a1, "male"), (&a2, "male"), (&b1, "undisclosed"), (&b2, "other")] {
         let _ = app.patch_me(session, json!({ "gender": gender })).await;
     }
     // Neither pair could enter a mixed league...

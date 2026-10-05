@@ -6,6 +6,6 @@ pub mod secrets;
 mod session;
 
 pub use session::{
-    CLIENT_HEADER, ClientIp, CurrentPlayer, CurrentUser, SESSION_COOKIE, create_session,
-    ensure_player, wants_cookie,
+    CLIENT_HEADER, ClientIp, CurrentPlayer, CurrentUser, SESSION_COOKIE, SessionDelivery,
+    create_session, ensure_player,
 };

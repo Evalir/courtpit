@@ -52,13 +52,8 @@ async fn unscoped_app_role_sees_no_players() {
     .unwrap();
 
     let mut tx = app.db.begin().await.unwrap();
-    let _ = sqlx::query("SET LOCAL ROLE courtpit_app")
-        .execute(&mut *tx)
-        .await
-        .unwrap();
-    let visible: i64 = sqlx::query_scalar("SELECT count(*) FROM players")
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
+    let _ = sqlx::query("SET LOCAL ROLE courtpit_app").execute(&mut *tx).await.unwrap();
+    let visible: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM players").fetch_one(&mut *tx).await.unwrap();
     assert_eq!(visible, 0, "no app.community_id set => no rows");
 }

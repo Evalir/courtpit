@@ -62,24 +62,14 @@ pub enum TenantKey {
 
 /// Extracts the tenant key from request headers. The header wins over the host.
 pub fn tenant_key(headers: &HeaderMap, base_domain: &str) -> Option<TenantKey> {
-    if let Some(slug) = headers
-        .get(COMMUNITY_HEADER)
-        .and_then(|value| value.to_str().ok())
-    {
+    if let Some(slug) = headers.get(COMMUNITY_HEADER).and_then(|value| value.to_str().ok()) {
         let slug = slug.trim().to_ascii_lowercase();
         if !slug.is_empty() {
             return Some(TenantKey::Slug(slug));
         }
     }
-    let host = headers
-        .get(header::HOST)
-        .and_then(|value| value.to_str().ok())?;
-    let host = host
-        .split(':')
-        .next()
-        .unwrap_or(host)
-        .trim()
-        .to_ascii_lowercase();
+    let host = headers.get(header::HOST).and_then(|value| value.to_str().ok())?;
+    let host = host.split(':').next().unwrap_or(host).trim().to_ascii_lowercase();
     let base = base_domain.trim_start_matches('.').to_ascii_lowercase();
     if host.is_empty() || host == base {
         return None;
@@ -106,12 +96,7 @@ impl std::fmt::Debug for TenantCache {
 impl TenantCache {
     /// A cache whose entries expire after `ttl` (so branding edits propagate).
     pub fn new(ttl: Duration) -> Self {
-        Self {
-            cache: Cache::builder()
-                .max_capacity(10_000)
-                .time_to_live(ttl)
-                .build(),
-        }
+        Self { cache: Cache::builder().max_capacity(10_000).time_to_live(ttl).build() }
     }
 
     /// Resolves a key to a community, hitting the database on a miss. Misses aren't cached.
@@ -191,11 +176,8 @@ impl FromRequestParts<AppState> for Tenant {
                 "no community: send the `{COMMUNITY_HEADER}` header or use a community host"
             ))
         })?;
-        let community = state
-            .tenants
-            .resolve(&state.db, &key)
-            .await?
-            .ok_or(ApiError::NotFound("community"))?;
+        let community =
+            state.tenants.resolve(&state.db, &key).await?.ok_or(ApiError::NotFound("community"))?;
         let tenant = Self(community);
         let _ = parts.extensions.insert(tenant.clone());
         Ok(tenant)
@@ -220,9 +202,7 @@ impl TenantTx {
             .bind(community_id.to_string())
             .execute(&mut *tx)
             .await?;
-        let _ = sqlx::query("SET LOCAL ROLE courtpit_app")
-            .execute(&mut *tx)
-            .await?;
+        let _ = sqlx::query("SET LOCAL ROLE courtpit_app").execute(&mut *tx).await?;
         Ok(Self { tx, community_id })
     }
 
@@ -266,14 +246,8 @@ mod tests {
 
     #[test]
     fn header_wins_over_host() {
-        let map = headers(&[
-            (COMMUNITY_HEADER, "Demo"),
-            ("host", "other.racquetcollective.app"),
-        ]);
-        assert_eq!(
-            tenant_key(&map, "racquetcollective.app"),
-            Some(TenantKey::Slug("demo".into()))
-        );
+        let map = headers(&[(COMMUNITY_HEADER, "Demo"), ("host", "other.racquetcollective.app")]);
+        assert_eq!(tenant_key(&map, "racquetcollective.app"), Some(TenantKey::Slug("demo".into())));
     }
 
     #[test]
@@ -288,24 +262,15 @@ mod tests {
     #[test]
     fn nested_subdomain_or_bare_base_is_none() {
         assert_eq!(
-            tenant_key(
-                &headers(&[("host", "a.b.racquetcollective.app")]),
-                "racquetcollective.app"
-            ),
+            tenant_key(&headers(&[("host", "a.b.racquetcollective.app")]), "racquetcollective.app"),
             None
         );
         assert_eq!(
-            tenant_key(
-                &headers(&[("host", "racquetcollective.app")]),
-                "racquetcollective.app"
-            ),
+            tenant_key(&headers(&[("host", "racquetcollective.app")]), "racquetcollective.app"),
             None
         );
         assert_eq!(
-            tenant_key(
-                &headers(&[("host", "localhost:8080")]),
-                "racquetcollective.app"
-            ),
+            tenant_key(&headers(&[("host", "localhost:8080")]), "racquetcollective.app"),
             None
         );
     }

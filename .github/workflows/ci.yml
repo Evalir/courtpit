@@ -132,9 +132,13 @@ jobs:
         if: steps.run.outputs.cargo == 'true'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      # rustfmt.toml uses nightly-only options (import granularity, comment wrapping), which
+      # stable rustfmt ignores; only nightly's formatter matches `cargo +nightly fmt`.
       - name: cargo fmt
         if: ${{ !cancelled() && steps.run.outputs.rust == 'true' }}
-        run: cargo fmt --all -- --check
+        run: |
+          rustup toolchain install nightly --profile minimal --component rustfmt --no-self-update
+          cargo +nightly fmt --all -- --check
       - name: cargo clippy
         if: ${{ !cancelled() && steps.run.outputs.rust == 'true' }}
         run: cargo clippy --workspace --all-targets -- -D warnings

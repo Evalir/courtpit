@@ -23,30 +23,19 @@ async fn communities_publish_the_apps_that_open_their_links() {
     assert!(applinks::store(&app.db, "demo", &links).await.unwrap());
     assert!(!applinks::store(&app.db, "nobody", &links).await.unwrap());
 
-    let res = app
-        .get("/.well-known/apple-app-site-association")
-        .community("demo")
-        .send()
-        .await;
+    let res = app.get("/.well-known/apple-app-site-association").community("demo").send().await;
     // Apple and Google fetch these as JSON; the security headers change nothing for them.
     assert_eq!(res.headers[header::CONTENT_TYPE], "application/json");
     assert_security_headers(&res, false);
     let apple = res.expect(StatusCode::OK);
     let details = &apple["applinks"]["details"][0];
-    assert_eq!(
-        details["appIDs"],
-        json!(["TEAM123.app.racquetcollective.demo"])
-    );
+    assert_eq!(details["appIDs"], json!(["TEAM123.app.racquetcollective.demo"]));
     assert_eq!(
         details["components"][0],
         json!({ "/": "/api/*", "exclude": true, "comment": "The API is not a page" })
     );
     assert_eq!(details["components"][1], json!({ "/": "*" }));
-    let res = app
-        .get("/.well-known/assetlinks.json")
-        .community("demo")
-        .send()
-        .await;
+    let res = app.get("/.well-known/assetlinks.json").community("demo").send().await;
     assert_eq!(res.headers[header::CONTENT_TYPE], "application/json");
     assert_security_headers(&res, false);
     let android = res.expect(StatusCode::OK);
@@ -63,15 +52,7 @@ async fn communities_publish_the_apps_that_open_their_links() {
     );
 
     // Without apps, links keep opening the web app.
-    for path in [
-        "/.well-known/apple-app-site-association",
-        "/.well-known/assetlinks.json",
-    ] {
-        let _ = app
-            .get(path)
-            .community("other")
-            .send()
-            .await
-            .expect(StatusCode::NOT_FOUND);
+    for path in ["/.well-known/apple-app-site-association", "/.well-known/assetlinks.json"] {
+        let _ = app.get(path).community("other").send().await.expect(StatusCode::NOT_FOUND);
     }
 }

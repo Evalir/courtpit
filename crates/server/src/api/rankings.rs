@@ -52,10 +52,7 @@ pub async fn list_rankings(
     player: CurrentPlayer,
     ApiQuery(query): ApiQuery<RankingQuery>,
 ) -> ApiResult<Json<Page<RankingRow>>> {
-    let page = PageParams {
-        cursor: query.cursor.clone(),
-        limit: query.limit,
-    };
+    let page = PageParams { cursor: query.cursor.clone(), limit: query.limit };
     let limit = page.limit();
     let mut tx = player.tenant.begin(&state.db).await?;
     let mut qb: QueryBuilder<'_, Postgres> = QueryBuilder::new(
@@ -72,10 +69,7 @@ pub async fn list_rankings(
         let (rank, id) = cursor
             .split_once('|')
             .and_then(|(rank_text, id_text)| {
-                Some((
-                    rank_text.parse::<i32>().ok()?,
-                    id_text.parse::<Uuid>().ok()?,
-                ))
+                Some((rank_text.parse::<i32>().ok()?, id_text.parse::<Uuid>().ok()?))
             })
             .ok_or_else(|| ApiError::BadRequest("invalid cursor".into()))?;
         let _ = qb
@@ -85,14 +79,10 @@ pub async fn list_rankings(
             .push_bind(id)
             .push(")");
     }
-    let _ = qb
-        .push(" ORDER BY r.rank, r.player_id LIMIT ")
-        .push_bind(limit + 1);
+    let _ = qb.push(" ORDER BY r.rank, r.player_id LIMIT ").push_bind(limit + 1);
     let rows: Vec<RankingRow> = qb.build_query_as().fetch_all(&mut *tx).await?;
     tx.commit().await?;
-    Ok(Json(paginate(rows, limit, |row| {
-        format!("{}|{}", row.rank, row.player_id)
-    })))
+    Ok(Json(paginate(rows, limit, |row| format!("{}|{}", row.rank, row.player_id))))
 }
 
 /// Query for `GET /rankings/events`.
@@ -136,14 +126,9 @@ pub async fn ledger(
                 occurred_at
          FROM ranking_events WHERE community_id = ",
     );
-    let _ = qb
-        .push_bind(tx.community_id())
-        .push(" AND player_id = ")
-        .push_bind(query.player_id);
+    let _ = qb.push_bind(tx.community_id()).push(" AND player_id = ").push_bind(query.player_id);
     if let Some(discipline) = query.discipline {
-        let _ = qb
-            .push(" AND discipline = ")
-            .push_bind(DbDiscipline::from(discipline));
+        let _ = qb.push(" AND discipline = ").push_bind(DbDiscipline::from(discipline));
     }
     let _ = qb.push(" ORDER BY occurred_at DESC, id DESC LIMIT 100");
     let rows: Vec<LedgerEntry> = qb.build_query_as().fetch_all(&mut *tx).await?;

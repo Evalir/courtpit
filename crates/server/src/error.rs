@@ -96,10 +96,7 @@ impl ApiError {
 
     /// Shorthand for [`ApiError::ConflictCode`].
     pub fn conflict_code(code: &'static str, message: impl Into<String>) -> Self {
-        Self::ConflictCode {
-            code,
-            message: message.into(),
-        }
+        Self::ConflictCode { code, message: message.into() }
     }
 
     /// Shorthand for [`ApiError::Forbidden`].
@@ -148,10 +145,7 @@ impl IntoResponse for ApiError {
             tracing::error!(error = ?err, "internal error");
         }
         let body = ErrorBody {
-            error: ErrorDetail {
-                code: self.code().to_owned(),
-                message: self.to_string(),
-            },
+            error: ErrorDetail { code: self.code().to_owned(), message: self.to_string() },
         };
         (status, Json(body)).into_response()
     }

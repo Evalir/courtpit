@@ -23,12 +23,7 @@ pub(crate) fn league_body(discipline: &str, opens: i64) -> Value {
 }
 
 pub(crate) async fn create_league(app: &TestApp, admin: &Session, body: Value) -> Value {
-    app.post("/api/v1/admin/leagues")
-        .as_(admin)
-        .json(body)
-        .send()
-        .await
-        .expect(StatusCode::CREATED)
+    app.post("/api/v1/admin/leagues").as_(admin).json(body).send().await.expect(StatusCode::CREATED)
 }
 
 /// A published league with registration open now.
@@ -68,15 +63,9 @@ async fn admins_create_and_validate_leagues() {
     assert_eq!(league["status"], "draft");
     assert!(league["published_at"].is_null());
     assert!(league["entry_fee_minor"].is_null());
+    assert_eq!(league["match_format"]["final_set"], "match_tiebreak_10", "community default");
     assert_eq!(
-        league["match_format"]["final_set"], "match_tiebreak_10",
-        "community default"
-    );
-    assert_eq!(
-        (
-            league["box_min_size"].clone(),
-            league["box_max_size"].clone()
-        ),
+        (league["box_min_size"].clone(), league["box_max_size"].clone()),
         (json!(6), json!(8))
     );
 
@@ -98,18 +87,8 @@ async fn admins_create_and_validate_leagues() {
         (bad_boxes, "boxes"),
         (bad_prev, "previous league of another discipline"),
     ] {
-        let res = app
-            .post("/api/v1/admin/leagues")
-            .as_(&admin)
-            .json(body)
-            .send()
-            .await;
-        assert_eq!(
-            res.status,
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "{why}: {:#}",
-            res.body
-        );
+        let res = app.post("/api/v1/admin/leagues").as_(&admin).json(body).send().await;
+        assert_eq!(res.status, StatusCode::UNPROCESSABLE_ENTITY, "{why}: {:#}", res.body);
     }
 
     let mut good = league_body("singles", 1);
@@ -150,10 +129,7 @@ async fn drafts_are_editable_and_hidden_until_published() {
         .await
         .expect(StatusCode::OK);
     assert_eq!(league["name"], "Winter doubles");
-    assert_eq!(
-        league["match_format"]["final_set"], "match_tiebreak_10",
-        "override cleared"
-    );
+    assert_eq!(league["match_format"]["final_set"], "match_tiebreak_10", "override cleared");
     let _ = app
         .patch(&format!("/api/v1/admin/leagues/{id}"))
         .as_(&admin)
@@ -179,12 +155,8 @@ async fn drafts_are_editable_and_hidden_until_published() {
         .await
         .expect(StatusCode::CONFLICT);
 
-    let filtered = app
-        .get("/api/v1/leagues?discipline=singles")
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let filtered =
+        app.get("/api/v1/leagues?discipline=singles").as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(count(filtered), 0);
 }
 
@@ -199,12 +171,8 @@ async fn publishing_opens_registration_and_cancel_ends_it() {
         .send()
         .await
         .expect(StatusCode::CONFLICT);
-    let league = app
-        .get(&format!("/api/v1/leagues/{id}"))
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let league =
+        app.get(&format!("/api/v1/leagues/{id}")).as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(league["status"], "registration");
     let _ = app
         .post(&format!("/api/v1/admin/leagues/{id}/cancel"))
@@ -230,10 +198,7 @@ async fn publishing_opens_registration_and_cancel_ends_it() {
     closed["registration_closes_at"] = json!(at(-1));
     let league = create_league(&app, &admin, closed).await;
     let _ = app
-        .post(&format!(
-            "/api/v1/admin/leagues/{}/publish",
-            league["id"].as_str().unwrap()
-        ))
+        .post(&format!("/api/v1/admin/leagues/{}/publish", league["id"].as_str().unwrap()))
         .as_(&admin)
         .send()
         .await

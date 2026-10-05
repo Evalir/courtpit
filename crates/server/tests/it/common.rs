@@ -93,9 +93,8 @@ async fn template() -> &'static str {
             .await
             .unwrap();
             for db_name in stale {
-                let _ = conn
-                    .execute(format!(r#"DROP DATABASE IF EXISTS "{db_name}""#).as_str())
-                    .await;
+                let _ =
+                    conn.execute(format!(r#"DROP DATABASE IF EXISTS "{db_name}""#).as_str()).await;
             }
 
             let exists: bool =
@@ -110,13 +109,9 @@ async fn template() -> &'static str {
                     .execute(format!(r#"DROP DATABASE IF EXISTS "{build}""#).as_str())
                     .await
                     .unwrap();
-                let _ = conn
-                    .execute(format!(r#"CREATE DATABASE "{build}""#).as_str())
-                    .await
-                    .unwrap();
-                let pool = db::connect_with(admin_options().database(&build), 2)
-                    .await
-                    .unwrap();
+                let _ =
+                    conn.execute(format!(r#"CREATE DATABASE "{build}""#).as_str()).await.unwrap();
+                let pool = db::connect_with(admin_options().database(&build), 2).await.unwrap();
                 db::migrate(&pool).await.unwrap();
                 pool.close().await;
                 let _ = conn
@@ -181,11 +176,7 @@ pub(crate) struct Session {
 
 /// Test defaults: generous rate limits, plain-HTTP cookies.
 pub(crate) fn test_config() -> Config {
-    Config {
-        auth_ip_limit_per_hour: 10_000,
-        cookie_secure: false,
-        ..Config::default()
-    }
+    Config { auth_ip_limit_per_hour: 10_000, cookie_secure: false, ..Config::default() }
 }
 
 impl TestApp {
@@ -214,14 +205,7 @@ impl TestApp {
             .transpose()
             .unwrap();
         let router = racquetcollective_server::router(state.clone(), web).layer(Extension(peer));
-        Self {
-            state,
-            router,
-            db,
-            mailer,
-            pusher,
-            clock,
-        }
+        Self { state, router, db, mailer, pusher, clock }
     }
 
     /// The 6-digit code in the last email sent to `email`.
@@ -262,12 +246,7 @@ impl TestApp {
 
     /// `PATCH /api/v1/me` expecting 200; returns the body.
     pub(crate) async fn patch_me(&self, session: &Session, body: Value) -> Value {
-        self.patch("/api/v1/me")
-            .as_(session)
-            .json(body)
-            .send()
-            .await
-            .expect(StatusCode::OK)
+        self.patch("/api/v1/me").as_(session).json(body).send().await.expect(StatusCode::OK)
     }
 
     /// Promotes a player to community admin.
@@ -281,13 +260,7 @@ impl TestApp {
 
     /// Starts building a request.
     pub(crate) fn req(&self, method: Method, path: &str) -> Req<'_> {
-        Req {
-            app: self,
-            method,
-            path: path.to_owned(),
-            headers: Vec::new(),
-            body: None,
-        }
+        Req { app: self, method, path: path.to_owned(), headers: Vec::new(), body: None }
     }
 
     pub(crate) fn get(&self, path: &str) -> Req<'_> {
@@ -378,16 +351,10 @@ impl Req<'_> {
         if self.body.is_some() {
             builder = builder.header(header::CONTENT_TYPE, "application/json");
         }
-        let body = self.body.map_or_else(Body::empty, |json| {
-            Body::from(serde_json::to_vec(&json).unwrap())
-        });
-        let res = self
-            .app
-            .router
-            .clone()
-            .oneshot(builder.body(body).unwrap())
-            .await
-            .unwrap();
+        let body = self
+            .body
+            .map_or_else(Body::empty, |json| Body::from(serde_json::to_vec(&json).unwrap()));
+        let res = self.app.router.clone().oneshot(builder.body(body).unwrap()).await.unwrap();
         let status = res.status();
         let headers = res.headers().clone();
         let bytes = res.into_body().collect().await.unwrap().to_bytes();
@@ -397,11 +364,7 @@ impl Req<'_> {
             serde_json::from_slice(&bytes)
                 .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()))
         };
-        Res {
-            status,
-            headers,
-            body,
-        }
+        Res { status, headers, body }
     }
 }
 
@@ -417,11 +380,7 @@ impl Res {
     /// Asserts the status, printing the body on mismatch, and returns the body.
     #[track_caller]
     pub(crate) fn expect(self, status: StatusCode) -> Value {
-        assert_eq!(
-            self.status, status,
-            "unexpected status; body: {:#}",
-            self.body
-        );
+        assert_eq!(self.status, status, "unexpected status; body: {:#}", self.body);
         self.body
     }
 }

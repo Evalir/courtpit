@@ -24,10 +24,7 @@ pub(crate) async fn insert_league_match(
 ) -> String {
     let id = Uuid::now_v7();
     let ids = |sessions: &[&Session]| {
-        sessions
-            .iter()
-            .map(|session| session.player_id)
-            .collect::<Vec<_>>()
+        sessions.iter().map(|session| session.player_id).collect::<Vec<_>>()
     };
     let _ = sqlx::query(
         "INSERT INTO matches (id, community_id, discipline, league_id, round, side_a_players,
@@ -103,14 +100,11 @@ async fn rankings(app: &TestApp, session: &Session, discipline: &str) -> Vec<(Uu
 }
 
 pub(crate) async fn ledger(app: &TestApp, viewer: &Session, player: &Session) -> Value {
-    app.get(&format!(
-        "/api/v1/rankings/events?player_id={}",
-        player.player_id
-    ))
-    .as_(viewer)
-    .send()
-    .await
-    .expect(StatusCode::OK)
+    app.get(&format!("/api/v1/rankings/events?player_id={}", player.player_id))
+        .as_(viewer)
+        .send()
+        .await
+        .expect(StatusCode::OK)
 }
 
 async fn setup(names: &[&str]) -> (TestApp, Session, Vec<Session>) {
@@ -130,11 +124,7 @@ async fn league_results_feed_the_ledger_and_rankings() {
 
     let m1 = league_match(&app, &league, "singles", &[ana], &[bo]).await;
     let _ = report(&app, ana, &m1, straight_sets_a()).await;
-    assert_eq!(
-        ledger(&app, cy, ana).await.as_array().unwrap().len(),
-        0,
-        "not yet confirmed"
-    );
+    assert_eq!(ledger(&app, cy, ana).await.as_array().unwrap().len(), 0, "not yet confirmed");
     confirm(&app, bo, &m1).await;
     let events = ledger(&app, cy, ana).await;
     assert_eq!(events[0]["points"], 3);
@@ -159,18 +149,11 @@ async fn league_results_feed_the_ledger_and_rankings() {
     confirm(&app, cy, &friendly).await;
     assert_eq!(ledger(&app, cy, bo).await.as_array().unwrap().len(), 1);
 
-    assert!(
-        rankings(&app, ana, "singles").await.is_empty(),
-        "materialised by the job"
-    );
+    assert!(rankings(&app, ana, "singles").await.is_empty(), "materialised by the job");
     let _ = jobs::run_due(&app.state, "t").await.unwrap();
     assert_eq!(
         rankings(&app, ana, "singles").await,
-        vec![
-            (ana.player_id, 1, 4),
-            (cy.player_id, 2, 2),
-            (bo.player_id, 3, 0)
-        ]
+        vec![(ana.player_id, 1, 4), (cy.player_id, 2, 2), (bo.player_id, 3, 0)]
     );
     assert!(rankings(&app, ana, "doubles").await.is_empty());
 }
@@ -207,25 +190,14 @@ async fn walkovers_disputes_and_auto_confirm_score_too() {
         .expect(StatusCode::OK);
 
     let silent = league_match(&app, &league, "doubles", &[a1, a2], &[b1, b2]).await;
-    let _ = report(
-        &app,
-        b1,
-        &silent,
-        json!({ "sets": [{ "a": 0, "b": 6 }, { "a": 0, "b": 6 }] }),
-    )
-    .await;
+    let _ = report(&app, b1, &silent, json!({ "sets": [{ "a": 0, "b": 6 }, { "a": 0, "b": 6 }] }))
+        .await;
     app.clock.advance(Duration::days(3) + Duration::minutes(1));
     let _ = jobs::run_due(&app.state, "t").await.unwrap();
 
     // a: walkover 0 + deciding win 2 + straight loss 0; b: 2 + 1 + 3. Each partner in full.
     let table = rankings(&app, a1, "doubles").await;
-    let points = |player: &Session| {
-        table
-            .iter()
-            .find(|row| row.0 == player.player_id)
-            .unwrap()
-            .2
-    };
+    let points = |player: &Session| table.iter().find(|row| row.0 == player.player_id).unwrap().2;
     assert_eq!((points(a1), points(a2)), (2, 2));
     assert_eq!((points(b1), points(b2)), (6, 6));
     assert_eq!(table[0].1, 1);
@@ -257,9 +229,5 @@ async fn points_decay_after_52_weeks_and_mixed_pooling_folds_into_doubles() {
     app.clock.advance(Duration::weeks(52) + Duration::days(2));
     let _ = jobs::run_due(&app.state, "t").await.unwrap();
     assert!(rankings(&app, ana, "doubles").await.is_empty(), "decayed");
-    assert_eq!(
-        ledger(&app, ana, ana).await.as_array().unwrap().len(),
-        1,
-        "ledger keeps it"
-    );
+    assert_eq!(ledger(&app, ana, ana).await.as_array().unwrap().len(), 1, "ledger keeps it");
 }

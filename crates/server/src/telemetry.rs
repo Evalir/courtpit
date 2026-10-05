@@ -18,8 +18,6 @@ pub fn init(format: LogFormat) {
     let registry = tracing_subscriber::registry().with(filter);
     match format {
         LogFormat::Pretty => registry.with(fmt::layer()).init(),
-        LogFormat::Json => registry
-            .with(fmt::layer().json().flatten_event(true))
-            .init(),
+        LogFormat::Json => registry.with(fmt::layer().json().flatten_event(true)).init(),
     }
 }

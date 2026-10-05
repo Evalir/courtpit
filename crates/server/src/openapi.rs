@@ -5,8 +5,8 @@
 //!
 //! - an operation with `security(("bearer" = []))` also accepts the session cookie;
 //! - every operation has a `default` response with the shared [`ErrorBody`] (clients switch on
-//!   `error.code`); secured operations also have a `401` and operations with a body a `422`
-//!   (the extractors answer both before the handler runs);
+//!   `error.code`); secured operations also have a `401` and operations with a body a `422` (the
+//!   extractors answer both before the handler runs);
 //! - responses declared without a description get the status's standard reason phrase.
 
 use axum::http::StatusCode;
@@ -109,15 +109,10 @@ fn operations(item: &mut PathItem) -> impl Iterator<Item = &mut Operation> {
 }
 
 fn apply_conventions(operation: &mut Operation) {
-    if let Some(requirements) = operation
-        .security
-        .as_mut()
-        .filter(|requirements| !requirements.is_empty())
+    if let Some(requirements) =
+        operation.security.as_mut().filter(|requirements| !requirements.is_empty())
     {
-        requirements.push(SecurityRequirement::new(
-            SESSION_COOKIE_SCHEME,
-            Vec::<String>::new(),
-        ));
+        requirements.push(SecurityRequirement::new(SESSION_COOKIE_SCHEME, Vec::<String>::new()));
         ensure_error(operation, "401", "Missing, invalid or expired session.");
     }
     if operation.request_body.is_some() {
@@ -146,10 +141,7 @@ fn ensure_error(operation: &mut Operation, status: &str, description: &str) {
 fn error_response(description: &str) -> Response {
     Response::builder()
         .description(description)
-        .content(
-            "application/json",
-            Content::new(Some(Ref::from_schema_name("ErrorBody"))),
-        )
+        .content("application/json", Content::new(Some(Ref::from_schema_name("ErrorBody"))))
         .build()
 }
 
@@ -171,9 +163,8 @@ mod tests {
     use super::*;
     use crate::{app::openapi, auth::CLIENT_HEADER, tenancy::COMMUNITY_HEADER};
 
-    const METHODS: [&str; 8] = [
-        "get", "put", "post", "delete", "options", "head", "patch", "trace",
-    ];
+    const METHODS: [&str; 8] =
+        ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
 
     fn document() -> Value {
         serde_json::to_value(openapi()).expect("the document serializes")
@@ -212,10 +203,7 @@ mod tests {
     fn description_names_the_wire_names() {
         let description = DESCRIPTION.to_lowercase();
         for name in [COMMUNITY_HEADER, CLIENT_HEADER, SESSION_COOKIE] {
-            assert!(
-                description.contains(name),
-                "{name} missing from DESCRIPTION"
-            );
+            assert!(description.contains(name), "{name} missing from DESCRIPTION");
         }
     }
 
@@ -336,10 +324,7 @@ mod tests {
         assert!(!refs.is_empty());
         for target in refs {
             let pointer = target.strip_prefix('#').expect("local reference");
-            assert!(
-                doc.pointer(pointer).is_some(),
-                "{target} does not resolve to a component"
-            );
+            assert!(doc.pointer(pointer).is_some(), "{target} does not resolve to a component");
         }
     }
 }

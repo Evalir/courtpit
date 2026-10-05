@@ -4,8 +4,7 @@
 //! (default 6–8), tier 1 at the top. Returning entries honour last season's promotion or
 //! relegation; newcomers are slotted by UTR. The result is deterministic for a given input.
 
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -22,10 +21,7 @@ pub struct BoxSize {
 
 impl Default for BoxSize {
     fn default() -> Self {
-        Self {
-            min_size: 6,
-            max_size: 8,
-        }
+        Self { min_size: 6, max_size: 8 }
     }
 }
 
@@ -81,9 +77,7 @@ pub fn box_sizes(n: usize, limits: BoxSize) -> Result<Vec<usize>, PlacementError
     }
     let sizes = |count: usize| -> Vec<usize> {
         let (base, extra) = (n / count, n % count);
-        (0..count)
-            .map(|idx| base + usize::from(idx < extra))
-            .collect()
+        (0..count).map(|idx| base + usize::from(idx < extra)).collect()
     };
     let stray = |sizes: &[usize]| -> usize {
         sizes
@@ -128,10 +122,9 @@ fn cut<T: Copy>(ordered: &[Seed<T>], sizes: &[usize]) -> Vec<Placed<T>> {
 /// Places `seeds` into boxes.
 ///
 /// 1. Every entry gets a UTR-only tier (as if nobody had history).
-/// 2. Returning entries replace it with last season's tier moved by their promotion or
-///    relegation (clamped to the available tiers).
-/// 3. Entries are sorted by (that tier, UTR desc, id) and cut into boxes of
-///    [`box_sizes`].
+/// 2. Returning entries replace it with last season's tier moved by their promotion or relegation
+///    (clamped to the available tiers).
+/// 3. Entries are sorted by (that tier, UTR desc, id) and cut into boxes of [`box_sizes`].
 pub fn place<T: Ord + Copy + Hash>(
     seeds: &[Seed<T>],
     limits: BoxSize,
@@ -175,10 +168,7 @@ pub enum Unplayable {
 pub fn playable<T>(entries: usize, boxes: &[Placed<T>]) -> Result<(), Unplayable> {
     if entries < MIN_ENTRIES {
         Err(Unplayable::TooFewEntries)
-    } else if boxes
-        .iter()
-        .any(|placed| placed.entries.len() < MIN_ENTRIES)
-    {
+    } else if boxes.iter().any(|placed| placed.entries.len() < MIN_ENTRIES) {
         Err(Unplayable::ThinBox)
     } else {
         Ok(())
@@ -194,23 +184,15 @@ pub fn movements(box_len: usize, tier: u32, tiers: u32, up: usize, down: usize) 
     let half = box_len / 2;
     let up = if tier > 1 { up.min(half) } else { 0 };
     let down = if tier < tiers { down.min(half) } else { 0 };
-    (0..box_len)
-        .map(|i| {
-            if i < up {
-                -1
-            } else {
-                i8::from(i >= box_len - down)
-            }
-        })
-        .collect()
+    (0..box_len).map(|i| if i < up { -1 } else { i8::from(i >= box_len - down) }).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn utr(tenths: i64) -> Option<Decimal> {
-        Some(Decimal::new(tenths, 1))
+    fn utr(tenths: i64) -> Decimal {
+        Decimal::new(tenths, 1)
     }
 
     fn seeds(utrs: &[i64]) -> Vec<Seed<u32>> {
@@ -218,7 +200,7 @@ mod tests {
             .enumerate()
             .map(|(idx, &tenths)| Seed {
                 id: u32::try_from(idx).unwrap(),
-                utr: utr(tenths),
+                utr: Some(utr(tenths)),
                 previous: None,
             })
             .collect()
@@ -245,17 +227,11 @@ mod tests {
         ] {
             assert_eq!(box_sizes(n, limits).unwrap(), want, "n={n}");
         }
-        let small = BoxSize {
-            min_size: 4,
-            max_size: 6,
-        };
+        let small = BoxSize { min_size: 4, max_size: 6 };
         assert_eq!(box_sizes(7, small).unwrap(), vec![7]);
         assert_eq!(box_sizes(10, small).unwrap(), vec![5, 5]);
         for bad in [(1, 4), (5, 4)] {
-            let limits = BoxSize {
-                min_size: bad.0,
-                max_size: bad.1,
-            };
+            let limits = BoxSize { min_size: bad.0, max_size: bad.1 };
             assert_eq!(box_sizes(10, limits), Err(PlacementError::BoxSize));
         }
     }
@@ -272,32 +248,19 @@ mod tests {
         assert_eq!(boxes[0].entries, vec![6, 1, 3, 12, 8, 11, 4]);
         // 55, 50, 40, 30, 10, unknown last
         assert_eq!(boxes[1].entries, vec![10, 0, 7, 2, 9, 5]);
-        assert_eq!((boxes[0].utr_min, boxes[0].utr_max), (utr(60), utr(90)));
-        assert_eq!((boxes[1].utr_min, boxes[1].utr_max), (utr(10), utr(55)));
-        assert_eq!(
-            boxes,
-            place(&all_seeds, BoxSize::default()).unwrap(),
-            "deterministic"
-        );
+        assert_eq!((boxes[0].utr_min, boxes[0].utr_max), (Some(utr(60)), Some(utr(90))));
+        assert_eq!((boxes[1].utr_min, boxes[1].utr_max), (Some(utr(10)), Some(utr(55))));
+        assert_eq!(boxes, place(&all_seeds, BoxSize::default()).unwrap(), "deterministic");
     }
 
     #[test]
     fn promotion_and_relegation_override_utr() {
         let mut all_seeds = seeds(&[90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 35]);
         // A low-UTR player promoted from tier 2 moves up; a high one relegated moves down.
-        all_seeds[11].previous = Some(Previous {
-            tier: 2,
-            movement: -1,
-        });
-        all_seeds[0].previous = Some(Previous {
-            tier: 1,
-            movement: 1,
-        });
+        all_seeds[11].previous = Some(Previous { tier: 2, movement: -1 });
+        all_seeds[0].previous = Some(Previous { tier: 1, movement: 1 });
         // Relegated from the bottom tier stays in the bottom tier.
-        all_seeds[10].previous = Some(Previous {
-            tier: 2,
-            movement: 1,
-        });
+        all_seeds[10].previous = Some(Previous { tier: 2, movement: 1 });
         let boxes = place(&all_seeds, BoxSize::default()).unwrap();
         assert_eq!(boxes.len(), 2);
         assert!(boxes[0].entries.contains(&11), "{boxes:?}");
@@ -312,24 +275,17 @@ mod tests {
         for n in 0..40 {
             let all_seeds = seeds(&(0..n).map(|idx| (idx * 37) % 100).collect::<Vec<_>>());
             let boxes = place(&all_seeds, BoxSize::default()).unwrap();
-            let mut all: Vec<u32> = boxes
-                .iter()
-                .flat_map(|placed| placed.entries.clone())
-                .collect();
+            let mut all: Vec<u32> =
+                boxes.iter().flat_map(|placed| placed.entries.clone()).collect();
             all.sort_unstable();
             assert_eq!(all, (0..u32::try_from(n).unwrap()).collect::<Vec<_>>());
             let tiers: Vec<u32> = boxes.iter().map(|placed| placed.tier).collect();
-            assert_eq!(
-                tiers,
-                (1..=u32::try_from(boxes.len()).unwrap()).collect::<Vec<_>>()
-            );
+            assert_eq!(tiers, (1..=u32::try_from(boxes.len()).unwrap()).collect::<Vec<_>>());
         }
     }
 
     fn seeds_of(n: usize) -> Vec<Seed<u32>> {
-        let utrs: Vec<i64> = (0..n)
-            .map(|idx| i64::try_from(idx * 37 % 100).unwrap())
-            .collect();
+        let utrs: Vec<i64> = (0..n).map(|idx| i64::try_from(idx * 37 % 100).unwrap()).collect();
         seeds(&utrs)
     }
 
@@ -337,11 +293,7 @@ mod tests {
     fn a_season_needs_two_entries_and_no_thin_box() {
         for n in 0..40 {
             let boxes = place(&seeds_of(n), BoxSize::default()).unwrap();
-            let want = if n < 2 {
-                Err(Unplayable::TooFewEntries)
-            } else {
-                Ok(())
-            };
+            let want = if n < 2 { Err(Unplayable::TooFewEntries) } else { Ok(()) };
             assert_eq!(playable(n, &boxes), want, "n={n}");
         }
         // Small custom boxes still never strand a lone entry.
@@ -349,25 +301,12 @@ mod tests {
             let limits = BoxSize { min_size, max_size };
             for n in 2..40 {
                 let boxes = place(&seeds_of(n), limits).unwrap();
-                assert_eq!(
-                    playable(n, &boxes),
-                    Ok(()),
-                    "n={n} in {min_size}..={max_size}"
-                );
+                assert_eq!(playable(n, &boxes), Ok(()), "n={n} in {min_size}..={max_size}");
             }
         }
-        let thin = [Placed {
-            tier: 1,
-            entries: vec![1_u32],
-            utr_min: None,
-            utr_max: None,
-        }];
+        let thin = [Placed { tier: 1, entries: vec![1_u32], utr_min: None, utr_max: None }];
         assert_eq!(playable(3, &thin), Err(Unplayable::ThinBox));
-        assert!(
-            Unplayable::TooFewEntries
-                .to_string()
-                .contains("Fewer than two")
-        );
+        assert!(Unplayable::TooFewEntries.to_string().contains("Fewer than two"));
     }
 
     #[test]

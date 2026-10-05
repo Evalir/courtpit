@@ -1,9 +1,11 @@
 //! `/api/v1/auth/*`: one-time email codes, passwords, sessions.
 
+use std::net::IpAddr;
+
 use axum::{
     Json,
-    extract::State,
-    http::{HeaderMap, StatusCode},
+    extract::{FromRequestParts, State},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
@@ -16,14 +18,14 @@ use uuid::Uuid;
 
 use subtle::ConstantTimeEq;
 
-use crate::extract::ApiJson;
 use crate::{
     ApiError, ApiResult, AppState, Tenant,
     auth::{
-        ClientIp, CurrentPlayer, CurrentUser, SESSION_COOKIE, create_session, ensure_player,
+        ClientIp, CurrentPlayer, CurrentUser, SESSION_COOKIE, SessionDelivery, create_session,
+        ensure_player,
         secrets::{hash_code, new_code},
-        wants_cookie,
     },
+    extract::ApiJson,
     mailer::Email,
     models::PlayerRole,
 };
@@ -39,10 +41,8 @@ const MAX_PASSWORD_LEN: usize = 256;
 
 /// Trims and validates an email address (RFC 5322 addr-spec with a dotted domain).
 pub(crate) fn normalize_email(raw: &str) -> Result<String, ApiError> {
-    let options = Options::default()
-        .with_required_tld()
-        .without_display_text()
-        .without_domain_literal();
+    let options =
+        Options::default().with_required_tld().without_display_text().without_domain_literal();
     EmailAddress::parse_with_options(raw.trim(), options)
         .map(|email| email.as_str().to_owned())
         .map_err(|_| ApiError::validation("invalid email address"))
@@ -111,11 +111,7 @@ pub async fn request_otp(
     .await?;
     let code_id = Uuid::now_v7();
     let code = new_code();
-    let purpose = if verified_at.is_some() {
-        "login"
-    } else {
-        "verify"
-    };
+    let purpose = if verified_at.is_some() { "login" } else { "verify" };
     let _ = sqlx::query(
         "INSERT INTO email_codes (id, user_id, code_hash, purpose, expires_at)
          VALUES ($1, $2, $3, $4::email_code_purpose, now() + make_interval(mins => $5))",
@@ -191,12 +187,10 @@ struct CodeRow {
 )]
 pub async fn verify_otp(
     State(state): State<AppState>,
-    tenant: Tenant,
-    ClientIp(ip): ClientIp,
-    headers: HeaderMap,
+    sign_in: SignIn,
     ApiJson(body): ApiJson<OtpVerify>,
 ) -> ApiResult<Response> {
-    state.limiter.check(&format!("verify-ip:{ip}"))?;
+    state.limiter.check(&format!("verify-ip:{}", sign_in.ip))?;
     let email = normalize_email(&body.email)?;
     let mut tx = state.db.begin().await?;
     let user: Option<(Uuid, String)> = sqlx::query_as(
@@ -217,9 +211,7 @@ pub async fn verify_otp(
     if code_row.expires_at <= Utc::now() || code_row.attempts >= MAX_CODE_ATTEMPTS {
         return Err(ApiError::InvalidCredentials);
     }
-    let matches: bool = hash_code(code_row.id, &body.code)
-        .ct_eq(&code_row.code_hash)
-        .into();
+    let matches: bool = hash_code(code_row.id, &body.code).ct_eq(&code_row.code_hash).into();
     if !matches {
         let _ = sqlx::query(
             "UPDATE email_codes SET attempts = attempts + 1,
@@ -245,50 +237,65 @@ pub async fn verify_otp(
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
-    finish_login(
-        &state,
-        &tenant,
-        user_id,
-        &email,
-        body.device_label.as_deref(),
-        &headers,
-    )
-    .await
+    sign_in.finish(&state, user_id, &email, body.device_label.as_deref()).await
 }
 
-/// Joins the community if needed, opens a session and renders it (cookie or body).
-pub(crate) async fn finish_login(
-    state: &AppState,
-    tenant: &Tenant,
-    user_id: Uuid,
-    email: &str,
-    device_label: Option<&str>,
-    headers: &HeaderMap,
-) -> ApiResult<Response> {
-    let mut tx = tenant.begin(&state.db).await?;
-    let player_id = ensure_player(&mut tx, tenant.id(), user_id, email).await?;
-    tx.commit().await?;
-    let ttl = Duration::days(state.config.session_ttl_days);
-    let (token, expires_at) = create_session(&state.db, user_id, device_label, ttl).await?;
-    let cookie = wants_cookie(headers);
-    let body = Json(AuthSession {
-        token: (!cookie).then(|| token.clone()),
-        expires_at,
-        user_id,
-        player_id,
-    });
-    if !cookie {
-        return Ok(body.into_response());
+/// What every sign-in request carries besides its credentials: the community signed in to, the
+/// caller's address (for rate limits) and how the session goes back to the client.
+#[derive(Debug, Clone)]
+pub struct SignIn {
+    /// The community signed in to.
+    pub tenant: Tenant,
+    /// The caller's address.
+    pub ip: IpAddr,
+    /// How the new session reaches the client.
+    pub delivery: SessionDelivery,
+}
+
+impl SignIn {
+    /// Joins the community if needed, opens a session and renders it (cookie or body).
+    pub(crate) async fn finish(
+        &self,
+        state: &AppState,
+        user_id: Uuid,
+        email: &str,
+        device_label: Option<&str>,
+    ) -> ApiResult<Response> {
+        let mut tx = self.tenant.begin(&state.db).await?;
+        let player_id = ensure_player(&mut tx, self.tenant.id(), user_id, email).await?;
+        tx.commit().await?;
+        let ttl = Duration::days(state.config.session_ttl_days);
+        let (token, expires_at) = create_session(&state.db, user_id, device_label, ttl).await?;
+        let cookie = self.delivery == SessionDelivery::Cookie;
+        let body = Json(AuthSession {
+            token: (!cookie).then(|| token.clone()),
+            expires_at,
+            user_id,
+            player_id,
+        });
+        if !cookie {
+            return Ok(body.into_response());
+        }
+        let jar = CookieJar::new().add(
+            Cookie::build((SESSION_COOKIE, token))
+                .path("/")
+                .http_only(true)
+                .same_site(SameSite::Lax)
+                .max_age(cookie::time::Duration::seconds(ttl.num_seconds()))
+                .secure(state.config.cookie_secure),
+        );
+        Ok((jar, body).into_response())
     }
-    let jar = CookieJar::new().add(
-        Cookie::build((SESSION_COOKIE, token))
-            .path("/")
-            .http_only(true)
-            .same_site(SameSite::Lax)
-            .max_age(cookie::time::Duration::seconds(ttl.num_seconds()))
-            .secure(state.config.cookie_secure),
-    );
-    Ok((jar, body).into_response())
+}
+
+impl FromRequestParts<AppState> for SignIn {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
+        let tenant = Tenant::from_request_parts(parts, state).await?;
+        let ClientIp(ip) = ClientIp::from_request_parts(parts, state).await?;
+        Ok(Self { tenant, ip, delivery: SessionDelivery::from_headers(&parts.headers) })
+    }
 }
 
 /// Body of `POST /auth/password/login`.
@@ -324,16 +331,12 @@ struct LoginRow {
 )]
 pub async fn password_login(
     State(state): State<AppState>,
-    tenant: Tenant,
-    ClientIp(ip): ClientIp,
-    headers: HeaderMap,
+    sign_in: SignIn,
     ApiJson(body): ApiJson<PasswordLogin>,
 ) -> ApiResult<Response> {
     let email = normalize_email(&body.email)?;
-    state.limiter.check(&format!("login-ip:{ip}"))?;
-    state
-        .limiter
-        .check(&format!("login-email:{}", email.to_lowercase()))?;
+    state.limiter.check(&format!("login-ip:{}", sign_in.ip))?;
+    state.limiter.check(&format!("login-email:{}", email.to_lowercase()))?;
     let user: Option<LoginRow> = sqlx::query_as(
         "SELECT id, email, password_hash, email_verified_at FROM users
          WHERE lower(email) = lower($1) AND deleted_at IS NULL",
@@ -341,12 +344,8 @@ pub async fn password_login(
     .bind(&email)
     .fetch_optional(&state.db)
     .await?;
-    let Some(LoginRow {
-        id: user_id,
-        email,
-        password_hash: Some(phc),
-        email_verified_at: Some(_),
-    }) = user
+    let Some(LoginRow { id: user_id, email, password_hash: Some(phc), email_verified_at: Some(_) }) =
+        user
     else {
         return Err(ApiError::InvalidCredentials);
     };
@@ -355,15 +354,7 @@ pub async fn password_login(
         .await
         .map_err(|err| ApiError::Internal(err.into()))?
         .map_err(|_| ApiError::InvalidCredentials)?;
-    finish_login(
-        &state,
-        &tenant,
-        user_id,
-        &email,
-        body.device_label.as_deref(),
-        &headers,
-    )
-    .await
+    sign_in.finish(&state, user_id, &email, body.device_label.as_deref()).await
 }
 
 /// Body of `PUT /auth/password`.

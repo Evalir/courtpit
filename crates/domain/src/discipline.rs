@@ -42,13 +42,7 @@ mod tests {
 
     #[test]
     fn json() {
-        assert_eq!(
-            serde_json::to_string(&Discipline::Mixed).unwrap(),
-            "\"mixed\""
-        );
-        assert_eq!(
-            serde_json::from_str::<Discipline>("\"doubles\"").unwrap(),
-            Discipline::Doubles
-        );
+        assert_eq!(serde_json::to_string(&Discipline::Mixed).unwrap(), "\"mixed\"");
+        assert_eq!(serde_json::from_str::<Discipline>("\"doubles\"").unwrap(), Discipline::Doubles);
     }
 }

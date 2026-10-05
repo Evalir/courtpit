@@ -89,7 +89,7 @@ impl Backup {
             );
         };
         let database_url =
-            nonblank(cfg.dump_database_url.as_deref()).unwrap_or(config.db.session_url());
+            nonblank(cfg.dump_database_url.as_deref()).unwrap_or_else(|| config.db.session_url());
         Ok(Some(Self {
             dump: Arc::new(pg_dump::PgDump::new(database_url)?),
             store: Arc::new(s3::S3Store::new(
@@ -117,14 +117,11 @@ pub fn normalized_prefix(prefix: &str) -> String {
     }
 }
 
-/// The object key of the dump taken at `at`: `{prefix}{YYYY}/{MM}/racquetcollective-{YYYYMMDDTHHMMSSZ}.dump`.
-/// `prefix` is empty or ends with `/` (see [`normalized_prefix`]).
+/// The object key of the dump taken at `at`:
+/// `{prefix}{YYYY}/{MM}/racquetcollective-{YYYYMMDDTHHMMSSZ}.dump`. `prefix` is empty or ends with
+/// `/` (see [`normalized_prefix`]).
 pub fn object_key(prefix: &str, at: DateTime<Utc>) -> String {
-    format!(
-        "{prefix}{}/racquetcollective-{}.dump",
-        at.format("%Y/%m"),
-        at.format(STAMP)
-    )
+    format!("{prefix}{}/racquetcollective-{}.dump", at.format("%Y/%m"), at.format(STAMP))
 }
 
 /// The time encoded in `key`, if it is exactly a key [`object_key`] would produce under
@@ -140,11 +137,7 @@ fn parse_key(prefix: &str, key: &str) -> Option<DateTime<Utc>> {
 pub fn next_run_at(now: DateTime<Utc>, hour: u32) -> DateTime<Utc> {
     let at = NaiveTime::from_hms_opt(hour, 0, 0).unwrap_or(NaiveTime::MIN);
     let today = now.date_naive().and_time(at).and_utc();
-    if today > now {
-        today
-    } else {
-        today + Duration::days(1)
-    }
+    if today > now { today } else { today + Duration::days(1) }
 }
 
 /// Makes sure a backup job is pending, if backups are configured. Inserts only when none
@@ -170,10 +163,7 @@ pub async fn prune(
     let mut deleted = 0;
     for key in store.list(prefix).await.context("listing backups")? {
         if parse_key(prefix, &key).is_some_and(|taken| taken < cutoff) {
-            store
-                .delete(&key)
-                .await
-                .with_context(|| format!("deleting {key}"))?;
+            store.delete(&key).await.with_context(|| format!("deleting {key}"))?;
             deleted += 1;
         }
     }
@@ -246,15 +236,9 @@ mod tests {
     fn keys_have_a_fixed_layout_and_roundtrip() {
         let taken = at(4, 3, 0);
         let key = object_key("racquetcollective/", taken);
-        assert_eq!(
-            key,
-            "racquetcollective/2026/10/racquetcollective-20261004T030005Z.dump"
-        );
+        assert_eq!(key, "racquetcollective/2026/10/racquetcollective-20261004T030005Z.dump");
         assert_eq!(parse_key("racquetcollective/", &key), Some(taken));
-        assert_eq!(
-            object_key("", taken),
-            "2026/10/racquetcollective-20261004T030005Z.dump"
-        );
+        assert_eq!(object_key("", taken), "2026/10/racquetcollective-20261004T030005Z.dump");
         assert_eq!(normalized_prefix("backups"), "backups/");
         assert_eq!(normalized_prefix(" b/ "), "b/");
         assert_eq!(normalized_prefix(""), "");
@@ -286,10 +270,7 @@ mod tests {
         );
         // At or past the hour: tomorrow.
         let exactly = Utc.with_ymd_and_hms(2026, 10, 4, 3, 0, 0).unwrap();
-        assert_eq!(
-            next_run_at(exactly, 3),
-            Utc.with_ymd_and_hms(2026, 10, 5, 3, 0, 0).unwrap()
-        );
+        assert_eq!(next_run_at(exactly, 3), Utc.with_ymd_and_hms(2026, 10, 5, 3, 0, 0).unwrap());
         assert_eq!(
             next_run_at(at(4, 23, 59), 0),
             Utc.with_ymd_and_hms(2026, 10, 5, 0, 0, 0).unwrap()

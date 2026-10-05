@@ -175,9 +175,7 @@ pub async fn require_not_entered(
     .fetch_one(&mut **tx)
     .await?;
     if entered {
-        Err(ApiError::conflict(format!(
-            "{who} already in an entry of this league"
-        )))
+        Err(ApiError::conflict(format!("{who} already in an entry of this league")))
     } else {
         Ok(())
     }
@@ -204,9 +202,7 @@ pub async fn require_unpaired(
     .fetch_one(&mut **tx)
     .await?;
     if paired {
-        Err(ApiError::conflict(format!(
-            "{who} already in an entry of this league"
-        )))
+        Err(ApiError::conflict(format!("{who} already in an entry of this league")))
     } else {
         Ok(())
     }

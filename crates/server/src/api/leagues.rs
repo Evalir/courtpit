@@ -20,7 +20,7 @@ use crate::{
         standings::{self, DivisionStanding},
     },
     matches::{self, DbDiscipline, MATCH_COLUMNS, MatchRow, MatchView},
-    models::{Page, PageParams, double_option, paginate},
+    models::{Page, PageParams, Patch, paginate},
 };
 
 /// The full set of league settings (creation, and the result of applying a patch).
@@ -168,10 +168,7 @@ pub async fn create_league(
     .await?;
     let league = leagues::load(&mut tx, id, false).await?;
     tx.commit().await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(LeagueView::new(league, &admin.tenant)?),
-    ))
+    Ok((StatusCode::CREATED, Json(LeagueView::new(league, &admin.tenant)?)))
 }
 
 /// Body of `PATCH /admin/leagues/{id}`: absent fields are untouched, `null` clears
@@ -190,19 +187,21 @@ pub struct PatchLeague {
     /// When the season ends.
     pub ends_at: Option<DateTime<Utc>>,
     /// Match format override.
-    #[serde(default, deserialize_with = "double_option")]
-    pub match_format: Option<Option<MatchFormat>>,
+    #[serde(default)]
+    #[schema(value_type = Option<MatchFormat>)]
+    pub match_format: Patch<MatchFormat>,
     /// Scoring config overrides.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(default)]
     #[schema(value_type = Option<Object>)]
-    pub scoring_overrides: Option<Option<Value>>,
+    pub scoring_overrides: Patch<Value>,
     /// Minimum box size.
     pub box_min_size: Option<i32>,
     /// Maximum box size.
     pub box_max_size: Option<i32>,
     /// The preceding season, if any.
-    #[serde(default, deserialize_with = "double_option")]
-    pub previous_league_id: Option<Option<Uuid>>,
+    #[serde(default)]
+    #[schema(value_type = Option<Uuid>)]
+    pub previous_league_id: Patch<Uuid>,
 }
 
 /// Edits a league while it is still a draft (admin).
@@ -224,11 +223,11 @@ pub async fn patch_league(
     if existing.status != LeagueStatus::Draft {
         return Err(ApiError::conflict("only draft leagues can be edited"));
     }
-    if patch.previous_league_id == Some(Some(id)) {
+    if patch.previous_league_id == Patch::Set(id) {
         return Err(ApiError::validation("a league can't follow itself"));
     }
     let mut settings = Settings {
-        name: patch.name.unwrap_or(existing.name.clone()),
+        name: patch.name.unwrap_or_else(|| existing.name.clone()),
         discipline: existing.discipline(),
         registration_opens_at: patch
             .registration_opens_at
@@ -240,18 +239,13 @@ pub async fn patch_league(
         ends_at: patch.ends_at.unwrap_or(existing.ends_at),
         match_format: patch
             .match_format
-            .unwrap_or(existing.match_format.as_ref().map(|json| json.0)),
-        scoring_overrides: patch.scoring_overrides.unwrap_or(
-            existing
-                .scoring_overrides
-                .as_ref()
-                .map(|json| json.0.clone()),
-        ),
+            .apply(|| existing.match_format.as_ref().map(|json| json.0)),
+        scoring_overrides: patch
+            .scoring_overrides
+            .apply(|| existing.scoring_overrides.as_ref().map(|json| json.0.clone())),
         box_min_size: patch.box_min_size.unwrap_or(existing.box_min_size),
         box_max_size: patch.box_max_size.unwrap_or(existing.box_max_size),
-        previous_league_id: patch
-            .previous_league_id
-            .unwrap_or(existing.previous_league_id),
+        previous_league_id: patch.previous_league_id.apply(|| existing.previous_league_id),
     };
     settings.validate(&mut tx, &admin.tenant).await?;
     let _ = sqlx::query(
@@ -296,9 +290,7 @@ pub async fn publish_league(
     let mut tx = admin.tenant.begin(&state.db).await?;
     let existing = leagues::load(&mut tx, id, true).await?;
     if existing.status != LeagueStatus::Draft || existing.published_at.is_some() {
-        return Err(ApiError::conflict(
-            "only unpublished drafts can be published",
-        ));
+        return Err(ApiError::conflict("only unpublished drafts can be published"));
     }
     if existing.registration_closes_at <= now {
         return Err(ApiError::conflict(
@@ -321,10 +313,7 @@ pub async fn publish_league(
     .execute(&mut *tx)
     .await?;
     // From here the dates drive the league; the job reschedules itself for each step.
-    let job = Job::AdvanceLeague {
-        community_id: tx.community_id(),
-        league_id: id,
-    };
+    let job = Job::AdvanceLeague { community_id: tx.community_id(), league_id: id };
     jobs::enqueue(&mut *tx, job, now).await?;
     let league = leagues::load(&mut tx, id, false).await?;
     tx.commit().await?;
@@ -345,10 +334,7 @@ pub async fn cancel_league(
     admin.require_admin()?;
     let mut tx = admin.tenant.begin(&state.db).await?;
     let existing = leagues::load(&mut tx, id, true).await?;
-    if matches!(
-        existing.status,
-        LeagueStatus::Finished | LeagueStatus::Cancelled
-    ) {
+    if matches!(existing.status, LeagueStatus::Finished | LeagueStatus::Cancelled) {
         return Err(ApiError::conflict("the league is already over"));
     }
     let _ = sqlx::query(
@@ -470,10 +456,7 @@ pub async fn unresolved_matches(
     let page = paginate(rows, limit, |row| row.id.to_string());
     let items = matches::views(&mut tx, page.items).await?;
     tx.commit().await?;
-    Ok(Json(Page {
-        items,
-        next_cursor: page.next_cursor,
-    }))
+    Ok(Json(Page { items, next_cursor: page.next_cursor }))
 }
 
 /// Filters for `GET /leagues`.
@@ -502,14 +485,10 @@ pub async fn list_leagues(
     player: CurrentPlayer,
     ApiQuery(query): ApiQuery<LeagueQuery>,
 ) -> ApiResult<Json<Page<LeagueView>>> {
-    let page = PageParams {
-        cursor: query.cursor.clone(),
-        limit: query.limit,
-    };
+    let page = PageParams { cursor: query.cursor.clone(), limit: query.limit };
     let limit = page.limit();
-    let mut qb: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
-        "SELECT {LEAGUE_COLUMNS} FROM leagues WHERE community_id = "
-    ));
+    let mut qb: QueryBuilder<'_, Postgres> =
+        QueryBuilder::new(format!("SELECT {LEAGUE_COLUMNS} FROM leagues WHERE community_id = "));
     let _ = qb.push_bind(player.tenant.id());
     if !player.role.is_admin() {
         let _ = qb.push(" AND published_at IS NOT NULL");
@@ -518,9 +497,7 @@ pub async fn list_leagues(
         let _ = qb.push(" AND status = ").push_bind(status);
     }
     if let Some(discipline) = query.discipline {
-        let _ = qb
-            .push(" AND discipline = ")
-            .push_bind(DbDiscipline::from(discipline));
+        let _ = qb.push(" AND discipline = ").push_bind(DbDiscipline::from(discipline));
     }
     if let Some(cursor) = page.uuid_cursor()? {
         let _ = qb.push(" AND id < ").push_bind(cursor);

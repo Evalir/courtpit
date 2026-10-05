@@ -22,11 +22,7 @@ const PART_SIZE: usize = 8 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const ALGORITHM: &str = "AWS4-HMAC-SHA256";
 /// SigV4 leaves `A-Za-z0-9-._~` as is and percent-encodes everything else.
-const ENCODE: &AsciiSet = &NON_ALPHANUMERIC
-    .remove(b'-')
-    .remove(b'.')
-    .remove(b'_')
-    .remove(b'~');
+const ENCODE: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
 
 fn uri_encode(text: &str) -> String {
     utf8_percent_encode(text, ENCODE).to_string()
@@ -57,15 +53,11 @@ fn amz_date(at: DateTime<Utc>) -> String {
 
 /// The canonical query string: names and values encoded, sorted by name.
 fn canonical_query(params: &[(&str, &str)]) -> String {
-    let mut pairs: Vec<(String, String)> = params
-        .iter()
-        .map(|(name, value)| (uri_encode(name), uri_encode(value)))
-        .collect();
+    let mut pairs: Vec<(String, String)> =
+        params.iter().map(|(name, value)| (uri_encode(name), uri_encode(value))).collect();
     pairs.sort();
-    let pairs: Vec<String> = pairs
-        .into_iter()
-        .map(|(name, value)| format!("{name}={value}"))
-        .collect();
+    let pairs: Vec<String> =
+        pairs.into_iter().map(|(name, value)| format!("{name}={value}")).collect();
     pairs.join("&")
 }
 
@@ -119,10 +111,8 @@ impl Credentials {
             amz_date(at),
             sha256_hex(canonical_request.as_bytes())
         );
-        let mut key = hmac_sha256(
-            format!("AWS4{}", self.secret_key).as_bytes(),
-            &date.to_string(),
-        )?;
+        let mut key =
+            hmac_sha256(format!("AWS4{}", self.secret_key).as_bytes(), &date.to_string())?;
         for part in [self.region.as_str(), "s3", "aws4_request"] {
             key = hmac_sha256(&key, part)?;
         }
@@ -246,9 +236,7 @@ impl S3Store {
     }
 
     async fn create_upload(&self, key: &str) -> anyhow::Result<String> {
-        let response = self
-            .send(Method::POST, key, &[("uploads", "")], Vec::new())
-            .await?;
+        let response = self.send(Method::POST, key, &[("uploads", "")], Vec::new()).await?;
         let xml = response.text().await?;
         element(&xml, "UploadId").context("S3 returned no UploadId")
     }
@@ -263,17 +251,11 @@ impl S3Store {
     ) -> anyhow::Result<String> {
         let number = number.to_string();
         let response = self
-            .send(
-                Method::PUT,
-                key,
-                &[("partNumber", &number), ("uploadId", upload_id)],
-                part,
-            )
+            .send(Method::PUT, key, &[("partNumber", &number), ("uploadId", upload_id)], part)
             .await?;
         let etag = response.headers().get(header::ETAG);
         let etag = etag.and_then(|value| value.to_str().ok());
-        etag.map(str::to_owned)
-            .context("S3 returned no ETag for a part")
+        etag.map(str::to_owned).context("S3 returned no ETag for a part")
     }
 
     async fn complete_upload(
@@ -291,14 +273,8 @@ impl S3Store {
             );
         }
         body.push_str("</CompleteMultipartUpload>");
-        let response = self
-            .send(
-                Method::POST,
-                key,
-                &[("uploadId", upload_id)],
-                body.into_bytes(),
-            )
-            .await?;
+        let response =
+            self.send(Method::POST, key, &[("uploadId", upload_id)], body.into_bytes()).await?;
         // S3 can answer 200 and still report a failure in the body.
         let xml = response.text().await?;
         if xml.contains("<Error>") {
@@ -317,9 +293,7 @@ impl S3Store {
         let mut etags = Vec::new();
         let mut total = 0;
         loop {
-            let part = read_part(body, self.part_size)
-                .await
-                .context("reading the dump")?;
+            let part = read_part(body, self.part_size).await.context("reading the dump")?;
             // A short (or empty) part means the dump ended.
             let last = part.len() < self.part_size;
             if !part.is_empty() {
@@ -346,14 +320,8 @@ impl S3Store {
         if let Some(token) = token {
             query.push(("continuation-token", token));
         }
-        let xml = self
-            .send(Method::GET, "", &query, Vec::new())
-            .await?
-            .text()
-            .await?;
-        let keys = elements(&xml, "Contents")
-            .filter_map(|entry| element(entry, "Key"))
-            .collect();
+        let xml = self.send(Method::GET, "", &query, Vec::new()).await?.text().await?;
+        let keys = elements(&xml, "Contents").filter_map(|entry| element(entry, "Key")).collect();
         if element(&xml, "IsTruncated").as_deref() != Some("true") {
             return Ok((keys, None));
         }
@@ -385,9 +353,8 @@ impl ObjectStore for S3Store {
             let uploaded = self.upload_parts(key, &upload_id, &mut body).await;
             if uploaded.is_err() {
                 // Don't leave a half-finished upload accruing storage.
-                if let Err(err) = self
-                    .send(Method::DELETE, key, &[("uploadId", &upload_id)], Vec::new())
-                    .await
+                if let Err(err) =
+                    self.send(Method::DELETE, key, &[("uploadId", &upload_id)], Vec::new()).await
                 {
                     tracing::warn!(error = ?err, %key, "aborting the multipart upload failed");
                 }
@@ -443,9 +410,8 @@ fn unescape(text: &str) -> String {
     let mut rest = text;
     while let Some((before, after)) = rest.split_once('&') {
         out.push_str(before);
-        let decoded = after
-            .split_once(';')
-            .and_then(|(entity, tail)| Some((decode_entity(entity)?, tail)));
+        let decoded =
+            after.split_once(';').and_then(|(entity, tail)| Some((decode_entity(entity)?, tail)));
         if let Some((ch, tail)) = decoded {
             out.push(ch);
             rest = tail;
@@ -502,10 +468,7 @@ mod tests {
             secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into(),
             region: "us-east-1".into(),
         };
-        (
-            credentials,
-            Utc.with_ymd_and_hms(2013, 5, 24, 0, 0, 0).unwrap(),
-        )
+        (credentials, Utc.with_ymd_and_hms(2013, 5, 24, 0, 0, 0).unwrap())
     }
 
     const EMPTY_SHA: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -574,14 +537,10 @@ mod tests {
         let xml = "<R><IsTruncated>true</IsTruncated><Contents><Key>a&amp;b/c&#233;&#x41;</Key>\
                    <Size>1</Size></Contents><Contents><Key>x&lt;y&gt;&quot;&apos;</Key></Contents>\
                    <NextContinuationToken>t&amp;1</NextContinuationToken></R>";
-        let keys: Vec<_> = elements(xml, "Contents")
-            .filter_map(|entry| element(entry, "Key"))
-            .collect();
+        let keys: Vec<_> =
+            elements(xml, "Contents").filter_map(|entry| element(entry, "Key")).collect();
         assert_eq!(keys, ["a&b/céA", "x<y>\"'"]);
-        assert_eq!(
-            element(xml, "NextContinuationToken").as_deref(),
-            Some("t&1")
-        );
+        assert_eq!(element(xml, "NextContinuationToken").as_deref(), Some("t&1"));
         assert_eq!(element(xml, "Missing"), None);
         assert_eq!(unescape("a & b &bogus; &#xZZ;"), "a & b &bogus; &#xZZ;");
     }
@@ -605,14 +564,10 @@ mod tests {
     fn signed_correctly(method: &HttpMethod, uri: &Uri, headers: &HeaderMap, body: &[u8]) -> bool {
         let header = |name: &str| headers.get(name).unwrap().to_str().unwrap().to_owned();
         let amz_date = header("x-amz-date");
-        let at = chrono::NaiveDateTime::parse_from_str(&amz_date, "%Y%m%dT%H%M%SZ")
-            .unwrap()
-            .and_utc();
+        let at =
+            chrono::NaiveDateTime::parse_from_str(&amz_date, "%Y%m%dT%H%M%SZ").unwrap().and_utc();
         let (credentials, _) = aws_example();
-        let credentials = Credentials {
-            region: "auto".into(),
-            ..credentials
-        };
+        let credentials = Credentials { region: "auto".into(), ..credentials };
         let expected = credentials
             .authorization(
                 at,
@@ -634,9 +589,7 @@ mod tests {
 
     impl FakeS3 {
         fn put_part(&self, query: &str, body: &[u8]) -> Reply {
-            let number = query
-                .split('&')
-                .find_map(|pair| pair.strip_prefix("partNumber="));
+            let number = query.split('&').find_map(|pair| pair.strip_prefix("partNumber="));
             let number: usize = number.unwrap().parse().unwrap();
             let _ = self.parts.lock().unwrap().insert(number, body.to_vec());
             let mut headers = HeaderMap::new();
@@ -690,10 +643,7 @@ mod tests {
                 "<R><IsTruncated>true</IsTruncated><Contents><Key>p/a</Key></Contents>\
                  <NextContinuationToken>next&amp;page</NextContinuationToken></R>",
             ),
-            _ => reply(
-                StatusCode::BAD_REQUEST,
-                &format!("<Error>{method} {uri}</Error>"),
-            ),
+            _ => reply(StatusCode::BAD_REQUEST, &format!("<Error>{method} {uri}</Error>")),
         }
     }
 
@@ -702,9 +652,7 @@ mod tests {
         let app = Router::new().fallback(s3_handler).with_state(fake.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        drop(tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap()
-        }));
+        drop(tokio::spawn(async move { axum::serve(listener, app).await.unwrap() }));
         let (credentials, _) = aws_example();
         let store = S3Store::new(
             &format!("http://{addr}/"),
@@ -759,51 +707,30 @@ mod tests {
     #[tokio::test]
     async fn a_failing_dump_aborts_the_upload() {
         let (store, fake) = fake_store(10).await;
-        let err = store
-            .put_stream("p/x.dump", Box::new(Dying(vec![7; 15])))
-            .await
-            .unwrap_err();
+        let err = store.put_stream("p/x.dump", Box::new(Dying(vec![7; 15]))).await.unwrap_err();
         assert!(format!("{err:#}").contains("pg_dump failed"), "{err:#}");
         assert!(fake.objects.lock().unwrap().is_empty());
         let calls = fake.calls.lock().unwrap();
-        assert_eq!(
-            calls.last().unwrap(),
-            "DELETE /bkt/p/x.dump?uploadId=up-1",
-            "{calls:?}"
-        );
+        assert_eq!(calls.last().unwrap(), "DELETE /bkt/p/x.dump?uploadId=up-1", "{calls:?}");
         assert!(
-            !calls
-                .iter()
-                .any(|call| call.contains("uploadId=up-1") && call.starts_with("POST"))
+            !calls.iter().any(|call| call.contains("uploadId=up-1") && call.starts_with("POST"))
         );
     }
 
     #[tokio::test]
     async fn an_empty_dump_is_an_error() {
         let (store, fake) = fake_store(10).await;
-        let err = store
-            .put_stream("p/x.dump", Box::new(io::Cursor::new(Vec::new())))
-            .await
-            .unwrap_err();
+        let err =
+            store.put_stream("p/x.dump", Box::new(io::Cursor::new(Vec::new()))).await.unwrap_err();
         assert!(err.to_string().contains("empty"), "{err}");
-        assert!(
-            fake.calls
-                .lock()
-                .unwrap()
-                .last()
-                .unwrap()
-                .starts_with("DELETE")
-        );
+        assert!(fake.calls.lock().unwrap().last().unwrap().starts_with("DELETE"));
     }
 
     #[tokio::test]
     async fn s3_errors_carry_status_and_message() {
         let (store, _) = fake_store(10).await;
         // The fake rejects what it can't route; the error names the call and the response.
-        let err = store
-            .send(Method::GET, "nothing", &[], Vec::new())
-            .await
-            .unwrap_err();
+        let err = store.send(Method::GET, "nothing", &[], Vec::new()).await.unwrap_err();
         assert!(err.to_string().contains("400"), "{err}");
     }
 }

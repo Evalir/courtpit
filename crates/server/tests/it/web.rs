@@ -27,10 +27,7 @@ impl Export {
     }
 
     pub(crate) fn config(&self) -> Config {
-        Config {
-            web_dir: Some(self.0.clone()),
-            ..test_config()
-        }
+        Config { web_dir: Some(self.0.clone()), ..test_config() }
     }
 }
 
@@ -41,9 +38,7 @@ impl Drop for Export {
 }
 
 fn header_of(res: &Res, name: header::HeaderName) -> &str {
-    res.headers
-        .get(name)
-        .map_or("", |value| value.to_str().unwrap())
+    res.headers.get(name).map_or("", |value| value.to_str().unwrap())
 }
 
 #[tokio::test]
@@ -62,16 +57,9 @@ async fn app_routes_get_the_shell_and_files_are_served_as_they_are() {
     let bundle = "/_expo/static/js/web/entry-abc123.js";
     let res = app.get(bundle).send().await;
     assert_eq!(res.status, StatusCode::OK);
-    assert_eq!(
-        header_of(&res, header::CACHE_CONTROL),
-        "public, max-age=31536000, immutable"
-    );
+    assert_eq!(header_of(&res, header::CACHE_CONTROL), "public, max-age=31536000, immutable");
     assert_eq!(res.body, "console.log(1)");
-    let res = app
-        .get(bundle)
-        .header("accept-encoding", "gzip")
-        .send()
-        .await;
+    let res = app.get(bundle).header("accept-encoding", "gzip").send().await;
     assert_eq!(header_of(&res, header::CONTENT_ENCODING), "gzip");
     assert_eq!(res.body, "gzipped");
 
@@ -91,11 +79,7 @@ async fn app_routes_get_the_shell_and_files_are_served_as_they_are() {
 #[tokio::test]
 async fn the_web_app_carries_security_headers() {
     let export = Export::new();
-    let app = TestApp::spawn_with(Config {
-        cookie_secure: true,
-        ..export.config()
-    })
-    .await;
+    let app = TestApp::spawn_with(Config { cookie_secure: true, ..export.config() }).await;
     for (path, status) in [
         ("/", StatusCode::OK),
         ("/verify?email=ana%40example.com", StatusCode::OK),
@@ -118,20 +102,11 @@ async fn the_api_keeps_its_paths_and_error_shape() {
     let app = TestApp::spawn_with(export.config()).await;
     let _ = app.community("demo").await;
 
-    let tenant = app
-        .get("/api/v1/tenant")
-        .community("demo")
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let tenant = app.get("/api/v1/tenant").community("demo").send().await.expect(StatusCode::OK);
     assert_eq!(tenant["slug"], "demo");
     let health = app.get("/healthz").send().await.expect(StatusCode::OK);
     assert_eq!(health["status"], "ok");
-    let missing = app
-        .get("/api/v1/no-such-thing")
-        .send()
-        .await
-        .expect(StatusCode::NOT_FOUND);
+    let missing = app.get("/api/v1/no-such-thing").send().await.expect(StatusCode::NOT_FOUND);
     assert_eq!(missing["error"]["code"], "not_found");
 }
 
@@ -139,11 +114,7 @@ async fn the_api_keeps_its_paths_and_error_shape() {
 async fn without_a_web_dir_only_the_api_answers() {
     let app = TestApp::spawn().await;
     let _ = app.get("/").send().await.expect(StatusCode::NOT_FOUND);
-    let missing = app
-        .get("/api/v2/anything")
-        .send()
-        .await
-        .expect(StatusCode::NOT_FOUND);
+    let missing = app.get("/api/v2/anything").send().await.expect(StatusCode::NOT_FOUND);
     assert_eq!(missing["error"]["code"], "not_found");
 }
 

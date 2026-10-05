@@ -15,11 +15,7 @@ use crate::{
 
 /// A scheduled match between `side_a` and `side_b` (one or two players each).
 pub(crate) async fn scheduled(app: &TestApp, side_a: &[&Session], side_b: &[&Session]) -> String {
-    let discipline = if side_a.len() == 1 {
-        "singles"
-    } else {
-        "doubles"
-    };
+    let discipline = if side_a.len() == 1 { "singles" } else { "doubles" };
     let view = app
         .post("/api/v1/matches")
         .as_(side_a[0])
@@ -70,13 +66,7 @@ async fn report_then_confirm() {
         .send()
         .await
         .expect(StatusCode::UNPROCESSABLE_ENTITY);
-    assert!(
-        bad["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("set 1: 6-5"),
-        "{bad}"
-    );
+    assert!(bad["error"]["message"].as_str().unwrap().contains("set 1: 6-5"), "{bad}");
     let view = report(
         &app,
         &bo,
@@ -88,11 +78,7 @@ async fn report_then_confirm() {
     assert_eq!(view["winner_side"], "b");
     assert_eq!(view["reported_by"], json!(bo.player_id));
     let reported_at: DateTime<Utc> = view["reported_at"].as_str().unwrap().parse().unwrap();
-    let deadline: DateTime<Utc> = view["confirm_deadline_at"]
-        .as_str()
-        .unwrap()
-        .parse()
-        .unwrap();
+    let deadline: DateTime<Utc> = view["confirm_deadline_at"].as_str().unwrap().parse().unwrap();
     assert_eq!(deadline - reported_at, Duration::days(3));
 
     let _ = app
@@ -172,12 +158,8 @@ async fn a_proposed_match_without_proposals_reports_and_auto_confirms() {
     let _ = jobs::run_due(&app.state, "t").await.unwrap();
     app.clock.advance(Duration::days(3) + Duration::minutes(1));
     assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 1);
-    let view = app
-        .get(&format!("/api/v1/matches/{id}"))
-        .as_(&ana)
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let view =
+        app.get(&format!("/api/v1/matches/{id}")).as_(&ana).send().await.expect(StatusCode::OK);
     assert_eq!(view["status"], "confirmed");
 }
 
@@ -235,13 +217,9 @@ async fn league_matches_reported_from_proposed_confirm_and_dispute_as_usual() {
 
     // A dispute from the same path waits for an admin, who then settles it and scores it.
     let contested = insert_league_match(&app, &league, "singles", &[&bo], &[&cy]).await;
-    let _ = report(
-        &app,
-        &cy,
-        &contested,
-        json!({ "sets": [{ "a": 4, "b": 6 }, { "a": 3, "b": 6 }] }),
-    )
-    .await;
+    let _ =
+        report(&app, &cy, &contested, json!({ "sets": [{ "a": 4, "b": 6 }, { "a": 3, "b": 6 }] }))
+            .await;
     let view = app
         .post(&format!("/api/v1/matches/{contested}/dispute"))
         .as_(&bo)
@@ -313,26 +291,17 @@ async fn disputes_are_resolved_by_an_admin() {
     assert_eq!(view["disputed_by"], json!(bo.player_id));
 
     let resolve = |actor: &Session, body: Value| {
-        app.post(&format!("/api/v1/admin/matches/{id}/resolve"))
-            .as_(actor)
-            .json(body)
-            .send()
+        app.post(&format!("/api/v1/admin/matches/{id}/resolve")).as_(actor).json(body).send()
     };
-    let _ = resolve(
-        &bo,
-        json!({ "resolution": "score", "score": straight_sets_a() }),
-    )
-    .await
-    .expect(StatusCode::FORBIDDEN);
+    let _ = resolve(&bo, json!({ "resolution": "score", "score": straight_sets_a() }))
+        .await
+        .expect(StatusCode::FORBIDDEN);
     let _ = resolve(&ref_, json!({ "resolution": "score" }))
         .await
         .expect(StatusCode::UNPROCESSABLE_ENTITY);
-    let _ = resolve(
-        &ref_,
-        json!({ "resolution": "void", "score": straight_sets_a() }),
-    )
-    .await
-    .expect(StatusCode::UNPROCESSABLE_ENTITY);
+    let _ = resolve(&ref_, json!({ "resolution": "void", "score": straight_sets_a() }))
+        .await
+        .expect(StatusCode::UNPROCESSABLE_ENTITY);
     let view = resolve(
         &ref_,
         json!({
@@ -449,9 +418,5 @@ async fn unanswered_reports_auto_confirm_after_the_window() {
     app.clock.advance(Duration::days(1) + Duration::minutes(1));
     assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 2);
     assert_eq!(status(id).await, "confirmed");
-    assert_eq!(
-        status(other).await,
-        "disputed",
-        "disputes are not auto-confirmed"
-    );
+    assert_eq!(status(other).await, "disputed", "disputes are not auto-confirmed");
 }

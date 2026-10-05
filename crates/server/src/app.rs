@@ -109,9 +109,7 @@ impl AppState {
             PushKind::Log => Arc::new(LogPusher::default()),
             PushKind::Expo => Arc::new(ExpoPusher::new(config.expo_access_token.clone())),
         };
-        Ok(Self::new(config, db, mailer)
-            .with_backup(backup)
-            .with_pusher(pusher))
+        Ok(Self::new(config, db, mailer).with_backup(backup).with_pusher(pusher))
     }
 }
 
@@ -133,29 +131,16 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::auth::session))
         .routes(routes!(api::oidc::oidc_login))
         .routes(routes!(api::oidc::oidc_link))
-        .routes(routes!(
-            api::me::get_me,
-            api::me::patch_me,
-            api::me::delete_me
-        ))
+        .routes(routes!(api::me::get_me, api::me::patch_me, api::me::delete_me))
         .routes(routes!(api::me::join))
         .routes(routes!(api::me::export))
-        .routes(routes!(
-            api::devices::register_device,
-            api::devices::forget_device
-        ))
-        .routes(routes!(
-            api::devices::get_notifications,
-            api::devices::set_notifications
-        ))
+        .routes(routes!(api::devices::register_device, api::devices::forget_device))
+        .routes(routes!(api::devices::get_notifications, api::devices::set_notifications))
         .routes(routes!(api::players::list_players))
         .routes(routes!(api::players::get_player))
         .routes(routes!(api::players::ban_player))
         .routes(routes!(api::players::unban_player))
-        .routes(routes!(
-            api::matches::create_match,
-            api::matches::list_matches
-        ))
+        .routes(routes!(api::matches::create_match, api::matches::list_matches))
         .routes(routes!(api::matches::get_match))
         .routes(routes!(api::matches::cancel_match))
         .routes(routes!(api::proposals::propose))
@@ -166,10 +151,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::match_results::dispute_score))
         .routes(routes!(api::match_results::resolve_match))
         .routes(routes!(api::match_results::walkover_match))
-        .routes(routes!(
-            api::match_requests::create_request,
-            api::match_requests::list_requests
-        ))
+        .routes(routes!(api::match_requests::create_request, api::match_requests::list_requests))
         .routes(routes!(api::match_requests::get_request))
         .routes(routes!(api::match_requests::join_request))
         .routes(routes!(api::match_requests::leave_request))
@@ -183,10 +165,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::leagues::list_leagues))
         .routes(routes!(api::leagues::get_league))
         .routes(routes!(api::leagues::league_standings))
-        .routes(routes!(
-            api::league_entries::register,
-            api::league_entries::list_entries
-        ))
+        .routes(routes!(api::league_entries::register, api::league_entries::list_entries))
         .routes(routes!(api::league_entries::accept_invite))
         .routes(routes!(api::league_entries::decline_invite))
         .routes(routes!(api::league_entries::withdraw))
@@ -216,28 +195,16 @@ async fn no_such_route() -> ApiError {
 /// plain-HTTP development server never pins a browser to HTTPS.
 fn with_security_headers(app: Router<AppState>, https: bool) -> Router<AppState> {
     let headers = [
-        (
-            header::STRICT_TRANSPORT_SECURITY,
-            https.then_some("max-age=63072000; includeSubDomains"),
-        ),
+        (header::STRICT_TRANSPORT_SECURITY, https.then_some("max-age=63072000; includeSubDomains")),
         (header::X_CONTENT_TYPE_OPTIONS, Some("nosniff")),
-        (
-            header::REFERRER_POLICY,
-            Some("strict-origin-when-cross-origin"),
-        ),
+        (header::REFERRER_POLICY, Some("strict-origin-when-cross-origin")),
         // Clickjacking: `frame-ancestors` for current browsers, `X-Frame-Options` for older
         // ones. No script policy: the web app is not verified against one.
-        (
-            header::CONTENT_SECURITY_POLICY,
-            Some("frame-ancestors 'none'"),
-        ),
+        (header::CONTENT_SECURITY_POLICY, Some("frame-ancestors 'none'")),
         (header::X_FRAME_OPTIONS, Some("DENY")),
     ];
     headers.into_iter().fold(app, |app, (name, value)| {
-        app.layer(SetResponseHeaderLayer::if_not_present(
-            name,
-            value.map(HeaderValue::from_static),
-        ))
+        app.layer(SetResponseHeaderLayer::if_not_present(name, value.map(HeaderValue::from_static)))
     })
 }
 
@@ -258,14 +225,8 @@ pub fn router(state: AppState, web: Option<WebApp>) -> Router {
             }),
         )
         .route("/api/{*path}", any(no_such_route))
-        .route(
-            "/.well-known/apple-app-site-association",
-            get(crate::applinks::apple),
-        )
-        .route(
-            "/.well-known/assetlinks.json",
-            get(crate::applinks::android),
-        );
+        .route("/.well-known/apple-app-site-association", get(crate::applinks::apple))
+        .route("/.well-known/assetlinks.json", get(crate::applinks::android));
     let app = match web {
         Some(web) => api.fallback(move |request: Request| web.clone().respond(request)),
         None => api,

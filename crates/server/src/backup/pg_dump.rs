@@ -34,9 +34,7 @@ pub struct PgDump {
 
 impl fmt::Debug for PgDump {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PgDump")
-            .field("program", &self.program)
-            .finish_non_exhaustive()
+        f.debug_struct("PgDump").field("program", &self.program).finish_non_exhaustive()
     }
 }
 
@@ -47,18 +45,11 @@ impl PgDump {
         let mut url =
             reqwest::Url::parse(database_url).context("parsing the backup database URL")?;
         let decode = |text: &str| percent_decode_str(text).decode_utf8_lossy().into_owned();
-        let user = Some(url.username())
-            .filter(|name| !name.is_empty())
-            .map(decode);
+        let user = Some(url.username()).filter(|name| !name.is_empty()).map(decode);
         let password = url.password().map(decode);
         let _ = url.set_username("");
         let _ = url.set_password(None);
-        Ok(Self {
-            program: "pg_dump".into(),
-            uri: url.into(),
-            user,
-            password,
-        })
+        Ok(Self { program: "pg_dump".into(), uri: url.into(), user, password })
     }
 
     /// Runs another executable instead of `pg_dump` (for example a versioned path).
@@ -75,11 +66,7 @@ impl DumpSource for PgDump {
             .args(["--format=custom", "--no-owner", "--no-privileges"])
             .arg(format!("--dbname={}", self.uri))
             .envs(self.user.as_ref().map(|user| ("PGUSER", user)))
-            .envs(
-                self.password
-                    .as_ref()
-                    .map(|password| ("PGPASSWORD", password)),
-            )
+            .envs(self.password.as_ref().map(|password| ("PGPASSWORD", password)))
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -110,11 +97,7 @@ impl DumpSource for PgDump {
                 Err(err) => Err(format!("waiting for pg_dump failed: {err}")),
             }
         });
-        Ok(Box::new(DumpStream {
-            stdout,
-            exit: Some(exit),
-            failed: None,
-        }))
+        Ok(Box::new(DumpStream { stdout, exit: Some(exit), failed: None }))
     }
 }
 
@@ -198,26 +181,16 @@ mod tests {
 
     #[tokio::test]
     async fn a_missing_binary_has_a_clear_error() {
-        let dump = PgDump::new("postgres://db/app")
-            .unwrap()
-            .with_program("/nonexistent/pg_dump");
+        let dump = PgDump::new("postgres://db/app").unwrap().with_program("/nonexistent/pg_dump");
         let err = dump.start().err().unwrap();
-        assert_eq!(
-            err.to_string(),
-            "pg_dump not found: the image must include postgresql-client"
-        );
+        assert_eq!(err.to_string(), "pg_dump not found: the image must include postgresql-client");
     }
 
     #[tokio::test]
     async fn a_non_zero_exit_is_a_read_error() {
         // `false` ignores its arguments, prints nothing and exits 1.
-        let dump = PgDump::new("postgres://db/app")
-            .unwrap()
-            .with_program("false");
+        let dump = PgDump::new("postgres://db/app").unwrap().with_program("false");
         let err = drain(&dump).await.unwrap_err();
-        assert!(
-            err.to_string().contains("pg_dump failed (exit status: 1)"),
-            "{err}"
-        );
+        assert!(err.to_string().contains("pg_dump failed (exit status: 1)"), "{err}");
     }
 }

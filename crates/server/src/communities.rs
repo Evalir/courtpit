@@ -41,10 +41,7 @@ pub struct CommunitySettings {
 
 impl Default for CommunitySettings {
     fn default() -> Self {
-        Self {
-            confirm_window_days: 3,
-            mixed_eligibility: MixedEligibility::default(),
-        }
+        Self { confirm_window_days: 3, mixed_eligibility: MixedEligibility::default() }
     }
 }
 
@@ -96,10 +93,7 @@ pub async fn create_community(db: &PgPool, new: NewCommunity) -> anyhow::Result<
     .bind(Uuid::now_v7())
     .bind(new.slug.trim().to_ascii_lowercase())
     .bind(new.name.trim())
-    .bind(
-        new.custom_domain
-            .map(|domain| domain.trim().to_ascii_lowercase()),
-    )
+    .bind(new.custom_domain.map(|domain| domain.trim().to_ascii_lowercase()))
     .bind(Json(&new.branding))
     .fetch_one(db)
     .await
@@ -136,10 +130,7 @@ pub async fn create_community(db: &PgPool, new: NewCommunity) -> anyhow::Result<
     } else {
         None
     };
-    Ok(CreatedCommunity {
-        community,
-        owner_player_id,
-    })
+    Ok(CreatedCommunity { community, owner_player_id })
 }
 
 #[cfg(test)]
@@ -186,14 +177,8 @@ mod tests {
         assert_eq!(with_settings(json!({})).confirm_window_days, 3);
         let settings = with_settings(json!({ "confirm_window_days": 7, "future_key": true }));
         assert_eq!(settings.confirm_window_days, 7);
-        assert_eq!(
-            with_settings(json!({ "confirm_window_days": 0 })).confirm_window_days,
-            1
-        );
-        assert_eq!(
-            with_settings(json!({ "confirm_window_days": 99 })).confirm_window_days,
-            30
-        );
+        assert_eq!(with_settings(json!({ "confirm_window_days": 0 })).confirm_window_days, 1);
+        assert_eq!(with_settings(json!({ "confirm_window_days": 99 })).confirm_window_days, 30);
         assert_eq!(
             with_settings(json!({ "confirm_window_days": "x" })),
             CommunitySettings::default()
@@ -203,10 +188,7 @@ mod tests {
     #[test]
     fn mixed_eligibility_defaults_and_tolerates_junk() {
         use serde_json::json;
-        assert_eq!(
-            with_settings(json!({})).mixed_eligibility,
-            MixedEligibility::FemaleMale
-        );
+        assert_eq!(with_settings(json!({})).mixed_eligibility, MixedEligibility::FemaleMale);
         let settings = with_settings(json!({ "mixed_eligibility": "any_two_distinct" }));
         assert_eq!(settings.mixed_eligibility, MixedEligibility::AnyTwoDistinct);
         assert_eq!(settings.confirm_window_days, 3);

@@ -1,7 +1,6 @@
 //! League box standings from results.
 
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{LeagueMatchPoints, Outcome, ScoreSummary, Side};
 
@@ -74,10 +73,8 @@ pub fn standings<T: Ord + Copy + Hash>(
     results: &[BoxResult<T>],
     points: &LeagueMatchPoints,
 ) -> Vec<StandingRow<T>> {
-    let mut rows: HashMap<T, StandingRow<T>> = entries
-        .iter()
-        .map(|&entry| (entry, StandingRow::new(entry)))
-        .collect();
+    let mut rows: HashMap<T, StandingRow<T>> =
+        entries.iter().map(|&entry| (entry, StandingRow::new(entry))).collect();
     for result in results {
         if !(rows.contains_key(&result.side_a) && rows.contains_key(&result.side_b)) {
             continue;
@@ -97,18 +94,8 @@ pub fn standings<T: Ord + Copy + Hash>(
             }
             if let Some(summary) = result.summary {
                 let (sets_for, sets_against, games_for, games_against) = match side {
-                    Side::A => (
-                        summary.sets_a,
-                        summary.sets_b,
-                        summary.games_a,
-                        summary.games_b,
-                    ),
-                    Side::B => (
-                        summary.sets_b,
-                        summary.sets_a,
-                        summary.games_b,
-                        summary.games_a,
-                    ),
+                    Side::A => (summary.sets_a, summary.sets_b, summary.games_a, summary.games_b),
+                    Side::B => (summary.sets_b, summary.sets_a, summary.games_b, summary.games_a),
                 };
                 row.sets_won += u32::from(sets_for);
                 row.sets_lost += u32::from(sets_against);
@@ -135,9 +122,7 @@ mod tests {
     use crate::{MatchFormat, Score, SetScore, validate_score};
 
     fn played(entry_a: u8, entry_b: u8, sets: &[(u16, u16)]) -> BoxResult<u8> {
-        let mut score = Score {
-            sets: sets.iter().map(|&(x, y)| SetScore::games(x, y)).collect(),
-        };
+        let mut score = Score { sets: sets.iter().map(|&(x, y)| SetScore::games(x, y)).collect() };
         if score.sets.len() == 3 {
             let last = score.sets[2];
             score.sets[2] = SetScore::tiebreak(last.a, last.b);
@@ -184,10 +169,7 @@ mod tests {
             &[played(1, 3, &[(6, 0), (6, 0)])],
             &LeagueMatchPoints::default(),
         );
-        assert_eq!(
-            table.iter().map(|row| row.entry).collect::<Vec<_>>(),
-            vec![3, 7, 9]
-        );
+        assert_eq!(table.iter().map(|row| row.entry).collect::<Vec<_>>(), vec![3, 7, 9]);
         assert!(table.iter().all(|row| row.played == 0));
     }
 }

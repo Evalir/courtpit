@@ -26,9 +26,7 @@ impl RateLimiter {
     /// A limiter allowing `per_hour` hits per key per hour (a limit of 0 is treated as 1).
     pub fn per_hour(per_hour: u32) -> Self {
         let quota = Quota::per_hour(NonZeroU32::new(per_hour).unwrap_or(NonZeroU32::MIN));
-        Self {
-            inner: Arc::new(DefaultKeyedRateLimiter::keyed(quota)),
-        }
+        Self { inner: Arc::new(DefaultKeyedRateLimiter::keyed(quota)) }
     }
 
     /// Records a hit for `key`; errors once the key has exhausted its quota.
@@ -36,9 +34,7 @@ impl RateLimiter {
         if self.inner.len() > SWEEP_ABOVE {
             self.inner.retain_recent();
         }
-        self.inner
-            .check_key(&key.to_owned())
-            .map_err(|_| ApiError::RateLimited)
+        self.inner.check_key(&key.to_owned()).map_err(|_| ApiError::RateLimited)
     }
 }
 
@@ -75,9 +71,6 @@ mod tests {
         let notice = rate_limit_notice(Some("148e21d3a9e418")).unwrap();
         assert!(notice.contains("148e21d3a9e418"), "{notice}");
         assert!(notice.contains("per instance"), "{notice}");
-        assert!(
-            notice.contains("RACQUETCOLLECTIVE_AUTH_IP_LIMIT_PER_HOUR"),
-            "{notice}"
-        );
+        assert!(notice.contains("RACQUETCOLLECTIVE_AUTH_IP_LIMIT_PER_HOUR"), "{notice}");
     }
 }

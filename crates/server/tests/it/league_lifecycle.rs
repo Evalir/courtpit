@@ -27,11 +27,7 @@ pub(crate) async fn setup(n: usize) -> (TestApp, Session, Vec<Session>) {
 }
 
 pub(crate) async fn league(app: &TestApp, admin: &Session, id: &str) -> Value {
-    app.get(&format!("/api/v1/leagues/{id}"))
-        .as_(admin)
-        .send()
-        .await
-        .expect(StatusCode::OK)
+    app.get(&format!("/api/v1/leagues/{id}")).as_(admin).send().await.expect(StatusCode::OK)
 }
 
 pub(crate) async fn league_matches(app: &TestApp, session: &Session, id: &str) -> Vec<Value> {
@@ -42,12 +38,7 @@ pub(crate) async fn league_matches(app: &TestApp, session: &Session, id: &str) -
             || format!("/api/v1/matches?league_id={id}&limit=100"),
             |token| format!("/api/v1/matches?league_id={id}&limit=100&cursor={token}"),
         );
-        let page = app
-            .get(&url)
-            .as_(session)
-            .send()
-            .await
-            .expect(StatusCode::OK);
+        let page = app.get(&url).as_(session).send().await.expect(StatusCode::OK);
         out.extend(page["items"].as_array().unwrap().iter().cloned());
         match page["next_cursor"].as_str() {
             Some(token) => cursor = Some(token.to_owned()),
@@ -99,7 +90,7 @@ async fn activation_places_entries_by_utr_and_schedules_round_robins() {
     let id = open_league(&app, &admin, "singles").await;
     let mut utr_of = HashMap::new();
     for (i, player) in ps.iter().enumerate() {
-        let utr = 3.0 + i as f64 * 0.5;
+        let utr = (i as f64).mul_add(0.5, 3.0);
         let _ = app.patch_me(player, json!({ "utr": utr })).await;
         let _ = utr_of.insert(player.player_id, utr);
         let _ = app
@@ -111,11 +102,7 @@ async fn activation_places_entries_by_utr_and_schedules_round_robins() {
             .expect(StatusCode::CREATED);
     }
     at_day(&app, 7).await;
-    assert_eq!(
-        league(&app, &admin, &id).await["status"],
-        "registration",
-        "closed, not started"
-    );
+    assert_eq!(league(&app, &admin, &id).await["status"], "registration", "closed, not started");
     at_day(&app, 8).await;
     assert_eq!(league(&app, &admin, &id).await["status"], "active");
 
@@ -137,10 +124,7 @@ async fn activation_places_entries_by_utr_and_schedules_round_robins() {
     sizes.sort_unstable();
     assert_eq!(sizes, vec![6, 7]);
     let top = by_division.values().find(|group| group.len() == 7).unwrap();
-    assert!(
-        top.iter().all(|player| utr_of[player] >= 6.0),
-        "top box holds the 7 highest UTRs"
-    );
+    assert!(top.iter().all(|player| utr_of[player] >= 6.0), "top box holds the 7 highest UTRs");
 
     let matches = league_matches(&app, &ps[0], &id).await;
     assert_eq!(matches.len(), 7 * 6 / 2 + 6 * 5 / 2);
@@ -148,10 +132,8 @@ async fn activation_places_entries_by_utr_and_schedules_round_robins() {
     for item in &matches {
         assert_eq!(item["status"], "proposed");
         assert!(item["round"].as_i64().unwrap() >= 1);
-        let (side_a, side_b) = (
-            item["side_a"][0].as_str().unwrap(),
-            item["side_b"][0].as_str().unwrap(),
-        );
+        let (side_a, side_b) =
+            (item["side_a"][0].as_str().unwrap(), item["side_b"][0].as_str().unwrap());
         let division = item["division_id"].as_str().unwrap();
         let members = &by_division[division];
         assert!(
@@ -164,12 +146,8 @@ async fn activation_places_entries_by_utr_and_schedules_round_robins() {
         );
     }
     // League matches are visible to every member and appear in players' own lists.
-    let mine = app
-        .get("/api/v1/matches?limit=100")
-        .as_(&ps[12])
-        .send()
-        .await
-        .expect(StatusCode::OK);
+    let mine =
+        app.get("/api/v1/matches?limit=100").as_(&ps[12]).send().await.expect(StatusCode::OK);
     assert_eq!(mine["items"].as_array().unwrap().len(), 6);
 }
 
@@ -178,28 +156,21 @@ async fn doubles_activation_drops_incomplete_entries_and_copies_pairs() {
     let (app, admin, ps) = setup(5).await;
     let id = open_league(&app, &admin, "doubles").await;
     let register = |session: &Session, body: Value| {
-        app.post(&format!("/api/v1/leagues/{id}/entries"))
-            .as_(session)
-            .json(body)
-            .send()
+        app.post(&format!("/api/v1/leagues/{id}/entries")).as_(session).json(body).send()
     };
     for (player, partner) in [(0, 1), (2, 3)] {
         let entry = register(&ps[player], json!({ "partner_id": ps[partner].player_id }))
             .await
             .expect(StatusCode::CREATED);
         let _ = app
-            .post(&format!(
-                "/api/v1/leagues/{id}/entries/{}/accept",
-                entry["id"].as_str().unwrap()
-            ))
+            .post(&format!("/api/v1/leagues/{id}/entries/{}/accept", entry["id"].as_str().unwrap()))
             .as_(&ps[partner])
             .send()
             .await
             .expect(StatusCode::OK);
     }
-    let solo = register(&ps[4], json!({ "looking_for_partner": true }))
-        .await
-        .expect(StatusCode::CREATED);
+    let solo =
+        register(&ps[4], json!({ "looking_for_partner": true })).await.expect(StatusCode::CREATED);
     at_day(&app, 8).await;
     let withdrawn = app
         .get(&format!("/api/v1/leagues/{id}/entries?status=withdrawn"))
@@ -211,14 +182,8 @@ async fn doubles_activation_drops_incomplete_entries_and_copies_pairs() {
     let matches = league_matches(&app, &ps[0], &id).await;
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0]["discipline"], "doubles");
-    assert_eq!(
-        matches[0]["side_a"],
-        json!([ps[0].player_id, ps[1].player_id])
-    );
-    assert_eq!(
-        matches[0]["side_b"],
-        json!([ps[2].player_id, ps[3].player_id])
-    );
+    assert_eq!(matches[0]["side_a"], json!([ps[0].player_id, ps[1].player_id]));
+    assert_eq!(matches[0]["side_b"], json!([ps[2].player_id, ps[3].player_id]));
 }
 
 #[tokio::test]
@@ -286,10 +251,7 @@ async fn too_few_entries_cancel_the_league_and_tell_entrants() {
     let (app, admin, ps) = setup(4).await;
     let id = open_league(&app, &admin, "doubles").await;
     let register = |session: &Session, body: Value| {
-        app.post(&format!("/api/v1/leagues/{id}/entries"))
-            .as_(session)
-            .json(body)
-            .send()
+        app.post(&format!("/api/v1/leagues/{id}/entries")).as_(session).json(body).send()
     };
     // One complete pair, one solo looking for a partner (withdrawn at the start), and one
     // solo whose email is not verified (not told).
@@ -297,20 +259,15 @@ async fn too_few_entries_cancel_the_league_and_tell_entrants() {
         .await
         .expect(StatusCode::CREATED);
     let _ = app
-        .post(&format!(
-            "/api/v1/leagues/{id}/entries/{}/accept",
-            entry["id"].as_str().unwrap()
-        ))
+        .post(&format!("/api/v1/leagues/{id}/entries/{}/accept", entry["id"].as_str().unwrap()))
         .as_(&ps[1])
         .send()
         .await
         .expect(StatusCode::OK);
-    let _ = register(&ps[2], json!({ "looking_for_partner": true }))
-        .await
-        .expect(StatusCode::CREATED);
-    let _ = register(&ps[3], json!({ "looking_for_partner": true }))
-        .await
-        .expect(StatusCode::CREATED);
+    let _ =
+        register(&ps[2], json!({ "looking_for_partner": true })).await.expect(StatusCode::CREATED);
+    let _ =
+        register(&ps[3], json!({ "looking_for_partner": true })).await.expect(StatusCode::CREATED);
     let _ = sqlx::query("UPDATE users SET email_verified_at = NULL WHERE id = $1")
         .bind(ps[3].user_id)
         .execute(&app.db)
@@ -321,10 +278,7 @@ async fn too_few_entries_cancel_the_league_and_tell_entrants() {
     let cancelled = league(&app, &admin, &id).await;
     assert_eq!(cancelled["status"], "cancelled");
     assert!(
-        cancelled["cancel_reason"]
-            .as_str()
-            .unwrap()
-            .contains("Fewer than two entries"),
+        cancelled["cancel_reason"].as_str().unwrap().contains("Fewer than two entries"),
         "{cancelled}"
     );
     assert!(league_matches(&app, &admin, &id).await.is_empty());
@@ -354,11 +308,7 @@ async fn too_few_entries_cancel_the_league_and_tell_entrants() {
     for mail in &sent {
         assert!(mail.subject.contains("Autumn doubles"), "{}", mail.subject);
         assert!(mail.text.contains("\"Autumn doubles\""), "{}", mail.text);
-        assert!(
-            mail.text.contains("Fewer than two entries"),
-            "{}",
-            mail.text
-        );
+        assert!(mail.text.contains("Fewer than two entries"), "{}", mail.text);
     }
 
     // Done for good: no lifecycle job is left, and later runs mail nobody again.

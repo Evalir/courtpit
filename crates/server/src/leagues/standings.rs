@@ -77,37 +77,31 @@ fn box_result(
     entries: &[PlacedEntry],
 ) -> Result<Option<BoxResult<EntryId>>, ApiError> {
     let entry_of = |players: &[Uuid]| {
-        entries
-            .iter()
-            .find(|entry| entry.player_ids == players)
-            .map(|entry| EntryId(entry.id))
+        entries.iter().find(|entry| entry.player_ids == players).map(|entry| EntryId(entry.id))
     };
-    let (Some(side_a_entry), Some(side_b_entry)) = (
-        entry_of(&match_row.side_a_players),
-        entry_of(&match_row.side_b_players),
-    ) else {
+    let (Some(side_a_entry), Some(side_b_entry)) =
+        (entry_of(&match_row.side_a_players), entry_of(&match_row.side_b_players))
+    else {
         return Ok(None);
     };
-    Ok(
-        match (match_row.status(), match_row.winner_side, &match_row.score) {
-            (MatchStatus::Walkover, Some(w), _) => Some(BoxResult {
+    Ok(match (match_row.status(), match_row.winner_side, &match_row.score) {
+        (MatchStatus::Walkover, Some(w), _) => Some(BoxResult {
+            side_a: side_a_entry,
+            side_b: side_b_entry,
+            outcome: Outcome::Walkover { winner: w.into() },
+            summary: None,
+        }),
+        (MatchStatus::Confirmed | MatchStatus::Resolved, Some(_), Some(score)) => {
+            let summary = check_score(&match_row.match_format, score)?;
+            Some(BoxResult {
                 side_a: side_a_entry,
                 side_b: side_b_entry,
-                outcome: Outcome::Walkover { winner: w.into() },
-                summary: None,
-            }),
-            (MatchStatus::Confirmed | MatchStatus::Resolved, Some(_), Some(score)) => {
-                let summary = check_score(&match_row.match_format, score)?;
-                Some(BoxResult {
-                    side_a: side_a_entry,
-                    side_b: side_b_entry,
-                    outcome: Outcome::from_summary(&summary),
-                    summary: Some(summary),
-                })
-            }
-            _ => None,
-        },
-    )
+                outcome: Outcome::from_summary(&summary),
+                summary: Some(summary),
+            })
+        }
+        _ => None,
+    })
 }
 
 /// Standings of every box of `league`, top tier first. Every placed entry appears (withdrawn
@@ -142,23 +136,15 @@ pub async fn compute(
     .bind(league.id)
     .fetch_all(&mut **tx)
     .await?;
-    let names = Names::load(
-        tx,
-        entries.iter().flat_map(|entry| entry.player_ids.clone()),
-    )
-    .await?;
+    let names = Names::load(tx, entries.iter().flat_map(|entry| entry.player_ids.clone())).await?;
 
     let mut out = Vec::with_capacity(divisions.len());
     for division in divisions {
-        let members: Vec<PlacedEntry> = entries
-            .iter()
-            .filter(|entry| entry.division_id == division.id)
-            .cloned()
-            .collect();
+        let members: Vec<PlacedEntry> =
+            entries.iter().filter(|entry| entry.division_id == division.id).cloned().collect();
         let mut results = Vec::new();
-        for match_row in matches
-            .iter()
-            .filter(|match_row| match_row.division_id == Some(division.id))
+        for match_row in
+            matches.iter().filter(|match_row| match_row.division_id == Some(division.id))
         {
             results.extend(box_result(match_row, &members)?);
         }

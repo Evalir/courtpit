@@ -6,33 +6,22 @@ use axum_client_ip::ClientIpSource;
 
 use crate::db::DbConfig;
 
-/// Configuration for `racquetcollective-server serve`. Every field has an env var; see `.env.example`.
+/// Configuration for `racquetcollective-server serve`. Every field has an env var; see
+/// `.env.example`.
 #[derive(Debug, Clone, clap::Args)]
 pub struct Config {
     /// Address the HTTP server binds to.
     #[arg(long, env = "RACQUETCOLLECTIVE_BIND", default_value = "0.0.0.0:8080")]
     pub bind: SocketAddr,
     /// Base domain for `{slug}.{base}` tenant hosts.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_BASE_DOMAIN",
-        default_value = "racquetcollective.app"
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_BASE_DOMAIN", default_value = "racquetcollective.app")]
     pub base_domain: String,
     /// Seconds a resolved community stays cached.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_TENANT_CACHE_TTL_SECS",
-        default_value_t = 60
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_TENANT_CACHE_TTL_SECS", default_value_t = 60)]
     pub tenant_cache_ttl_secs: u64,
     /// Where the client IP comes from: `ConnectInfo` (the socket peer) unless behind a proxy you
     /// control, then e.g. `FlyClientIp` or `RightmostXForwardedFor`.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_CLIENT_IP_SOURCE",
-        default_value = "ConnectInfo"
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_CLIENT_IP_SOURCE", default_value = "ConnectInfo")]
     pub client_ip_source: ClientIpSource,
     /// Session lifetime in days.
     #[arg(long, env = "RACQUETCOLLECTIVE_SESSION_TTL_DAYS", default_value_t = 30)]
@@ -42,11 +31,7 @@ pub struct Config {
     #[arg(long, env = "RACQUETCOLLECTIVE_COOKIE_SECURE", default_value_t = true, action = clap::ArgAction::Set)]
     pub cookie_secure: bool,
     /// Auth requests (code requests, verifications, logins) allowed per client IP per hour.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_AUTH_IP_LIMIT_PER_HOUR",
-        default_value_t = 30
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_AUTH_IP_LIMIT_PER_HOUR", default_value_t = 30)]
     pub auth_ip_limit_per_hour: u32,
     /// Email transport.
     #[arg(long, env = "RACQUETCOLLECTIVE_MAILER", value_enum, default_value_t)]
@@ -68,18 +53,10 @@ pub struct Config {
     )]
     pub email_from: String,
     /// Accepted `aud` values for Sign in with Apple (bundle ids / service ids), comma-separated.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_APPLE_CLIENT_IDS",
-        value_delimiter = ','
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_APPLE_CLIENT_IDS", value_delimiter = ',')]
     pub apple_client_ids: Vec<String>,
     /// Accepted `aud` values for Google sign-in (OAuth client ids), comma-separated.
-    #[arg(
-        long,
-        env = "RACQUETCOLLECTIVE_GOOGLE_CLIENT_IDS",
-        value_delimiter = ','
-    )]
+    #[arg(long, env = "RACQUETCOLLECTIVE_GOOGLE_CLIENT_IDS", value_delimiter = ',')]
     pub google_client_ids: Vec<String>,
     /// Apple's JWKS endpoint.
     #[arg(
@@ -124,25 +101,13 @@ pub struct BackupConfig {
     #[arg(long = "backup-s3-bucket", env = "BACKUP_S3_BUCKET")]
     pub s3_bucket: Option<String>,
     /// Access key id.
-    #[arg(
-        long = "backup-s3-access-key",
-        env = "BACKUP_S3_ACCESS_KEY",
-        hide_env_values = true
-    )]
+    #[arg(long = "backup-s3-access-key", env = "BACKUP_S3_ACCESS_KEY", hide_env_values = true)]
     pub s3_access_key: Option<String>,
     /// Secret access key.
-    #[arg(
-        long = "backup-s3-secret-key",
-        env = "BACKUP_S3_SECRET_KEY",
-        hide_env_values = true
-    )]
+    #[arg(long = "backup-s3-secret-key", env = "BACKUP_S3_SECRET_KEY", hide_env_values = true)]
     pub s3_secret_key: Option<String>,
     /// Signing region (`auto` is what R2 expects).
-    #[arg(
-        long = "backup-s3-region",
-        env = "BACKUP_S3_REGION",
-        default_value = "auto"
-    )]
+    #[arg(long = "backup-s3-region", env = "BACKUP_S3_REGION", default_value = "auto")]
     pub s3_region: String,
     /// Key prefix for dumps; only keys under it with our naming are ever listed for pruning.
     #[arg(
@@ -170,11 +135,7 @@ pub struct BackupConfig {
     /// Direct (non-pooled) connection URL for `pg_dump`; defaults to `DATABASE_DIRECT_URL`,
     /// then `DATABASE_URL`. A pooler in transaction mode (Neon's `-pooler` host) cannot be
     /// dumped.
-    #[arg(
-        long = "backup-database-url",
-        env = "BACKUP_DATABASE_URL",
-        hide_env_values = true
-    )]
+    #[arg(long = "backup-database-url", env = "BACKUP_DATABASE_URL", hide_env_values = true)]
     pub dump_database_url: Option<String>,
 }
 
