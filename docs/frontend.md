@@ -61,7 +61,8 @@ The bundle reads two `EXPO_PUBLIC_*` variables (inlined at build time) in `src/a
 | Web, development | `demo` | unset → `localhost:8081` | header (localhost is no community host) | httpOnly cookie |
 
 The web app and the API share an origin in every environment. In production the API serves the
-exported single-page app itself (step F6), so the browser talks to `{slug}.courtpit.app` only:
+exported single-page app itself (`COURTPIT_WEB_DIR`, decision 88; see `docs/deploy.md`), so the
+browser talks to `{slug}.courtpit.app` only:
 the session cookie is same-site, the host already names the community, and no CORS is needed. In
 development `metro.config.js` proxies `/api/*`, `/healthz` and `/readyz` from the Expo dev server
 to `COURTPIT_DEV_API` (default `http://127.0.0.1:8080`); Expo Go on a phone reaches the API the
@@ -230,7 +231,7 @@ leads: proposing on a `proposed` match, reporting on a `scheduled` one.
 | F3 | Play: open match requests (list, create, join, leave), propose a friendly from a player page |
 | F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view |
 | F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in |
-| F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) |
+| F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
 | F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation |
 | F8 | Native: Apple/Google sign-in, push and deep links (spec step 6), per-community EAS profiles and store submission (spec step 7) |
 

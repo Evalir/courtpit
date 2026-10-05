@@ -199,7 +199,14 @@ impl TestApp {
         let state = AppState::new(config, db.clone(), mailer.clone()).with_clock(clock.clone());
         // `oneshot` has no socket peer; stand in for the `ConnectInfo` that `serve` provides.
         let peer = ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0)));
-        let router = courtpit_server::router(state.clone()).layer(Extension(peer));
+        let web = state
+            .config
+            .web_dir
+            .as_deref()
+            .map(courtpit_server::web::WebApp::new)
+            .transpose()
+            .unwrap();
+        let router = courtpit_server::router(state.clone(), web).layer(Extension(peer));
         Self {
             state,
             router,

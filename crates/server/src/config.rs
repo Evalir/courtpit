@@ -70,6 +70,10 @@ pub struct Config {
     /// Job loop poll interval in milliseconds.
     #[arg(long, env = "COURTPIT_JOB_POLL_MS", default_value_t = 1000)]
     pub job_poll_ms: u64,
+    /// Directory of the exported web app (`npm run export:web` in `apps/mobile`), served for
+    /// every path outside the API. Unset: the API only.
+    #[arg(long, env = "COURTPIT_WEB_DIR")]
+    pub web_dir: Option<std::path::PathBuf>,
     /// Database settings.
     #[command(flatten)]
     pub db: DbConfig,
@@ -188,6 +192,7 @@ impl Default for Config {
             google_client_ids: Vec::new(),
             apple_jwks_url: "https://appleid.apple.com/auth/keys".to_owned(),
             google_jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_owned(),
+            web_dir: None,
             db: DbConfig {
                 database_url: "postgres://courtpit:courtpit@127.0.0.1/courtpit".to_owned(),
                 database_direct_url: None,

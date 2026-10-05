@@ -13,6 +13,7 @@ use courtpit_server::{
     backup,
     communities::{NewCommunity, create_community},
     db, jobs, router, seed, telemetry,
+    web::WebApp,
 };
 
 #[derive(Debug, Parser)]
@@ -161,6 +162,7 @@ fn print_openapi(out: Option<&Path>) -> anyhow::Result<()> {
 }
 
 async fn serve(config: Config) -> anyhow::Result<()> {
+    let web = config.web_dir.as_deref().map(WebApp::new).transpose()?;
     let listener = tokio::net::TcpListener::bind(config.bind)
         .await
         .with_context(|| format!("binding {}", config.bind))?;
@@ -176,7 +178,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         let every = std::time::Duration::from_millis(state.config.job_poll_ms);
         jobs::spawn_loop(state.clone(), every, stop_rx)
     });
-    let app = router(state);
+    let app = router(state, web);
     let served = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
