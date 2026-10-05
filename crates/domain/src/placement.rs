@@ -191,8 +191,8 @@ pub fn movements(box_len: usize, tier: u32, tiers: u32, up: usize, down: usize) 
 mod tests {
     use super::*;
 
-    fn utr(tenths: i64) -> Option<Decimal> {
-        Some(Decimal::new(tenths, 1))
+    fn utr(tenths: i64) -> Decimal {
+        Decimal::new(tenths, 1)
     }
 
     fn seeds(utrs: &[i64]) -> Vec<Seed<u32>> {
@@ -200,7 +200,7 @@ mod tests {
             .enumerate()
             .map(|(idx, &tenths)| Seed {
                 id: u32::try_from(idx).unwrap(),
-                utr: utr(tenths),
+                utr: Some(utr(tenths)),
                 previous: None,
             })
             .collect()
@@ -248,8 +248,8 @@ mod tests {
         assert_eq!(boxes[0].entries, vec![6, 1, 3, 12, 8, 11, 4]);
         // 55, 50, 40, 30, 10, unknown last
         assert_eq!(boxes[1].entries, vec![10, 0, 7, 2, 9, 5]);
-        assert_eq!((boxes[0].utr_min, boxes[0].utr_max), (utr(60), utr(90)));
-        assert_eq!((boxes[1].utr_min, boxes[1].utr_max), (utr(10), utr(55)));
+        assert_eq!((boxes[0].utr_min, boxes[0].utr_max), (Some(utr(60)), Some(utr(90))));
+        assert_eq!((boxes[1].utr_min, boxes[1].utr_max), (Some(utr(10)), Some(utr(55))));
         assert_eq!(boxes, place(&all_seeds, BoxSize::default()).unwrap(), "deterministic");
     }
 

@@ -89,7 +89,7 @@ impl Backup {
             );
         };
         let database_url =
-            nonblank(cfg.dump_database_url.as_deref()).unwrap_or(config.db.session_url());
+            nonblank(cfg.dump_database_url.as_deref()).unwrap_or_else(|| config.db.session_url());
         Ok(Some(Self {
             dump: Arc::new(pg_dump::PgDump::new(database_url)?),
             store: Arc::new(s3::S3Store::new(

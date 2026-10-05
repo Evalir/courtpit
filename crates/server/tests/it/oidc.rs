@@ -49,14 +49,14 @@ async fn spawn() -> Oidc {
     Oidc { app, fetches }
 }
 
-fn token(claims: Value) -> String {
+fn token(claims: &Value) -> String {
     token_with_kid(claims, "test-key-1")
 }
 
-fn token_with_kid(claims: Value, kid: &str) -> String {
+fn token_with_kid(claims: &Value, kid: &str) -> String {
     let mut header = Header::new(Algorithm::RS256);
     header.kid = Some(kid.to_owned());
-    encode(&header, &claims, &EncodingKey::from_rsa_pem(KEY_PEM).unwrap()).unwrap()
+    encode(&header, claims, &EncodingKey::from_rsa_pem(KEY_PEM).unwrap()).unwrap()
 }
 
 fn exp() -> i64 {
@@ -64,7 +64,7 @@ fn exp() -> i64 {
 }
 
 fn google(sub: &str, email: &str, verified: bool) -> String {
-    token(json!({
+    token(&json!({
         "iss": "https://accounts.google.com", "aud": GOOGLE_AUD, "sub": sub,
         "email": email, "email_verified": verified, "exp": exp(), "iat": exp() - 600,
     }))
@@ -125,7 +125,7 @@ async fn unverified_email_never_takes_over_an_account() {
 #[tokio::test]
 async fn apple_string_email_verified_and_nonce() {
     let oidc = spawn().await;
-    let id_token = token(json!({
+    let id_token = token(&json!({
         "iss": "https://appleid.apple.com", "aud": APPLE_AUD, "sub": "apple-1",
         "email": "dee@privaterelay.appleid.com", "email_verified": "true",
         "nonce": "n0nce", "exp": exp(),
@@ -161,7 +161,7 @@ async fn bad_tokens_are_rejected() {
     wrong_iss["iss"] = json!("https://evil.example");
     let mut expired = base.clone();
     expired["exp"] = json!(chrono::Utc::now().timestamp() - 3600);
-    let good = token(base.clone());
+    let good = token(&base);
     let (head, rest) = good.split_once('.').unwrap();
     let (_, sig) = rest.split_once('.').unwrap();
     let forged_payload = {
@@ -171,13 +171,13 @@ async fn bad_tokens_are_rejected() {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(forged.to_string())
     };
     let tampered = format!("{head}.{forged_payload}.{sig}");
-    for bad in [token(wrong_aud), token(wrong_iss), token(expired), tampered, "garbage".into()] {
+    for bad in [token(&wrong_aud), token(&wrong_iss), token(&expired), tampered, "garbage".into()] {
         let body = sign_in(&oidc, "google", &bad).await.expect(StatusCode::UNAUTHORIZED);
         assert_eq!(body["error"]["code"], "invalid_credentials");
     }
     // Unknown kid triggers exactly one refetch, then fails.
     let before = oidc.fetches.load(Ordering::SeqCst);
-    let _ = sign_in(&oidc, "google", &token_with_kid(base, "rotated-away"))
+    let _ = sign_in(&oidc, "google", &token_with_kid(&base, "rotated-away"))
         .await
         .expect(StatusCode::UNAUTHORIZED);
     assert_eq!(oidc.fetches.load(Ordering::SeqCst), before + 1);

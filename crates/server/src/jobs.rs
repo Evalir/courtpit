@@ -109,11 +109,11 @@ impl Job {
             .context("job serialised without kind")?
             .to_owned();
         let payload =
-            value.get_mut("payload").map_or(Value::Object(Default::default()), Value::take);
+            value.get_mut("payload").map_or_else(|| Value::Object(Default::default()), Value::take);
         Ok((kind, payload))
     }
 
-    fn from_parts(kind: &str, payload: Value) -> anyhow::Result<Self> {
+    fn from_parts(kind: &str, payload: &Value) -> anyhow::Result<Self> {
         serde_json::from_value(serde_json::json!({ "kind": kind, "payload": payload }))
             .with_context(|| format!("unknown or malformed job kind `{kind}`"))
     }
@@ -307,7 +307,7 @@ pub async fn finish(
 
 /// Runs a claimed job's handler and records its outcome.
 async fn run_claimed(state: &AppState, claimed: ClaimedJob) -> Result<(), sqlx::Error> {
-    let result = match Job::from_parts(&claimed.kind, claimed.payload.0) {
+    let result = match Job::from_parts(&claimed.kind, &claimed.payload.0) {
         Ok(job) => {
             // A panicking handler fails its job instead of killing the loop.
             let state = state.clone();
@@ -407,7 +407,7 @@ mod tests {
         let (kind, payload) = Job::Noop {}.into_parts().unwrap();
         assert_eq!(kind, "noop");
         assert_eq!(payload, serde_json::json!({}));
-        assert_eq!(Job::from_parts(&kind, payload).unwrap(), Job::Noop {});
-        let _ = Job::from_parts("from_the_future", serde_json::json!({})).unwrap_err();
+        assert_eq!(Job::from_parts(&kind, &payload).unwrap(), Job::Noop {});
+        let _ = Job::from_parts("from_the_future", &serde_json::json!({})).unwrap_err();
     }
 }

@@ -100,13 +100,12 @@ fn box_players(table: &Value) -> Vec<Vec<Uuid>> {
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines, reason = "one long end-to-end season scenario")]
 async fn a_season_finishes_with_points_and_seeds_the_next_one() {
     let (app, admin, ps) = setup(12).await;
     let first = open_league(&app, &admin, "singles").await;
     let mut by_id = HashMap::new();
     for (i, player) in ps.iter().enumerate() {
-        let utr = 2.0 + i as f64 * 0.5;
+        let utr = (i as f64).mul_add(0.5, 2.0);
         let _ = app.patch_me(player, json!({ "utr": utr })).await;
         let _ = by_id.insert(player.player_id, (player, utr));
     }

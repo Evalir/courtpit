@@ -21,4 +21,4 @@ max-struct-bools = 2
 type-complexity-threshold = 200
 avoid-breaking-exported-api = false
 
-# doc-valid-idents = ["..", "MyAcronym"]
+doc-valid-idents = ["..", "ETag", "OpenAPI", "SigV4"]

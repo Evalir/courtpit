@@ -225,7 +225,7 @@ pub async fn patch_league(
         return Err(ApiError::validation("a league can't follow itself"));
     }
     let mut settings = Settings {
-        name: patch.name.unwrap_or(existing.name.clone()),
+        name: patch.name.unwrap_or_else(|| existing.name.clone()),
         discipline: existing.discipline(),
         registration_opens_at: patch
             .registration_opens_at
@@ -237,10 +237,10 @@ pub async fn patch_league(
         ends_at: patch.ends_at.unwrap_or(existing.ends_at),
         match_format: patch
             .match_format
-            .unwrap_or(existing.match_format.as_ref().map(|json| json.0)),
+            .unwrap_or_else(|| existing.match_format.as_ref().map(|json| json.0)),
         scoring_overrides: patch
             .scoring_overrides
-            .unwrap_or(existing.scoring_overrides.as_ref().map(|json| json.0.clone())),
+            .unwrap_or_else(|| existing.scoring_overrides.as_ref().map(|json| json.0.clone())),
         box_min_size: patch.box_min_size.unwrap_or(existing.box_min_size),
         box_max_size: patch.box_max_size.unwrap_or(existing.box_max_size),
         previous_league_id: patch.previous_league_id.unwrap_or(existing.previous_league_id),

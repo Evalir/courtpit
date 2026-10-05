@@ -90,7 +90,7 @@ async fn activation_places_entries_by_utr_and_schedules_round_robins() {
     let id = open_league(&app, &admin, "singles").await;
     let mut utr_of = HashMap::new();
     for (i, player) in ps.iter().enumerate() {
-        let utr = 3.0 + i as f64 * 0.5;
+        let utr = (i as f64).mul_add(0.5, 3.0);
         let _ = app.patch_me(player, json!({ "utr": utr })).await;
         let _ = utr_of.insert(player.player_id, utr);
         let _ = app
