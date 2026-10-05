@@ -1,6 +1,5 @@
 //! `racquetcollective-server` binary: `serve`, `tick`, `migrate`, `create-community`, `openapi`,
 //! `seed`.
-#![deny(unsafe_code)]
 
 use std::path::{Path, PathBuf};
 

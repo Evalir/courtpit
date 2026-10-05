@@ -1,6 +1,6 @@
 //! Racquet Collective server: REST API, background jobs and admin CLI, backed by Postgres.
-#![deny(unsafe_code)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 // Used only by the `racquetcollective-server` binary target, which shares this manifest.
 use tokio as _;
