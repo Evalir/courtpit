@@ -444,7 +444,7 @@ extra round trip ever shows up in latency.
 
 ### Running the pooled test suite locally
 
-CI's `test-pooled` job runs the suite through pgbouncer with `ci/pgbouncer/` (transaction mode,
+CI runs the suite through pgbouncer on every push to `main` (pull requests skip it) with `ci/pgbouncer/` (transaction mode,
 Neon-like `max_prepared_statements`, a wildcard `* = host=… port=…` entry so the per-test
 databases are reachable, `racquetcollective/racquetcollective` credentials). Locally, run a copy of it with the
 ports of your own cluster (here Postgres on 5432, pgbouncer on 6433):

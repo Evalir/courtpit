@@ -48,7 +48,7 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   `#[into_params(parameter_in = Query)]`; tags are declared on `openapi::ApiDoc`; unit tests
   in `openapi.rs` check the generated document. Any PR that changes the API surface re-runs
   `npm run gen` in `packages/api-client` and commits `openapi.json` + `src/schema.d.ts`
-  (the CI `api-client` job fails on drift).
+  (CI's `api-client` step fails on drift).
 - **Lists** use cursor pagination (`?cursor=&limit=`, response `{ items, next_cursor }`).
 - **Money**: no payment logic in steps 1–3. The spec's payment columns exist as an unused
   seam (`communities.currency/stripe_*/platform_fee_*`, `leagues.entry_fee_minor`).
@@ -82,7 +82,7 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   `CREATE DATABASE racquetcollective_test_<uuid> TEMPLATE ...` — fast and fully isolated. Leftover test
   databases from earlier runs are dropped at harness start. Needs `DATABASE_URL` pointing at a
   role allowed to create databases (default `postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective`).
-- CI also runs the suite through pgbouncer (transaction pooling, `ci/pgbouncer/`) with
+- CI on `main` (not on pull requests) also runs the suite through pgbouncer (transaction pooling, `ci/pgbouncer/`) with
   `DATABASE_DIRECT_URL` for the harness's admin work and `RACQUETCOLLECTIVE_DB_POOLED=true`; see
   `docs/deploy.md`. Keep server code free of session state (session `SET`, advisory locks,
   `LISTEN`, temp tables): `SET LOCAL` inside a transaction is fine.
