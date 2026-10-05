@@ -90,6 +90,10 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   rather than hand-rolling requests.
 
 ## Quality gate (every PR, must be green)
+CI checks only pull requests that are ready for review and target `main` (plus every push to
+`main`): drafts and stacked PRs above the bottom get no CI, so run the gate locally before every
+push. To check another branch in CI, run the CI workflow on it by hand (Actions → CI → Run
+workflow); minutes are scarce, so only when the local gate can't (decision 106).
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
