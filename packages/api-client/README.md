@@ -16,9 +16,9 @@ fails if they differ from what is committed.
 After any change to a handler, its `#[utoipa::path]` or a type it exposes:
 
 ```sh
+npm ci                              # at the repository root (npm workspaces), first time only
 cd packages/api-client
-npm ci          # first time only
-npm run gen     # cargo run -p courtpit-server -- openapi, then openapi-typescript
+npm run gen                         # cargo run -p courtpit-server -- openapi, then openapi-typescript
 git add -A .
 ```
 
@@ -32,9 +32,13 @@ import { createCourtpitClient, isApiError } from "@courtpit/api-client";
 
 const api = createCourtpitClient({
   baseUrl: "https://api.courtpit.app",
-  community: "madrid-tc", // sent as X-Courtpit-Community
+  community: "madrid-tc", // sent as X-Courtpit-Community; omit on a community host
   token: () => sessionStore.token, // Authorization: Bearer; a string works too
 });
+
+// In a browser on the community's own host: no community header (Host decides) and a
+// cookie session instead of a token.
+const web = createCourtpitClient({ baseUrl: location.origin, web: true });
 
 const { data, error } = await api.GET("/api/v1/matches/{id}", {
   params: { path: { id } },

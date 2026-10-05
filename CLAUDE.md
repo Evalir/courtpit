@@ -10,6 +10,9 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   `domain`, persist. Single binary `courtpit-server` with subcommands `serve`, `tick`,
   `migrate`, `create-community`, `openapi`, `seed` (demo data; refuses
   `COURTPIT_ENV=production`).
+- `apps/mobile` — the Expo app (iOS, Android, web); design and conventions in
+  `docs/frontend.md`. `packages/api-client` — the generated TypeScript client. Both are npm
+  workspaces of the root `package.json` (one root `package-lock.json`; run `npm ci` at the root).
 - `migrations/` — sqlx migrations embedded with `sqlx::migrate!()`. **One new migration file per
   PR that touches schema. Never edit a migration that has shipped** (anything below the stack tip).
 
@@ -50,6 +53,19 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
 - **Money**: no payment logic in steps 1–3. The spec's payment columns exist as an unused
   seam (`communities.currency/stripe_*/platform_fee_*`, `leagues.entry_fee_minor`).
 
+## Frontend conventions (`apps/mobile`)
+- Expo SDK 57 APIs move between releases: check the versioned docs
+  (`https://docs.expo.dev/versions/v57.0.0/`) rather than memory, and add native packages with
+  `npx expo install` (then move dev tools to `devDependencies`; it puts everything in
+  `dependencies`).
+- Routes only in `src/app`; everything else in `src/{api,session,tenant,theme,ui,features}`.
+- Data: `useApi().$api.useQuery/useMutation` (typed from the spec); cursor lists via
+  `useCursorList`; after a write call `refreshAfterWrite`. Never hand-write API types.
+- Styling: `createStyles(theme => …)` and the `src/ui` primitives; colors only from the theme
+  palette (they are the community's branding), never literals in screens.
+- Pure logic (grouping, formatting, color math) lives in plain functions with unit tests next to
+  them; screens stay thin.
+
 ## Local environment
 - Postgres 16: `DATABASE_URL=postgres://courtpit:courtpit@127.0.0.1/courtpit` (see `.env.example`;
   the role must be allowed to create databases for the test harness). `service postgresql start`
@@ -79,6 +95,10 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+```
+PRs touching `apps/mobile` (from `apps/mobile`, after `npm ci` at the root):
+```sh
+npm run format:check && npm run lint && npm run typecheck && npm test && npm run export:web
 ```
 
 ## Lints
