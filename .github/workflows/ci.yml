@@ -6,20 +6,22 @@ name: CI
 # so one run still reports every failure. On pull requests a step runs only when the diff
 # touches what it checks; pushes to main (which gate the deploy) and manual runs check
 # everything, plus the suite again through pgbouncer. Decision 105.
+#
+# Pull requests are checked only once they are ready and target main: drafts and the upper
+# floors of a stack rely on the local quality gate (CLAUDE.md), so rebasing a stack no longer
+# runs CI on every branch in it. A stacked PR is checked when it is retargeted to main, a draft
+# when it is marked ready; Actions -> CI -> Run workflow checks any branch by hand. Decision 106.
 
 on:
   push:
     branches: [main]
     paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
+    branches: [main]
+    # `edited` only for a change of base (retargeted to main), see the job's `if`.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     paths-ignore: ["docs/**", "**/*.md"]
   workflow_dispatch:
-
-# A newer push replaces the run in flight, on main too: merging a stack runs CI once for its tip,
-# and the deploy only ships main's tip anyway.
-concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -35,6 +37,17 @@ env:
 
 jobs:
   ci:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (!github.event.pull_request.draft &&
+      (github.event.action != 'edited' || github.event.changes.base != null))
+    # A newer run on the same branch replaces the one in flight, on main too: merging a stack
+    # runs CI once for its tip, and the deploy only ships main's tip anyway. Keyed by branch, not
+    # PR, so two events for one push collapse into one run; set on the job, so runs skipped by
+    # the `if` above (drafts, title edits) never cancel a real one.
+    concurrency:
+      group: ci-${{ github.head_ref || github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
