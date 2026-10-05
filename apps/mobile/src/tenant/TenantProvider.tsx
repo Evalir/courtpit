@@ -3,9 +3,10 @@ import * as SplashScreen from "expo-splash-screen";
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useApi } from "@/api/client";
+import { useAppearance } from "@/theme/AppearanceProvider";
 import { loadTypography } from "@/theme/fonts";
 import { ThemeProvider } from "@/theme/ThemeProvider";
-import { themeFromBranding, type Theme } from "@/theme/theme";
+import { themeFromBranding, type ColorScheme, type Theme } from "@/theme/theme";
 import { ErrorState, LoadingState } from "@/ui/States";
 
 type TenantInfo = components["schemas"]["TenantInfo"];
@@ -18,7 +19,8 @@ export interface Community {
   logoUrl: string | null;
   /** Feature flags; a flag the community hasn't set is on. */
   features: { doubles: boolean; mixed: boolean; matchRequests: boolean };
-  theme: Theme;
+  /** The branded theme in each scheme; the device's appearance picks one. */
+  themes: Record<ColorScheme, Theme>;
 }
 
 /** Turns `GET /api/v1/tenant` into what the UI needs. */
@@ -33,7 +35,10 @@ export function communityFrom(tenant: TenantInfo): Community {
       mixed: flags.mixed_doubles ?? true,
       matchRequests: flags.match_requests ?? true,
     },
-    theme: themeFromBranding(tenant.branding),
+    themes: {
+      light: themeFromBranding(tenant.branding, "light"),
+      dark: themeFromBranding(tenant.branding, "dark"),
+    },
   };
 }
 
@@ -46,10 +51,14 @@ const CommunityContext = createContext<Community | null>(null);
  */
 export function TenantProvider({ children }: { children: ReactNode }) {
   const { $api } = useApi();
+  const { scheme } = useAppearance();
   const tenant = $api.useQuery("get", "/api/v1/tenant", undefined, { staleTime: 5 * 60_000 });
-  // One object per response: themed styles are cached per theme object (`createStyles`).
+  // One object per response and scheme: themed styles are cached per theme object
+  // (`createStyles`), so switching back and forth reuses them.
   const community = useMemo(() => (tenant.data ? communityFrom(tenant.data) : null), [tenant.data]);
-  const typography = community?.theme.typography;
+  // Before the branding arrives (or when it fails), Courtpit's own look in the right scheme.
+  const fallback = useMemo(() => themeFromBranding(undefined, scheme), [scheme]);
+  const typography = community?.themes.light.typography;
   const [fontsReady, setFontsReady] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,11 +76,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, [ready, tenant.error]);
 
   if (tenant.error)
-    return <ErrorState error={tenant.error} onRetry={() => void tenant.refetch()} />;
-  if (!ready) return <LoadingState />;
+    return (
+      <ThemeProvider theme={fallback}>
+        <ErrorState error={tenant.error} onRetry={() => void tenant.refetch()} />
+      </ThemeProvider>
+    );
+  if (!ready)
+    return (
+      <ThemeProvider theme={fallback}>
+        <LoadingState />
+      </ThemeProvider>
+    );
   return (
     <CommunityContext value={community}>
-      <ThemeProvider theme={community.theme}>{children}</ThemeProvider>
+      <ThemeProvider theme={community.themes[scheme]}>{children}</ThemeProvider>
     </CommunityContext>
   );
 }

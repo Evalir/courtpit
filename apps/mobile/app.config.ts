@@ -35,8 +35,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // JS updates reach builds of the same app version (EAS Update, spec §16).
   runtimeVersion: { policy: "appVersion" },
   ...(projectId ? { updates: { url: `https://u.expo.dev/${projectId}` } } : {}),
-  // Branding defines a light palette only; see docs/frontend.md (Theming).
-  userInterfaceStyle: "light",
+  // Follows the device; a player can pin light or dark in Profile (docs/frontend.md, Theming).
+  // Android needs expo-system-ui installed for this to apply.
+  userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: process.env.COURTPIT_BUNDLE_ID ?? "app.courtpit.dev",
     supportsTablet: true,
@@ -67,7 +68,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-router",
     "expo-secure-store",
     "expo-font",
-    ["expo-splash-screen", { backgroundColor: "#ffffff" }],
+    // The dark splash matches the base a derived dark theme starts from (src/theme/theme.ts).
+    ["expo-splash-screen", { backgroundColor: "#ffffff", dark: { backgroundColor: "#0f1216" } }],
     ["expo-notifications", { defaultChannel: "default" }],
     "expo-apple-authentication",
     ...(googleUrlScheme

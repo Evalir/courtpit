@@ -132,11 +132,31 @@ else for the system font. `display_name` and `logo_url` drive the sign-in hero (
 the accent color stands in for a missing or broken logo). `feature_flags.doubles` and
 `mixed_doubles` hide the matching ranking tabs; `match_requests` will gate open match requests.
 
-The UI is light-only for now (`userInterfaceStyle: "light"`): branding defines one palette, and
-deriving a faithful dark variant of an arbitrary brand needs a design decision of its own.
+**Dark mode** (decision 102). The app follows the device's light or dark setting
+(`userInterfaceStyle: "automatic"`; Android needs `expo-system-ui` for it), and a player can pin
+Light or Dark under Profile → Appearance. The choice is per device (SecureStore on native, where
+it is also handed to the OS with `Appearance.setColorScheme` so alerts and the keyboard match;
+`localStorage` on web, where the page's CSS `color-scheme` follows). Branding still defines one
+palette; the dark one is derived from it:
+
+- the background is a near-black (`#0f1216`) tinted 8% with the primary, and the surface sits a
+  step lighter (dark UIs show elevation by lightness, not shadow);
+- the brand's page color becomes the ink (pushed to 7:1 on the surface);
+- the primary fill keeps the brand color, lifted to 3:1 against the surface where it would vanish
+  (WCAG non-text contrast); text on it is white or black;
+- tone colors (`primaryText`, success, warning, danger) reach 4.5:1 on their own soft fills,
+  which are stronger than in light mode, and therefore on the surface and background too; text on
+  the accent is white or black;
+- a brand that is dark already is used as it is in both schemes: its community chose it.
+
+`TenantProvider` builds both themes once per tenant response and picks one with
+`useAppearance().scheme`; until the branding arrives, Courtpit's default look follows the same
+scheme. The root view (native) and page body (web) take the theme's background through
+`expo-system-ui`, and the dark splash screen uses the same near-black.
 
 Screens style themselves with `createStyles(theme => ({ ... }))`, which builds a `StyleSheet`
-once per theme object; the theme object changes only when the tenant response does.
+once per theme object; the theme object changes only when the tenant response or the scheme
+does, and each scheme's styles are kept, so switching back and forth costs nothing.
 
 ## 6. Information architecture
 
@@ -368,6 +388,7 @@ proposed time and place, that opens on its match page (decision 89).
 | F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
 | F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation (done) |
 | F8 | Native: Apple/Google sign-in, push and deep links (spec step 6), per-community EAS profiles and store submission (spec step 7) (done) |
+| F9 | Dark mode: a dark palette derived from each brand, following the device with a per-device override (done) |
 
 Payments (spec step 4) and tournaments (step 5) slot in after F4 as the server gains them.
 

@@ -62,3 +62,67 @@ describe("themeFromBranding", () => {
     expect(contrast(rgb(theme.danger), surface)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe("themeFromBranding in dark mode", () => {
+  it("derives a dark theme from a light brand, keeping its colors", () => {
+    const light = themeFromBranding(riverside, "light");
+    const dark = themeFromBranding(riverside, "dark");
+    expect(light.dark).toBe(false);
+    expect(dark.dark).toBe(true);
+    expect(dark.colors.background).not.toBe(light.colors.background);
+    expect(contrast(rgb(dark.colors.background), rgb("#000000"))).toBeLessThan(1.3);
+    // The page color becomes the ink, and the accent stays the brand's.
+    expect(dark.colors.text).toBe("#f7f9f4");
+    expect(dark.colors.accent).toBe("#f4b942");
+    expect(dark.typography).toBe("inter");
+  });
+
+  it("uses a brand that is dark already as it is, in both schemes", () => {
+    const branding = { colors: { background: "#111111", surface: "#1d1d1d", text: "#f0f0f0" } };
+    expect(themeFromBranding(branding, "dark")).toEqual(themeFromBranding(branding, "light"));
+    expect(themeFromBranding(branding, "light").dark).toBe(true);
+  });
+
+  it("gives a dark brand's accent readable text", () => {
+    const branding = {
+      colors: { background: "#111111", surface: "#1d1d1d", text: "#f0f0f0", secondary: "#d9f24a" },
+    };
+    const { colors } = themeFromBranding(branding, "light");
+    expect(contrast(rgb(colors.onAccent), rgb(colors.accent))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    ["Courtpit's defaults", undefined],
+    ["the demo club", riverside],
+    ["a navy primary", { colors: { primary: "#0b1f4d", secondary: "#e63946" } }],
+    ["a pale primary", { colors: { primary: "#ffe14d" } }],
+    ["a near-black primary", { colors: { primary: "#111111" } }],
+    ["unreadable text", { colors: { text: "#eeeeee" } }],
+    [
+      "a mid-grey everything",
+      { colors: { primary: "#888888", secondary: "#888888", text: "#999999" } },
+    ],
+  ])("keeps %s readable", (_name, branding) => {
+    const colors = themeFromBranding(branding, "dark").colors;
+    const surface = rgb(colors.surface);
+    const ratio = (one: string, other: string) => contrast(rgb(one), rgb(other));
+    expect(ratio(colors.text, colors.surface)).toBeGreaterThanOrEqual(7);
+    expect(ratio(colors.textMuted, colors.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(colors.textMuted, colors.surfaceMuted)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(rgb(colors.primary), surface)).toBeGreaterThanOrEqual(3);
+    expect(ratio(colors.onPrimary, colors.primary)).toBeGreaterThanOrEqual(3);
+    expect(ratio(colors.onAccent, colors.accent)).toBeGreaterThanOrEqual(4.5);
+    // Tone text on the page, on cards, and on its own badge fill.
+    const tones = [
+      [colors.primaryText, colors.primarySoft],
+      [colors.success, colors.successSoft],
+      [colors.warning, colors.warningSoft],
+      [colors.danger, colors.dangerSoft],
+    ] as const;
+    for (const [text, fill] of tones) {
+      for (const behind of [colors.background, colors.surface, fill]) {
+        expect(ratio(text, behind)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+});

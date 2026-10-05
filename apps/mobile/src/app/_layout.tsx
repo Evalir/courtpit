@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import { router, Stack, usePathname, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import * as SystemUI from "expo-system-ui";
 import { useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -15,6 +16,7 @@ import { registerForPush, useNotificationTaps } from "@/session/push";
 import { returnTo } from "@/session/returnTo";
 import { SessionProvider, useSession, type Session } from "@/session/SessionProvider";
 import { TenantProvider, useCommunity } from "@/tenant/TenantProvider";
+import { AppearanceProvider } from "@/theme/AppearanceProvider";
 import { fontFamilies } from "@/theme/fonts";
 import { useTheme } from "@/theme/ThemeProvider";
 import { ErrorState, LoadingState } from "@/ui/States";
@@ -46,11 +48,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ApiContext value={setup.api}>
         <QueryClientProvider client={setup.queryClient}>
-          <TenantProvider>
-            <SessionProvider>
-              <RootNavigator />
-            </SessionProvider>
-          </TenantProvider>
+          <AppearanceProvider>
+            <TenantProvider>
+              <SessionProvider>
+                <RootNavigator />
+              </SessionProvider>
+            </TenantProvider>
+          </AppearanceProvider>
         </QueryClientProvider>
       </ApiContext>
     </SafeAreaProvider>
@@ -62,6 +66,7 @@ function RootNavigator() {
   const { session } = useSession();
   const { colors, typography, dark } = useTheme();
   const community = useCommunity();
+  useRootBackground(colors.background);
   useReturnAfterSignIn(session);
   useNotificationTaps(session.status === "signed-in");
   useSilentPushRegistration(session.status === "signed-in");
@@ -203,6 +208,18 @@ function useSilentPushRegistration(signedIn: boolean) {
 function MisconfiguredBuild({ error }: { error: unknown }) {
   useEffect(() => SplashScreen.hide(), []);
   return <ErrorState error={error} />;
+}
+
+/**
+ * The color behind every screen: the root view on native (seen during transitions and while the
+ * keyboard resizes), the page body on web (seen when overscrolling). Follows light and dark.
+ */
+function useRootBackground(color: string) {
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(color).catch((error: unknown) =>
+      console.warn("could not set the root background", error),
+    );
+  }, [color]);
 }
 
 /** On native, tell TanStack Query when the app returns to the foreground (web does this itself). */
