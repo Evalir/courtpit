@@ -2,7 +2,6 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -10,6 +9,7 @@ use crate::{
     ApiError, ApiResult, AppState,
     auth::CurrentPlayer,
     extract::{ApiJson, ApiPath},
+    notify::NotificationPrefs,
 };
 
 /// The operating system a push token belongs to.
@@ -95,24 +95,6 @@ pub async fn forget_device(
     .await?;
     tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-/// Which notifications the player wants. Everything is on until they say otherwise.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromRow, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct NotificationPrefs {
-    /// Proposals, scores, disputes and rulings on the player's matches.
-    pub match_updates: bool,
-    /// Partner invitations and league news.
-    pub league_updates: bool,
-    /// Reminders before scheduled matches.
-    pub reminders: bool,
-}
-
-impl Default for NotificationPrefs {
-    fn default() -> Self {
-        Self { match_updates: true, league_updates: true, reminders: true }
-    }
 }
 
 /// The signed-in player's notification preferences.

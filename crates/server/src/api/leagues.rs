@@ -20,7 +20,7 @@ use crate::{
         standings::{self, DivisionStanding},
     },
     matches::{self, DbDiscipline, MATCH_COLUMNS, MatchRow, MatchView},
-    models::{Page, PageParams, double_option, paginate},
+    models::{Page, PageParams, Patch, paginate},
 };
 
 /// The full set of league settings (creation, and the result of applying a patch).
@@ -187,19 +187,21 @@ pub struct PatchLeague {
     /// When the season ends.
     pub ends_at: Option<DateTime<Utc>>,
     /// Match format override.
-    #[serde(default, deserialize_with = "double_option")]
-    pub match_format: Option<Option<MatchFormat>>,
+    #[serde(default)]
+    #[schema(value_type = Option<MatchFormat>)]
+    pub match_format: Patch<MatchFormat>,
     /// Scoring config overrides.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(default)]
     #[schema(value_type = Option<Object>)]
-    pub scoring_overrides: Option<Option<Value>>,
+    pub scoring_overrides: Patch<Value>,
     /// Minimum box size.
     pub box_min_size: Option<i32>,
     /// Maximum box size.
     pub box_max_size: Option<i32>,
     /// The preceding season, if any.
-    #[serde(default, deserialize_with = "double_option")]
-    pub previous_league_id: Option<Option<Uuid>>,
+    #[serde(default)]
+    #[schema(value_type = Option<Uuid>)]
+    pub previous_league_id: Patch<Uuid>,
 }
 
 /// Edits a league while it is still a draft (admin).
@@ -221,7 +223,7 @@ pub async fn patch_league(
     if existing.status != LeagueStatus::Draft {
         return Err(ApiError::conflict("only draft leagues can be edited"));
     }
-    if patch.previous_league_id == Some(Some(id)) {
+    if patch.previous_league_id == Patch::Set(id) {
         return Err(ApiError::validation("a league can't follow itself"));
     }
     let mut settings = Settings {
@@ -237,13 +239,13 @@ pub async fn patch_league(
         ends_at: patch.ends_at.unwrap_or(existing.ends_at),
         match_format: patch
             .match_format
-            .unwrap_or_else(|| existing.match_format.as_ref().map(|json| json.0)),
+            .apply(|| existing.match_format.as_ref().map(|json| json.0)),
         scoring_overrides: patch
             .scoring_overrides
-            .unwrap_or_else(|| existing.scoring_overrides.as_ref().map(|json| json.0.clone())),
+            .apply(|| existing.scoring_overrides.as_ref().map(|json| json.0.clone())),
         box_min_size: patch.box_min_size.unwrap_or(existing.box_min_size),
         box_max_size: patch.box_max_size.unwrap_or(existing.box_max_size),
-        previous_league_id: patch.previous_league_id.unwrap_or(existing.previous_league_id),
+        previous_league_id: patch.previous_league_id.apply(|| existing.previous_league_id),
     };
     settings.validate(&mut tx, &admin.tenant).await?;
     let _ = sqlx::query(

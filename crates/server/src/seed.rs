@@ -457,8 +457,9 @@ async fn play(
     let scheduled = matches::load(tx, row.id, true).await?;
     let _ = scheduled.transition(Actor::Player(winner), Event::Report)?;
     let reported_at = at + Duration::hours(2);
-    let reporter = lead(row, winner)?;
-    results::record_report(tx, &scheduled, reporter, &score, winner, reported_at, window).await?;
+    let report =
+        results::ScoreReport { by: lead(row, winner)?, score: &score, winner, at: reported_at };
+    results::record_report(tx, &scheduled, &report, window).await?;
     let reported = matches::load(tx, row.id, true).await?;
     let loser = Actor::Player(winner.other());
     match fate {

@@ -26,12 +26,24 @@ pub const SESSION_COOKIE: &str = "racquetcollective_session";
 /// body.
 pub const CLIENT_HEADER: &str = "x-racquetcollective-client";
 
-/// Whether the client asked for cookie delivery.
-pub fn wants_cookie(headers: &HeaderMap) -> bool {
-    headers
-        .get(CLIENT_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.eq_ignore_ascii_case("web"))
+/// How a new session reaches the client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionDelivery {
+    /// An httpOnly cookie, for the web app (it asks with [`CLIENT_HEADER`]).
+    Cookie,
+    /// The token in the response body, for native apps.
+    Body,
+}
+
+impl SessionDelivery {
+    /// [`SessionDelivery::Cookie`] when the client sent `X-RacquetCollective-Client: web`.
+    pub fn from_headers(headers: &HeaderMap) -> Self {
+        let web = headers
+            .get(CLIENT_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.eq_ignore_ascii_case("web"));
+        if web { Self::Cookie } else { Self::Body }
+    }
 }
 
 /// Creates a session; returns the plaintext token (never stored) and its expiry.

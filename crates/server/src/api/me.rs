@@ -13,7 +13,7 @@ use crate::{
     ApiError, ApiResult, AppState, Tenant,
     auth::{CurrentPlayer, CurrentUser, ensure_player},
     extract::ApiJson,
-    models::{Gender, PlayPref, double_option},
+    models::{Gender, Patch, PlayPref},
     players::{self, PlayerProfile},
 };
 
@@ -82,15 +82,15 @@ pub struct ProfilePatch {
     /// New display name.
     pub display_name: Option<String>,
     /// New UTR; `null` clears it.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(default)]
     #[schema(value_type = Option<f64>)]
-    pub utr: Option<Option<Decimal>>,
+    pub utr: Patch<Decimal>,
     /// New gender.
     pub gender: Option<Gender>,
     /// New phone number; `null` clears it.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(default)]
     #[schema(value_type = Option<String>)]
-    pub phone: Option<Option<String>>,
+    pub phone: Patch<String>,
     /// Whether the phone number is public.
     pub phone_visible: Option<bool>,
     /// New social handles keyed by network (up to 10 strings).
@@ -99,17 +99,17 @@ pub struct ProfilePatch {
     /// Whether social handles are public.
     pub socials_visible: Option<bool>,
     /// New racket; `null` clears it.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(default)]
     #[schema(value_type = Option<String>)]
-    pub racket: Option<Option<String>>,
+    pub racket: Patch<String>,
     /// New strings; `null` clears them.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(default)]
     #[schema(value_type = Option<String>)]
-    pub strings: Option<Option<String>>,
+    pub strings: Patch<String>,
     /// New string tension in kg; `null` clears it.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(default)]
     #[schema(value_type = Option<f64>)]
-    pub tension_kg: Option<Option<Decimal>>,
+    pub tension_kg: Patch<Decimal>,
     /// New match format preference.
     pub play_pref: Option<PlayPref>,
     /// New preferred locations.
@@ -140,7 +140,8 @@ pub async fn patch_me(
             .ok_or_else(|| ApiError::validation("display_name cannot be empty"))?;
         let _ = qb.push(", display_name = ").push_bind(name);
     }
-    if let Some(utr) = patch.utr {
+    if !patch.utr.is_keep() {
+        let utr = patch.utr.into_value();
         if let Some(rating) = utr
             && (rating < Decimal::ONE || rating > Decimal::new(1650, 2) || rating.scale() > 2)
         {
@@ -151,8 +152,9 @@ pub async fn patch_me(
     if let Some(gender) = patch.gender {
         let _ = qb.push(", gender = ").push_bind(gender);
     }
-    if let Some(phone) = patch.phone {
-        let _ = qb.push(", phone = ").push_bind(short_text("phone", phone, 32)?);
+    if !patch.phone.is_keep() {
+        let phone = short_text("phone", patch.phone.into_value(), 32)?;
+        let _ = qb.push(", phone = ").push_bind(phone);
     }
     if let Some(visible) = patch.phone_visible {
         let _ = qb.push(", phone_visible = ").push_bind(visible);
@@ -170,13 +172,16 @@ pub async fn patch_me(
     if let Some(visible) = patch.socials_visible {
         let _ = qb.push(", socials_visible = ").push_bind(visible);
     }
-    if let Some(racket) = patch.racket {
-        let _ = qb.push(", racket = ").push_bind(short_text("racket", racket, 80)?);
+    if !patch.racket.is_keep() {
+        let racket = short_text("racket", patch.racket.into_value(), 80)?;
+        let _ = qb.push(", racket = ").push_bind(racket);
     }
-    if let Some(strings) = patch.strings {
-        let _ = qb.push(", strings = ").push_bind(short_text("strings", strings, 80)?);
+    if !patch.strings.is_keep() {
+        let strings = short_text("strings", patch.strings.into_value(), 80)?;
+        let _ = qb.push(", strings = ").push_bind(strings);
     }
-    if let Some(tension) = patch.tension_kg {
+    if !patch.tension_kg.is_keep() {
+        let tension = patch.tension_kg.into_value();
         if tension.is_some_and(|kg| kg < Decimal::from(10) || kg > Decimal::from(35)) {
             return Err(ApiError::validation("tension_kg must be between 10 and 35"));
         }

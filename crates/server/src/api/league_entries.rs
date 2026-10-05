@@ -86,20 +86,6 @@ async fn check_partner(
     }
 }
 
-/// Tells an invited partner (if any) about the entry waiting for them.
-async fn invite(
-    state: &AppState,
-    tx: &mut TenantTx,
-    league_id: Uuid,
-    entry_id: Uuid,
-    player: &CurrentPlayer,
-    partner: Option<Uuid>,
-) -> ApiResult<()> {
-    let event = notify::Event::PartnerInvited { league_id, entry_id, by: player.id };
-    notify::tell(tx, partner, event, state.clock.now()).await?;
-    Ok(())
-}
-
 /// Registers the caller. Singles entries are confirmed immediately; doubles and mixed
 /// entries wait for the invited partner (or a pairing) as `pending_partner`.
 #[utoipa::path(post, path = "/api/v1/leagues/{id}/entries", tag = "leagues",
@@ -144,7 +130,8 @@ pub async fn register(
     .bind(body.partner_id)
     .execute(&mut *tx)
     .await?;
-    invite(&state, &mut tx, league_id, id, &player, body.partner_id).await?;
+    let invited = notify::Event::PartnerInvited { league_id, entry_id: id, by: player.id };
+    notify::tell(&mut tx, body.partner_id, invited, state.clock.now()).await?;
     let res = respond(&mut tx, league_id, id, &player).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, res))
@@ -345,7 +332,8 @@ pub async fn change_partner(
     .bind(body.partner_id.is_none())
     .execute(&mut *tx)
     .await?;
-    invite(&state, &mut tx, league_id, entry_id, &player, body.partner_id).await?;
+    let invited = notify::Event::PartnerInvited { league_id, entry_id, by: player.id };
+    notify::tell(&mut tx, body.partner_id, invited, state.clock.now()).await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
     Ok(res)

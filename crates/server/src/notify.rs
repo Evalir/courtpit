@@ -7,6 +7,7 @@ use racquetcollective_domain::{MatchStatus, Score, Side};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::FromRow;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -135,6 +136,39 @@ pub enum Category {
     LeagueUpdates,
     /// Reminders before scheduled matches.
     Reminders,
+}
+
+/// Which notifications the player wants. Everything is on until they say otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromRow, ToSchema)]
+#[serde(deny_unknown_fields)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent on/off switches, one per category: the API's body and the table's columns"
+)]
+pub struct NotificationPrefs {
+    /// Proposals, scores, disputes and rulings on the player's matches.
+    pub match_updates: bool,
+    /// Partner invitations and league news.
+    pub league_updates: bool,
+    /// Reminders before scheduled matches.
+    pub reminders: bool,
+}
+
+impl NotificationPrefs {
+    /// Whether the player wants news in `category`.
+    pub const fn allows(self, category: Category) -> bool {
+        match category {
+            Category::MatchUpdates => self.match_updates,
+            Category::LeagueUpdates => self.league_updates,
+            Category::Reminders => self.reminders,
+        }
+    }
+}
+
+impl Default for NotificationPrefs {
+    fn default() -> Self {
+        Self { match_updates: true, league_updates: true, reminders: true }
+    }
 }
 
 impl Event {
@@ -273,13 +307,6 @@ struct Recipient {
     email_verified: bool,
 }
 
-#[derive(FromRow)]
-struct Prefs {
-    match_updates: bool,
-    league_updates: bool,
-    reminders: bool,
-}
-
 /// Sends one notification (the `notify` job). Nothing is sent to a player who left or was
 /// banned, who turned the category off, or for whom the news no longer holds.
 pub async fn send(
@@ -326,7 +353,7 @@ pub async fn send(
 }
 
 async fn wants(tx: &mut TenantTx, player: Uuid, category: Category) -> anyhow::Result<bool> {
-    let prefs: Option<Prefs> = sqlx::query_as(
+    let prefs: Option<NotificationPrefs> = sqlx::query_as(
         "SELECT match_updates, league_updates, reminders FROM notification_prefs
          WHERE community_id = $1 AND player_id = $2",
     )
@@ -334,11 +361,7 @@ async fn wants(tx: &mut TenantTx, player: Uuid, category: Category) -> anyhow::R
     .bind(player)
     .fetch_optional(&mut **tx)
     .await?;
-    Ok(prefs.is_none_or(|prefs| match category {
-        Category::MatchUpdates => prefs.match_updates,
-        Category::LeagueUpdates => prefs.league_updates,
-        Category::Reminders => prefs.reminders,
-    }))
+    Ok(prefs.is_none_or(|prefs| prefs.allows(category)))
 }
 
 async fn push(

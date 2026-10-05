@@ -51,7 +51,9 @@ pub async fn report_score(
     let _ = found.transition(actor, Event::Report)?;
     let summary = results::check_score(&found.match_format, &score)?;
     let now = state.clock.now();
-    results::record_report(&mut tx, &found, player.id, &score, summary.winner, now, window).await?;
+    let report =
+        results::ScoreReport { by: player.id, score: &score, winner: summary.winner, at: now };
+    results::record_report(&mut tx, &found, &report, window).await?;
     let event = notify::Event::ScoreReported { match_id: id, by: player.id };
     notify::tell(&mut tx, notify::other_side(&found, player.id), event, now).await?;
     let res = respond(&mut tx, id).await?;
