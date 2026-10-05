@@ -100,6 +100,43 @@ describe("boot", () => {
         status: 200,
         body: { account: {}, player: { display_name: "Lily Fernandez" } },
       }),
+      "/api/v1/me/entries": () => ({
+        status: 200,
+        body: [
+          {
+            league: {
+              id: "l1",
+              name: "Autumn Doubles",
+              discipline: "doubles",
+              status: "registration",
+              registration_opens_at: "2020-01-01T00:00:00Z",
+              registration_closes_at: "2999-01-01T00:00:00Z",
+              starts_at: "2999-01-02T00:00:00Z",
+              ends_at: "2999-03-01T00:00:00Z",
+              match_format: {
+                sets_to_win: 2,
+                games_per_set: 6,
+                tiebreak_at: 6,
+                final_set: "full_set",
+              },
+              box_min_size: 6,
+              box_max_size: 8,
+              created_at: "2026-09-01T00:00:00Z",
+            },
+            entry: {
+              id: "e1",
+              league_id: "l1",
+              player_ids: [opponent],
+              created_by: opponent,
+              invited_partner_id: me,
+              status: "pending_partner",
+              looking_for_partner: false,
+              created_at: "2026-09-02T00:00:00Z",
+              names: [{ id: opponent, display_name: "Mateo Alvarez" }],
+            },
+          },
+        ],
+      }),
       "/api/v1/matches": () => ({
         status: 200,
         body: {
@@ -136,7 +173,10 @@ describe("boot", () => {
     const view = await renderApp("/");
 
     expect(await view.findByText("Hi, Lily", {}, slow)).toBeVisible();
-    expect(view.getByText("1 match needs you.")).toBeVisible();
+    expect(await view.findByText("1 match and 1 league entry need you.", {}, slow)).toBeVisible();
+    expect(
+      view.getByText("Mateo Alvarez invited you to play Autumn Doubles together"),
+    ).toBeVisible();
     expect(await view.findByText("You vs Mateo Alvarez", {}, slow)).toBeVisible();
     // The viewer's games first.
     expect(view.getByText("2–6 3–6")).toBeVisible();

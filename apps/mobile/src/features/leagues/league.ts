@@ -61,3 +61,12 @@ export function describeFormat(format: MatchFormat): string {
   if (format.deuce === "golden_point") parts.push("golden point at deuce");
   return parts.join(" · ");
 }
+
+/** The boxes with the viewer's own box first (a player plays in at most one), and which it is. */
+export function ownBoxFirst<Box extends { table: readonly { player_ids: readonly string[] }[] }>(
+  boxes: readonly Box[],
+  me: string,
+): { boxes: Box[]; mine: Box | null } {
+  const mine = boxes.find((box) => box.table.some((line) => line.player_ids.includes(me))) ?? null;
+  return { boxes: mine ? [mine, ...boxes.filter((box) => box !== mine)] : [...boxes], mine };
+}

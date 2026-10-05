@@ -121,9 +121,9 @@ Five tabs, chosen around what a club player does weekly:
 
 | Tab | Purpose |
 |---|---|
-| **Home** | "What needs me": scores to confirm or report, upcoming matches, matches to arrange, waiting on others, recent results |
+| **Home** | "What needs me": league invitations and entries that lost their partner, scores to confirm or report, upcoming matches, matches to arrange, waiting on others, recent results |
 | **Play** | Open match requests (join one or post your own) and the player directory; challenge a player from their page |
-| **Leagues** | Seasons by status; a league's dates, format and box tables; registration next |
+| **Leagues** | Seasons by status, marked where the player is in or invited; a league's dates, format, registration and box tables (the player's box first) |
 | **Rankings** | 52-week points per discipline (singles / doubles / mixed, by feature flag) |
 | **Profile** | The player's profile, contact visibility and account; editing next |
 
@@ -148,7 +148,7 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 |---|---|---|---|
 | Sign in | `/sign-in` | `POST /auth/otp/request` | built |
 | Verify code | `/verify?email=` | `POST /auth/otp/verify`, `/auth/otp/request` (resend) | built |
-| Home | `/` | `GET /me`, `GET /matches` | built |
+| Home | `/` | `GET /me`, `GET /matches`, `GET /me/entries`; `POST /leagues/{id}/entries/{entry_id}/accept`, `…/decline` | built |
 | Match | `/matches/[id]` | `GET /matches/{id}`, `GET /leagues/{id}`; `POST …/confirm`, `…/dispute`, `…/proposals/{id}/accept`, `…/decline` | built |
 | Propose a time | `/matches/[id]/propose` (modal) | `POST /matches/{id}/proposals` | built |
 | Report the score | `/matches/[id]/report` (modal) | `POST /matches/{id}/score` | built |
@@ -158,9 +158,9 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Play: open requests | `/play` | `GET /match-requests?fits_me=` (cursor pages), `POST /match-requests/{id}/join`, `…/leave`, `…/cancel` | built |
 | New match request | `/requests/new` (modal) | `POST /match-requests`, `GET /players?q=` (partner) | built |
 | Challenge a player | `/players/[id]/challenge` (modal) | `POST /matches` | built |
-| Leagues | `/leagues` | `GET /leagues` | built |
+| Leagues | `/leagues` | `GET /leagues`, `GET /me/entries` | built |
 | League | `/leagues/[id]` | `GET /leagues/{id}`, `GET /leagues/{id}/standings` | built |
-| League: enter, partner invites, withdraw | `/leagues/[id]` | `GET/POST /leagues/{id}/entries`, `…/accept`, `…/decline`, `…/withdraw` | F4 |
+| League: enter, partner invites, withdraw | `/leagues/[id]` | `GET/POST /leagues/{id}/entries`, `…/{entry_id}/accept`, `…/decline`, `…/partner`, `…/withdraw` | built |
 | Rankings | `/rankings` | `GET /rankings?discipline=` | built |
 | Points history | `/rankings/me` | `GET /rankings/events` | F5 |
 | Profile | `/profile` | `GET /me` | built |
@@ -208,6 +208,26 @@ leads: proposing on a `proposed` match, reporting on a `scheduled` one.
   admin") with the reason; a proposal a cancel or a report closed reads "Closed", not
   "replaced".
 
+### League registration
+
+A league taking entries shows a registration section (`features/leagues/EntryPanel.tsx`, rules in
+`entries.ts`): invitations to the viewer (accept or decline), then either the way in or the
+viewer's entry, with the number of complete entries beside the heading.
+
+- **Entering.** Singles is one tap. Doubles and mixed take a partner from a directory search (they
+  get an invitation; the entry completes when they accept) or "enter and look for a partner".
+  Mixed explains up front when the profile's gender is undisclosed; anything else the community's
+  rule decides, and the server's message is shown.
+- **The viewer's entry** reads as entered (with whom), waiting for an invited partner, looking, or
+  needing a partner (declined or lapsed). Until it is complete it can invite someone else or list
+  itself as looking (`…/partner`, decision 90). Withdrawing asks first, naming the partner.
+- **Looking for a partner** lists other solo entries; "Invite" either enters the viewer with that
+  partner or points the viewer's solo entry at them. A player already invited reads "Invited".
+- **Home** leads with a Leagues section while registration is open: invitations to answer inline,
+  and entries whose partner fell through (to the league page). The summary line counts both.
+- **Leagues** marks each league "You’re in", "Entry pending" or "Invited" from `GET /me/entries`.
+- **An active league** lists the viewer's box first, titled "Your box".
+
 ### Match requests
 
 Play opens on the community's open requests when the `match_requests` feature is on (the
@@ -235,7 +255,7 @@ proposed time and place, that opens on its match page (decision 89).
   grouping, league dates and format descriptions) has plain unit tests next to the code.
 - `src/boot.test.tsx` mounts the real route tree with a stubbed `fetch`: tenant → theme →
   signed-out deep link lands on sign-in; a failed boot offers a retry; a stored native token
-  restores the session and Home shows the match that needs the player.
+  restores the session and Home shows the match and the league invitation that need the player.
 - CI (`mobile` job) runs Prettier, ESLint, `tsc` (after generating Expo Router's route types),
   Jest and a production web export.
 
@@ -246,7 +266,7 @@ proposed time and place, that opens on its match page (decision 89).
 | F1 | This slice: workspace, theming, API layer, email-code sign-in, five tabs, read-only league/ranking/player screens, confirm/dispute and answering proposals |
 | F2 | Match actions: propose a time (day-and-slot picker), format-aware score entry checked like the server, cancel a friendly (done) |
 | F3 | Play: open match requests (list, create, join, leave), propose a friendly from a player page (done) |
-| F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view |
+| F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view (done) |
 | F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in |
 | F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
 | F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation |

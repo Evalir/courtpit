@@ -4,7 +4,8 @@ import { View } from "react-native";
 
 import { useApi } from "@/api/client";
 import { disciplineLabel, formatDate } from "@/features/format";
-import { describeFormat, leagueBadge, leagueTiming } from "@/features/leagues/league";
+import { EntryPanel } from "@/features/leagues/EntryPanel";
+import { describeFormat, leagueBadge, leagueTiming, ownBoxFirst } from "@/features/leagues/league";
 import { nameLookup, sideName } from "@/features/players/names";
 import { useSignedIn } from "@/session/SessionProvider";
 import { createStyles } from "@/theme/ThemeProvider";
@@ -17,7 +18,10 @@ import { Text } from "@/ui/Text";
 
 type DivisionStanding = components["schemas"]["DivisionStanding"];
 
-/** A league: its dates and format, then each box's table once the season has started. */
+/**
+ * A league: its dates and format; registration while it takes entries; then each box's table
+ * once the season has started, the viewer's box first.
+ */
 export default function League() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { $api } = useApi();
@@ -41,6 +45,7 @@ export default function League() {
   const data = league.data;
   const badge = leagueBadge[data.status];
   const now = new Date(league.dataUpdatedAt);
+  const boxes = ownBoxFirst(standings.data ?? [], me);
 
   return (
     <Screen
@@ -77,14 +82,21 @@ export default function League() {
           value={`${data.box_min_size}–${data.box_max_size} entries, round robin`}
         />
       </Card>
+      <EntryPanel league={data} now={now} />
       {started ? (
         standings.isPending ? (
           <LoadingState />
         ) : standings.error ? (
           <ErrorState error={standings.error} onRetry={() => void standings.refetch()} />
         ) : (
-          standings.data.map((box) => (
-            <BoxTable key={box.division_id} box={box} me={me} name={name} />
+          boxes.boxes.map((box) => (
+            <BoxTable
+              key={box.division_id}
+              box={box}
+              mine={box === boxes.mine}
+              me={me}
+              name={name}
+            />
           ))
         )
       ) : null}
@@ -106,16 +118,18 @@ function Fact({ label, value }: { label: string; value: string }) {
 /** One box: position, entry, played / won / lost and table points, the viewer highlighted. */
 function BoxTable({
   box,
+  mine,
   me,
   name,
 }: {
   box: DivisionStanding;
+  mine: boolean;
   me: string;
   name: (id: string) => string;
 }) {
   const styles = useStyles();
   return (
-    <Section title={`${box.name} · Tier ${box.tier}`}>
+    <Section title={`${mine ? "Your box · " : ""}${box.name} · Tier ${box.tier}`}>
       <View style={styles.table} accessibilityRole="list">
         <View style={[styles.row, styles.head]}>
           <Text variant="caption" tone="textMuted" style={styles.pos}>

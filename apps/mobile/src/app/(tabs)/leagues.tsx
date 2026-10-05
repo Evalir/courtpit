@@ -3,13 +3,17 @@ import { View } from "react-native";
 
 import { useApi } from "@/api/client";
 import { disciplineLabel } from "@/features/format";
+import { entryBadges } from "@/features/leagues/entries";
 import { leagueBadge, leagueOrder, leagueTiming, type LeagueView } from "@/features/leagues/league";
+import { useSignedIn } from "@/session/SessionProvider";
 import { space } from "@/theme/tokens";
-import { Badge } from "@/ui/Badge";
+import { Badge, type BadgeTone } from "@/ui/Badge";
 import { Card } from "@/ui/Card";
 import { Screen, Section } from "@/ui/Screen";
 import { EmptyState, ErrorState, LoadingState } from "@/ui/States";
 import { Text } from "@/ui/Text";
+
+type Mark = { label: string; tone: BadgeTone };
 
 const SECTION_TITLE: Record<LeagueView["status"], string> = {
   registration: "Open for entries",
@@ -23,18 +27,24 @@ const SECTION_TITLE: Record<LeagueView["status"], string> = {
 export default function Leagues() {
   const { $api } = useApi();
   const leagues = $api.useQuery("get", "/api/v1/leagues", { params: { query: { limit: 100 } } });
+  const mine = $api.useQuery("get", "/api/v1/me/entries");
+  const me = useSignedIn().player_id;
 
   if (leagues.isPending) return <LoadingState />;
   if (leagues.error)
     return <ErrorState error={leagues.error} onRetry={() => void leagues.refetch()} />;
   const now = new Date(leagues.dataUpdatedAt);
   const items = leagues.data.items;
+  const marks = entryBadges(mine.data ?? [], me);
 
   return (
     <Screen
       title="Leagues"
-      refreshing={leagues.isRefetching}
-      onRefresh={() => void leagues.refetch()}
+      refreshing={leagues.isRefetching || mine.isRefetching}
+      onRefresh={() => {
+        void leagues.refetch();
+        void mine.refetch();
+      }}
     >
       {items.length === 0 ? (
         <EmptyState
@@ -48,7 +58,7 @@ export default function Leagues() {
           return group.length > 0 ? (
             <Section key={status} title={SECTION_TITLE[status]}>
               {group.map((league) => (
-                <LeagueCard key={league.id} league={league} now={now} />
+                <LeagueCard key={league.id} league={league} now={now} mark={marks.get(league.id)} />
               ))}
             </Section>
           ) : null;
@@ -58,15 +68,16 @@ export default function Leagues() {
   );
 }
 
-function LeagueCard({ league, now }: { league: LeagueView; now: Date }) {
+function LeagueCard({ league, now, mark }: { league: LeagueView; now: Date; mark?: Mark }) {
   const badge = leagueBadge[league.status];
   return (
     <Card
-      accessibilityLabel={`${league.name}, ${badge.label}`}
+      accessibilityLabel={[league.name, badge.label, mark?.label].filter(Boolean).join(", ")}
       onPress={() => router.push({ pathname: "/leagues/[id]", params: { id: league.id } })}
     >
       <View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
         <Badge label={badge.label} tone={badge.tone} />
+        {mark ? <Badge label={mark.label} tone={mark.tone} /> : null}
         <Text variant="caption" tone="textMuted">
           {disciplineLabel[league.discipline]}
         </Text>

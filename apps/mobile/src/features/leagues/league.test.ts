@@ -1,6 +1,6 @@
 import { formatDate } from "@/features/format";
 
-import { describeFormat, leagueTiming, type LeagueView } from "./league";
+import { describeFormat, leagueTiming, ownBoxFirst, type LeagueView } from "./league";
 
 const league: LeagueView = {
   id: "l1",
@@ -70,5 +70,20 @@ describe("describeFormat", () => {
     expect(describeFormat({ sets_to_win: 3, games_per_set: 6, final_set: "pro_set_8" })).toBe(
       "Best of 5 sets · advantage sets · pro set to 8 as the final set",
     );
+  });
+});
+
+describe("ownBoxFirst", () => {
+  const box = (name: string, players: string[][]) => ({
+    name,
+    table: players.map((player_ids) => ({ player_ids })),
+  });
+
+  it("moves the viewer's box to the top and keeps the rest in order", () => {
+    const one = box("Box 1", [["a"], ["b"]]);
+    const two = box("Box 2", [["c"], ["me", "d"]]);
+    const three = box("Box 3", [["e"]]);
+    expect(ownBoxFirst([one, two, three], "me")).toEqual({ boxes: [two, one, three], mine: two });
+    expect(ownBoxFirst([one, three], "me")).toEqual({ boxes: [one, three], mine: null });
   });
 });
