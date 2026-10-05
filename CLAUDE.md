@@ -1,4 +1,4 @@
-# Courtpit — notes for agents and contributors
+# Racquet Collective — notes for agents and contributors
 
 Spec: `docs/architecture.md` (authoritative). Where it is silent, decide, and record the
 decision in `docs/decisions.md`. Read the relevant spec section before changing behaviour.
@@ -7,9 +7,9 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
 - `crates/domain` — pure logic. **No IO, no tokio, no sqlx.** Score validation, match state
   machine, placement/pairings, scoring rules. Exhaustive unit tests live next to the code.
 - `crates/server` — axum 0.8 + sqlx 0.8 (Postgres) + utoipa. Handlers are thin: parse, call
-  `domain`, persist. Single binary `courtpit-server` with subcommands `serve`, `tick`,
+  `domain`, persist. Single binary `racquetcollective-server` with subcommands `serve`, `tick`,
   `migrate`, `create-community`, `openapi`, `seed` (demo data; refuses
-  `COURTPIT_ENV=production`).
+  `RACQUETCOLLECTIVE_ENV=production`).
 - `apps/mobile` — the Expo app (iOS, Android, web); design and conventions in
   `docs/frontend.md`. `packages/api-client` — the generated TypeScript client. Both are npm
   workspaces of the root `package.json` (one root `package-lock.json`; run `npm ci` at the root).
@@ -67,23 +67,23 @@ decision in `docs/decisions.md`. Read the relevant spec section before changing 
   them; screens stay thin.
 
 ## Local environment
-- Postgres 16: `DATABASE_URL=postgres://courtpit:courtpit@127.0.0.1/courtpit` (see `.env.example`;
+- Postgres 16: `DATABASE_URL=postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective` (see `.env.example`;
   the role must be allowed to create databases for the test harness). `service postgresql start`
   if it is not running.
 - Share one target dir across worktrees to reuse compiled deps:
-  `export CARGO_TARGET_DIR=/home/claude/courtpit-target`.
-- No `sqlx-cli` needed: `cargo run -p courtpit-server -- migrate` applies migrations.
+  `export CARGO_TARGET_DIR=/home/claude/racquetcollective-target`.
+- No `sqlx-cli` needed: `cargo run -p racquetcollective-server -- migrate` applies migrations.
 
 ## Tests
-- `domain`: plain unit tests (`cargo test -p courtpit-domain`).
+- `domain`: plain unit tests (`cargo test -p racquetcollective-domain`).
 - `server`: one integration test binary `crates/server/tests/it/` (a module per area).
   **Per-test database cloned from a migrated template**: the harness migrates a template DB
-  named `courtpit_tpl_<hash of migrations>` once (under an advisory lock), then every test runs
-  `CREATE DATABASE courtpit_test_<uuid> TEMPLATE ...` — fast and fully isolated. Leftover test
+  named `racquetcollective_tpl_<hash of migrations>` once (under an advisory lock), then every test runs
+  `CREATE DATABASE racquetcollective_test_<uuid> TEMPLATE ...` — fast and fully isolated. Leftover test
   databases from earlier runs are dropped at harness start. Needs `DATABASE_URL` pointing at a
-  role allowed to create databases (default `postgres://courtpit:courtpit@127.0.0.1/courtpit`).
+  role allowed to create databases (default `postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective`).
 - CI also runs the suite through pgbouncer (transaction pooling, `ci/pgbouncer/`) with
-  `DATABASE_DIRECT_URL` for the harness's admin work and `COURTPIT_DB_POOLED=true`; see
+  `DATABASE_DIRECT_URL` for the harness's admin work and `RACQUETCOLLECTIVE_DB_POOLED=true`; see
   `docs/deploy.md`. Keep server code free of session state (session `SET`, advisory locks,
   `LISTEN`, temp tables): `SET LOCAL` inside a transaction is fine.
 - Use the helpers in `tests/it/common.rs` (`TestApp::spawn`, `app.req(..)`, `app.login(..)`)

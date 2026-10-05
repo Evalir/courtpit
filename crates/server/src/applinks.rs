@@ -4,8 +4,8 @@
 //!
 //! ```json
 //! { "app_links": {
-//!     "ios": ["ABCDE12345.app.courtpit.riverside"],
-//!     "android": [{ "package": "app.courtpit.riverside",
+//!     "ios": ["ABCDE12345.app.racquetcollective.riverside"],
+//!     "android": [{ "package": "app.racquetcollective.riverside",
 //!                   "sha256_cert_fingerprints": ["AB:CD:…"] }] } }
 //! ```
 //!

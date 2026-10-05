@@ -1,6 +1,6 @@
 //! Box standings, computed from a league's matches that have a result.
 
-use courtpit_domain::{
+use racquetcollective_domain::{
     BoxResult, EntryId, LeagueMatchPoints, MatchStatus, Outcome, StandingRow, standings,
 };
 use serde::Serialize;

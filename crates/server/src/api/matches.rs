@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Utc};
-use courtpit_domain::{Actor, Discipline, Event, MatchFormat, MatchStatus};
+use racquetcollective_domain::{Actor, Discipline, Event, MatchFormat, MatchStatus};
 use serde::Deserialize;
 use sqlx::{Postgres, QueryBuilder};
 use utoipa::ToSchema;

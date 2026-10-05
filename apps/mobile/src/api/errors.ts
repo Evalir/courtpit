@@ -1,4 +1,4 @@
-import { isApiError } from "@courtpit/api-client";
+import { isApiError } from "@racquetcollective/api-client";
 
 /**
  * Errors reach the UI in two shapes: the API's `{ error: { code, message } }` body (thrown by

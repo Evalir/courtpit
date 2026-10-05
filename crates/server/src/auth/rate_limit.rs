@@ -50,7 +50,7 @@ pub fn rate_limit_notice(fly_machine_id: Option<&str>) -> Option<String> {
     let machine = fly_machine_id.map(str::trim).filter(|id| !id.is_empty())?;
     Some(format!(
         "running on Fly Machine {machine}: auth rate limits are per instance, so N Machines allow \
-         N times COURTPIT_AUTH_IP_LIMIT_PER_HOUR; keep one Machine or move the limits to Postgres"
+         N times RACQUETCOLLECTIVE_AUTH_IP_LIMIT_PER_HOUR; keep one Machine or move the limits to Postgres"
     ))
 }
 
@@ -76,7 +76,7 @@ mod tests {
         assert!(notice.contains("148e21d3a9e418"), "{notice}");
         assert!(notice.contains("per instance"), "{notice}");
         assert!(
-            notice.contains("COURTPIT_AUTH_IP_LIMIT_PER_HOUR"),
+            notice.contains("RACQUETCOLLECTIVE_AUTH_IP_LIMIT_PER_HOUR"),
             "{notice}"
         );
     }

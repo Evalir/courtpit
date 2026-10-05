@@ -21,9 +21,9 @@ use crate::{
 };
 
 /// Cookie carrying the session token on web.
-pub const SESSION_COOKIE: &str = "courtpit_session";
-/// `X-Courtpit-Client: web` asks for the session as an httpOnly cookie instead of in the body.
-pub const CLIENT_HEADER: &str = "x-courtpit-client";
+pub const SESSION_COOKIE: &str = "racquetcollective_session";
+/// `X-RacquetCollective-Client: web` asks for the session as an httpOnly cookie instead of in the body.
+pub const CLIENT_HEADER: &str = "x-racquetcollective-client";
 
 /// Whether the client asked for cookie delivery.
 pub fn wants_cookie(headers: &HeaderMap) -> bool {
@@ -214,7 +214,7 @@ impl FromRequestParts<AppState> for CurrentPlayer {
     }
 }
 
-/// Client IP for rate limiting, from the source configured by `COURTPIT_CLIENT_IP_SOURCE`
+/// Client IP for rate limiting, from the source configured by `RACQUETCOLLECTIVE_CLIENT_IP_SOURCE`
 /// (see [`axum_client_ip::ClientIpSource`]). Rejections render as our usual error body.
 #[derive(Debug, Clone, Copy)]
 pub struct ClientIp(pub IpAddr);

@@ -9,7 +9,7 @@ use std::{
 };
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use courtpit_server::{
+use racquetcollective_server::{
     AppState, Config,
     backup::{self, Backup, DumpReader, DumpSource, ObjectStore, StoreFuture, pg_dump::PgDump},
     clock::Clock,
@@ -138,12 +138,12 @@ async fn pending(app: &TestApp) -> Vec<(String, DateTime<Utc>)> {
 async fn the_job_uploads_prunes_and_schedules_the_next_night() {
     let app = TestApp::spawn_with(config(5)).await;
     let store = MemoryStore::with(&[
-        "courtpit/2026/09/courtpit-20260920T030000Z.dump", // past retention: deleted
-        "courtpit/2026/10/courtpit-20261001T030000Z.dump", // recent: kept
-        "courtpit/notes.txt",                              // foreign: kept
-        "courtpit/2026/09/courtpit-garbage.dump",          // unparseable: kept
-        "courtpit/old/courtpit-20260920T030000Z.dump",     // wrong layout: kept
-        "other/2026/09/courtpit-20260920T030000Z.dump",    // outside the prefix: kept
+        "racquetcollective/2026/09/racquetcollective-20260920T030000Z.dump", // past retention: deleted
+        "racquetcollective/2026/10/racquetcollective-20261001T030000Z.dump", // recent: kept
+        "racquetcollective/notes.txt",                                       // foreign: kept
+        "racquetcollective/2026/09/racquetcollective-garbage.dump",          // unparseable: kept
+        "racquetcollective/old/racquetcollective-20260920T030000Z.dump",     // wrong layout: kept
+        "other/2026/09/racquetcollective-20260920T030000Z.dump", // outside the prefix: kept
     ]);
     let state = backup_state(&app, &store, false);
     app.clock.set(utc(10, 4, 10, 30));
@@ -157,12 +157,15 @@ async fn the_job_uploads_prunes_and_schedules_the_next_night() {
     let keys = store.keys();
     let uploaded: Vec<_> = keys
         .iter()
-        .filter(|key| key.starts_with("courtpit/2026/10/courtpit-20261004T1030"))
+        .filter(|key| key.starts_with("racquetcollective/2026/10/racquetcollective-20261004T1030"))
         .collect();
     assert_eq!(uploaded.len(), 1, "{keys:?}");
     assert_eq!(store.objects.lock().unwrap()[uploaded[0]], DUMP);
     assert_eq!(keys.len(), 6, "one added, one pruned: {keys:?}");
-    assert!(!keys.iter().any(|key| key.contains("20260920T030000Z.dump") && key.starts_with("courtpit/2026/09")));
+    assert!(
+        !keys.iter().any(|key| key.contains("20260920T030000Z.dump")
+            && key.starts_with("racquetcollective/2026/09"))
+    );
     // The next run: tomorrow at BACKUP_HOUR_UTC.
     assert_eq!(
         pending(&app).await,
@@ -271,8 +274,9 @@ async fn partial_configuration_is_a_startup_error() {
 #[tokio::test]
 async fn pg_dump_streams_a_custom_format_dump() {
     let app = TestApp::spawn().await;
-    let base = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://courtpit:courtpit@127.0.0.1/courtpit".to_owned());
+    let base = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective".to_owned()
+    });
     let mut url = reqwest::Url::parse(&base).unwrap();
     url.set_path(app.db.connect_options().get_database().unwrap());
     let dump = PgDump::new(url.as_str()).unwrap();

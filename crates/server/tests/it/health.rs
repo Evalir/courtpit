@@ -36,7 +36,7 @@ async fn openapi_route_serves_the_generated_document() {
         .send()
         .await
         .expect(StatusCode::OK);
-    let generated = serde_json::to_value(courtpit_server::app::openapi()).unwrap();
+    let generated = serde_json::to_value(racquetcollective_server::app::openapi()).unwrap();
     assert_eq!(served, generated);
 }
 

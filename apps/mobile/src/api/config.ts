@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 export interface ApiConfig {
   /** API origin, no trailing slash. */
   baseUrl: string;
-  /** Community slug for `X-Courtpit-Community`; absent on web on a community's own host. */
+  /** Community slug for `X-RacquetCollective-Community`; absent on web on a community's own host. */
   community?: string;
   /** Browser build: the session is an httpOnly cookie, not a stored token. */
   web: boolean;

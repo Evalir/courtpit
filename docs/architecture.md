@@ -1,12 +1,12 @@
-# Courtpit — Architecture
+# Racquet Collective — Architecture
 
 **Status:** v0.1 draft, agreed in discussion on 2026-10-02; updated 2026-10-03 with the Phase 1/Phase 2 hosting plan (§17) and the resolved open questions (§20). Living document; the Decisions Log at the end records what was settled and why, and `docs/decisions.md` records the finer rulings.
 
 ## 1. Product scope (v1)
 
-Courtpit is a white-label, multi-tenant tennis community app. Each *community* (a club, a group, a city scene) gets its own branded app in which players sign up, fill in a profile, find friendly matches by level, and compete in seasonal ranked leagues and one-off tournaments. Match scores are self-reported and confirmed by the opponent. Players accumulate community ranking points from league and tournament play.
+Racquet Collective is a white-label, multi-tenant tennis community app. Each *community* (a club, a group, a city scene) gets its own branded app in which players sign up, fill in a profile, find friendly matches by level, and compete in seasonal ranked leagues and one-off tournaments. Match scores are self-reported and confirmed by the opponent. Players accumulate community ranking points from league and tournament play.
 
-v1 includes singles, doubles and mixed doubles in leagues and tournaments; open sign-up; entry fees paid in-app via Stripe with a switchable Courtpit platform fee; push notifications; and a native mobile client with a web surface as a by-product. One community is live at launch, but every layer is tenant-aware from day one.
+v1 includes singles, doubles and mixed doubles in leagues and tournaments; open sign-up; entry fees paid in-app via Stripe with a switchable Racquet Collective platform fee; push notifications; and a native mobile client with a web surface as a by-product. One community is live at launch, but every layer is tenant-aware from day one.
 
 ## 2. Principles
 
@@ -21,7 +21,7 @@ Rules that communities will want to tune (match formats, scoring, fees) are data
 ## 3. System overview
 
 ```
- Expo app (iOS / Android / web) ──HTTPS──▶  courtpit-server (axum)  ──▶ Postgres
+ Expo app (iOS / Android / web) ──HTTPS──▶  racquetcollective-server (axum)  ──▶ Postgres
                                                  │   │   │
                                      Stripe ◀────┘   │   └────▶ Expo Push (APNs/FCM)
                                    (Connect,         └────▶ Email API (Resend/Postmark)
@@ -29,14 +29,14 @@ Rules that communities will want to tune (match formats, scoring, fees) are data
                                     webhooks)
 ```
 
-`courtpit-server` serves the REST API, verifies Stripe webhooks, and runs an in-process job loop (season transitions, auto-confirmations, reminders, leaderboard refresh) backed by a `jobs` table. Multiple instances coordinate through Postgres (`FOR UPDATE SKIP LOCKED`), nothing else. While the server is scaled to zero, an hourly `courtpit-server tick` drains due jobs and exits (§17).
+`racquetcollective-server` serves the REST API, verifies Stripe webhooks, and runs an in-process job loop (season transitions, auto-confirmations, reminders, leaderboard refresh) backed by a `jobs` table. Multiple instances coordinate through Postgres (`FOR UPDATE SKIP LOCKED`), nothing else. While the server is scaled to zero, an hourly `racquetcollective-server tick` drains due jobs and exits (§17).
 
 Expected load is low; the stack is chosen so that a single small instance handles thousands of requests per second on CRUD traffic and the only resource to watch is the Postgres connection pool.
 
 ## 4. Repository layout
 
 ```
-courtpit/
+racquetcollective/
   Cargo.toml                 # workspace
   crates/
     domain/                  # pure logic: scores, state machines, draws, pairings, scoring
@@ -59,7 +59,7 @@ Core dependencies: `axum`, `tokio`, `sqlx` (Postgres; runtime-checked queries, s
 
 `communities` is the tenant table. Every tenant-scoped table carries `community_id`.
 
-Tenant resolution: for web, from the request host (`{slug}.courtpit.app` or a registered custom domain) via a cached lookup; for native, the community slug is baked into the per-community build and sent as a header. In both cases the resolved tenant is cross-checked against the authenticated user's membership before any scoped query runs.
+Tenant resolution: for web, from the request host (`{slug}.racquetcollective.app` or a registered custom domain) via a cached lookup; for native, the community slug is baked into the per-community build and sent as a header. In both cases the resolved tenant is cross-checked against the authenticated user's membership before any scoped query runs.
 
 Enforcement: a `Tenant` extractor that handlers must accept, plus Postgres RLS policies on every scoped table keyed on `current_setting('app.community_id')`, set with `SET LOCAL` at the start of each transaction.
 
@@ -218,7 +218,7 @@ UTR is the self-declared level used for matchmaking and division placement. It n
 
 ## 13. Payments (Stripe Connect)
 
-Money belongs to the community owner, not Courtpit. Each community onboards a Stripe Connect Express account during setup (hosted onboarding; Stripe handles KYC). Entry fees are destination charges to the owner's account via Stripe Checkout (hosted page in an in-app browser), so Courtpit never holds funds and stays out of PCI scope.
+Money belongs to the community owner, not Racquet Collective. Each community onboards a Stripe Connect Express account during setup (hosted onboarding; Stripe handles KYC). Entry fees are destination charges to the owner's account via Stripe Checkout (hosted page in an in-app browser), so Racquet Collective never holds funds and stays out of PCI scope.
 
 Platform fee: `platform_fee_bps` and `platform_fee_fixed_minor` live on `communities` (with a global default in server config) and may be changed at any time by an admin endpoint or the `set-fee` CLI subcommand, including to zero. The fee is computed per charge at Checkout Session creation and passed as `application_fee_amount`, and the applied amount is recorded on the `payments` row. Changing the fee therefore affects future charges only and leaves a full audit trail.
 
@@ -226,7 +226,7 @@ Flow: creating or accepting an entry with a fee opens a Checkout Session and set
 
 Apple's in-app-purchase rules do not apply: fees for a physical tennis league fall under the "goods and services consumed outside the app" exemption, so Stripe in the app is permitted.
 
-Owner-pays-Courtpit subscription billing, if ever wanted, is a separate concern (Stripe Billing on the platform account) and does not touch this design.
+Subscription billing of community owners by Racquet Collective, if ever wanted, is a separate concern (Stripe Billing on the platform account) and does not touch this design.
 
 ## 14. Notifications and background jobs
 
@@ -236,29 +236,29 @@ Push (Expo's push service over APNs/FCM) is the primary channel, keyed by `devic
 
 ## 15. API
 
-REST JSON under `/api/v1`, OpenAPI generated by `utoipa` (also printed by `courtpit-server openapi`), TypeScript client generated into `packages/api-client` with `npm run gen`, committed, and checked for drift in CI. Resource groups: `tenant`, `auth`, `me`, `players`, `leagues` (+ divisions, entries, standings), `tournaments` (+ entries, draw), `matches` (+ proposals, score, confirm, dispute), `match-requests`, `rankings`, `payments` (checkout, webhook), `admin/*`. Cursor pagination on lists. No GraphQL and no realtime in v1.
+REST JSON under `/api/v1`, OpenAPI generated by `utoipa` (also printed by `racquetcollective-server openapi`), TypeScript client generated into `packages/api-client` with `npm run gen`, committed, and checked for drift in CI. Resource groups: `tenant`, `auth`, `me`, `players`, `leagues` (+ divisions, entries, standings), `tournaments` (+ entries, draw), `matches` (+ proposals, score, confirm, dispute), `match-requests`, `rankings`, `payments` (checkout, webhook), `admin/*`. Cursor pagination on lists. No GraphQL and no realtime in v1.
 
 ## 16. Mobile client and distribution
 
 Expo with Expo Router; `react-native-web` provides the web surface from the same codebase. Web is secondary but required: it is where email flows, Stripe return URLs and shared links land. EAS Update delivers JS-only fixes over the air without store review.
 
-Distribution is one store listing per community, built from a per-community EAS build profile (bundle id, app name, icon, baked slug). Apple's guideline 4.3 (template apps) means these listings should be published under each community's own Apple Developer account rather than a single Courtpit account; this requires each community to hold a developer account (and a D-U-N-S number for organisations). With one community at launch this is a single enrolment; the process for onboarding further communities is deferred.
+Distribution is one store listing per community, built from a per-community EAS build profile (bundle id, app name, icon, baked slug). Apple's guideline 4.3 (template apps) means these listings should be published under each community's own Apple Developer account rather than a single Racquet Collective account; this requires each community to hold a developer account (and a D-U-N-S number for organisations). With one community at launch this is a single enrolment; the process for onboarding further communities is deferred.
 
 No avatar uploads in v1 (avoids object storage); community logos are URLs in the branding config.
 
 ## 17. Deployment, operations, observability
 
-One Docker image built from a multi-stage `Dockerfile`: a Debian slim runtime with `postgresql-client` (for `pg_dump`) rather than distroless. GitHub Actions deploys it to Fly.io after CI passes on `main`; migrations run as Fly's release step (`courtpit-server migrate`, over a direct database connection); secrets live in Fly's secret store. `tracing` emits JSON logs with the request id; OpenTelemetry export to a hosted backend's free tier comes later. Integration tests run against a real Postgres service container, and a second CI job runs the whole suite through pgbouncer in transaction mode; the domain crate is covered by plain unit tests. Step-by-step setup is in `docs/deploy.md`.
+One Docker image built from a multi-stage `Dockerfile`: a Debian slim runtime with `postgresql-client` (for `pg_dump`) rather than distroless. GitHub Actions deploys it to Fly.io after CI passes on `main`; migrations run as Fly's release step (`racquetcollective-server migrate`, over a direct database connection); secrets live in Fly's secret store. `tracing` emits JSON logs with the request id; OpenTelemetry export to a hosted backend's free tier comes later. Integration tests run against a real Postgres service container, and a second CI job runs the whole suite through pgbouncer in transaction mode; the domain crate is covered by plain unit tests. Step-by-step setup is in `docs/deploy.md`.
 
 **Phase 1 (before payments, about $0/month).**
 
 - *Server:* one Fly Machine with `auto_stop_machines = "stop"` and `min_machines_running = 0`, billed only while serving traffic. Cold starts are accepted.
 - *Database:* Neon Free (scale-to-zero after 5 minutes, 1 GB, 6 h point-in-time restore). The app connects through Neon's **pooled** connection string (pgbouncer, transaction mode). That is safe because the server keeps no session state: `TenantTx` uses `SET LOCAL`/`set_config(.., true)`, job claims are single `SKIP LOCKED` statements, and Neon's pooler tracks protocol-level prepared statements. Anything that needs a session — migrations (sqlx's advisory lock) and `pg_dump` — uses the direct URL (`DATABASE_DIRECT_URL`).
-- *Jobs:* the in-process loop runs while the Machine is awake. Because nothing polls while it is stopped, a Fly **scheduled Machine** runs `courtpit-server tick` hourly: it drains due jobs (bounded by `--max-seconds`) and exits. Deadlines such as auto-confirmation and league dates therefore fire within the hour even when nobody uses the app.
+- *Jobs:* the in-process loop runs while the Machine is awake. Because nothing polls while it is stopped, a Fly **scheduled Machine** runs `racquetcollective-server tick` hourly: it drains due jobs (bounded by `--max-seconds`) and exits. Deadlines such as auto-confirmation and league dates therefore fire within the hour even when nobody uses the app.
 - *Backups:* besides Neon's PITR, a nightly `backup_database` job streams `pg_dump --format=custom` to Cloudflare R2 (S3-compatible, free tier) through a small built-in S3 client, and prunes dumps past `BACKUP_RETENTION_DAYS`.
 - *Rate limits* stay in memory, which is exact with a single Machine.
 
-**Phase 2 (when payments ship).** Stripe webhooks and checkout returns want a warm, always reachable server, so the database moves to an always-on Postgres on Fly and the app runs with `min_machines_running = 1` (the tick Machine can then go). The pooled/direct split disappears (`COURTPIT_DB_POOLED=false`). Nothing in the schema or the server changes between phases.
+**Phase 2 (when payments ship).** Stripe webhooks and checkout returns want a warm, always reachable server, so the database moves to an always-on Postgres on Fly and the app runs with `min_machines_running = 1` (the tick Machine can then go). The pooled/direct split disappears (`RACQUETCOLLECTIVE_DB_POOLED=false`). Nothing in the schema or the server changes between phases.
 
 ## 18. Privacy and compliance
 

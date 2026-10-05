@@ -2,7 +2,7 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Utc};
-use courtpit_domain::{Discipline, MatchFormat};
+use racquetcollective_domain::{Discipline, MatchFormat};
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::{Postgres, QueryBuilder, types::Json as SqlJson};

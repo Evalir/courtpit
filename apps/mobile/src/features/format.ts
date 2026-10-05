@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 
 type Discipline = components["schemas"]["Discipline"];
 type PlayPref = components["schemas"]["PlayPref"];

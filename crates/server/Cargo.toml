@@ -1,6 +1,6 @@
 [package]
-name = "courtpit-server"
-description = "Courtpit HTTP API, background jobs and admin CLI."
+name = "racquetcollective-server"
+description = "Racquet Collective HTTP API, background jobs and admin CLI."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "courtpit-server"
+name = "racquetcollective-server"
 path = "src/main.rs"
 
 [[test]]
@@ -16,7 +16,7 @@ name = "it"
 path = "tests/it/main.rs"
 
 [dependencies]
-courtpit-domain = { workspace = true, features = ["openapi"] }
+racquetcollective-domain = { workspace = true, features = ["openapi"] }
 anyhow.workspace = true
 base64.workspace = true
 axum.workspace = true

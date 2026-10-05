@@ -1,7 +1,7 @@
 {
-  "name": "courtpit",
+  "name": "racquetcollective",
   "private": true,
-  "description": "npm workspaces for Courtpit's TypeScript packages; the server is the Cargo workspace.",
+  "description": "npm workspaces for Racquet Collective's TypeScript packages; the server is the Cargo workspace.",
   "workspaces": [
     "apps/*",
     "packages/*"

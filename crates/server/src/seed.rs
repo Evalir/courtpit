@@ -1,4 +1,4 @@
-//! `courtpit-server seed`: fills a dev/staging database with a demo community, so the mobile
+//! `racquetcollective-server seed`: fills a dev/staging database with a demo community, so the mobile
 //! app and reviewers have something to look at.
 //!
 //! Where a code path exists it is the real one: leagues are activated by
@@ -12,7 +12,7 @@ use std::fmt;
 
 use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::{Actor, Discipline, Event, Score, SetScore, Side};
+use racquetcollective_domain::{Actor, Discipline, Event, Score, SetScore, Side};
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 use sqlx::types::Json;
@@ -65,7 +65,7 @@ const SCORES: [&[(u16, u16, bool)]; 6] = [
     &[(6, 3, false), (4, 6, false), (10, 7, true)], &[(4, 6, false), (6, 3, false), (10, 8, true)],
 ];
 
-/// Fails when `env` (the value of `COURTPIT_ENV`) names production: seeding writes fake
+/// Fails when `env` (the value of `RACQUETCOLLECTIVE_ENV`) names production: seeding writes fake
 /// people and results, so it must never run against a live database.
 pub fn ensure_not_production(env: Option<&str>) -> anyhow::Result<()> {
     let name = env.unwrap_or_default().trim();
@@ -74,7 +74,7 @@ pub fn ensure_not_production(env: Option<&str>) -> anyhow::Result<()> {
         .any(|label| name.eq_ignore_ascii_case(label));
     anyhow::ensure!(
         !production,
-        "refusing to seed: COURTPIT_ENV is `{name}`; seed is for development and staging only"
+        "refusing to seed: RACQUETCOLLECTIVE_ENV is `{name}`; seed is for development and staging only"
     );
     Ok(())
 }
@@ -646,7 +646,7 @@ async fn summarize(state: &AppState, tenant: &Tenant) -> anyhow::Result<SeedSumm
 mod tests {
     use std::collections::HashSet;
 
-    use courtpit_domain::{MatchFormat, validate_score};
+    use racquetcollective_domain::{MatchFormat, validate_score};
 
     use super::*;
     use crate::communities::Branding;

@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use courtpit_server::TenantTx;
+use racquetcollective_server::TenantTx;
 use uuid::Uuid;
 
 use crate::{common::TestApp, tenancy::add_player};

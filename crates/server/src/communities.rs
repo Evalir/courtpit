@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
-use courtpit_domain::MixedEligibility;
+use racquetcollective_domain::MixedEligibility;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, types::Json};
 use utoipa::ToSchema;

@@ -1,4 +1,4 @@
-import { isApiError } from "@courtpit/api-client";
+import { isApiError } from "@racquetcollective/api-client";
 import { MutationCache, QueryCache, QueryClient, type Query } from "@tanstack/react-query";
 
 import { errorCode } from "./errors";

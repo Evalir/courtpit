@@ -4,7 +4,7 @@
 //! Handlers live in `api::matches`; everything here takes a [`TenantTx`] so it is scoped.
 
 use chrono::{DateTime, Utc};
-use courtpit_domain::{
+use racquetcollective_domain::{
     Actor, Discipline, Event, MatchFormat, MatchKind, MatchState, MatchStatus, Score, Side,
     TransitionError, side_of,
 };

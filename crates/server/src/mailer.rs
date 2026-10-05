@@ -71,7 +71,7 @@ pub struct ResendMailer {
 }
 
 impl ResendMailer {
-    /// Creates a mailer sending as `from` (e.g. `Courtpit <no-reply@courtpit.app>`).
+    /// Creates a mailer sending as `from` (e.g. `Racquet Collective <no-reply@racquetcollective.app>`).
     pub fn new(api_key: String, from: String) -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -181,14 +181,17 @@ mod tests {
     #[tokio::test]
     async fn resend_mailer_posts_the_message() {
         let (endpoint, seen) = fake_resend(200).await;
-        let mailer = ResendMailer::new("re_key".into(), "Courtpit <no-reply@x.test>".into())
-            .with_endpoint(endpoint);
+        let mailer = ResendMailer::new(
+            "re_key".into(),
+            "Racquet Collective <no-reply@x.test>".into(),
+        )
+        .with_endpoint(endpoint);
         mailer.send(&email()).await.unwrap();
         let seen = seen.lock().unwrap();
         let (auth, body) = &seen[0];
         assert_eq!(auth.as_deref(), Some("Bearer re_key"));
         assert_eq!(body["to"], serde_json::json!(["Ana@Example.test"]));
-        assert_eq!(body["from"], "Courtpit <no-reply@x.test>");
+        assert_eq!(body["from"], "Racquet Collective <no-reply@x.test>");
         assert_eq!(body["text"], "123456");
     }
 

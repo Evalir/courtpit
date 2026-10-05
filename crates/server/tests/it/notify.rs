@@ -2,7 +2,7 @@
 
 use axum::http::StatusCode;
 use chrono::{Duration, Utc};
-use courtpit_server::{clock::Clock, jobs};
+use racquetcollective_server::{clock::Clock, jobs};
 use serde_json::{Value, json};
 
 use crate::{
@@ -299,7 +299,7 @@ async fn players_without_devices_get_scores_to_confirm_by_email() {
     assert!(mail.text.contains("confirms itself after 3 days"));
     assert!(
         mail.text
-            .contains(&format!("https://demo.courtpit.app/matches/{id}"))
+            .contains(&format!("https://demo.racquetcollective.app/matches/{id}"))
     );
 }
 
@@ -391,7 +391,7 @@ async fn partner_invitations_and_their_answers_are_told() {
     assert_eq!(mail.subject, "demo club: Ana invited you to partner them");
     assert!(
         mail.text
-            .contains(&format!("https://demo.courtpit.app{url}"))
+            .contains(&format!("https://demo.racquetcollective.app{url}"))
     );
 
     entry_action(&app, &cy, &league, &entry, "accept").await;

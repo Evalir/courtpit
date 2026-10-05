@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 
 type MatchFormat = components["schemas"]["MatchFormat"];
 type SetScore = components["schemas"]["SetScore"];

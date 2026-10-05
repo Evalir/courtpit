@@ -1,5 +1,5 @@
 /**
- * Browser session storage: nothing to store. Sign-in sends `X-Courtpit-Client: web`, the
+ * Browser session storage: nothing to store. Sign-in sends `X-RacquetCollective-Client: web`, the
  * server answers with an httpOnly cookie, and the browser attaches it to same-origin requests;
  * script never sees the session (decision 10).
  */

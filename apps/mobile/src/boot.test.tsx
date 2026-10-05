@@ -75,7 +75,7 @@ describe("boot", () => {
     expect(view.getByText("Riverside Tennis Club")).toBeVisible();
     // Native: the community header on every request; no stored token, so no session check.
     expect(requests.map((request) => new URL(request.url).pathname)).toEqual(["/api/v1/tenant"]);
-    expect(requests[0]?.headers.get("X-Courtpit-Community")).toBe("demo");
+    expect(requests[0]?.headers.get("X-RacquetCollective-Community")).toBe("demo");
   });
 
   it("draws the community's dark theme on a device set to dark", async () => {

@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 
 import {
   BLACK,
@@ -65,7 +65,7 @@ export interface Theme {
   dark: boolean;
 }
 
-/** Courtpit's own look, used for anything a community's branding leaves out. */
+/** Racquet Collective's own look, used for anything a community's branding leaves out. */
 export const defaultBrandColors = {
   primary: "#2456c9",
   secondary: "#d9f24a",

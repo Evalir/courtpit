@@ -9,10 +9,10 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_COMMUNITY": "demo",
-        "EXPO_PUBLIC_API_URL": "https://demo.courtpit.app",
-        "COURTPIT_APP_NAME": "Courtpit (dev)",
-        "COURTPIT_BUNDLE_ID": "app.courtpit.dev",
-        "COURTPIT_SCHEME": "courtpit-dev"
+        "EXPO_PUBLIC_API_URL": "https://demo.racquetcollective.app",
+        "RACQUETCOLLECTIVE_APP_NAME": "Racquet Collective (dev)",
+        "RACQUETCOLLECTIVE_BUNDLE_ID": "app.racquetcollective.dev",
+        "RACQUETCOLLECTIVE_SCHEME": "racquetcollective-dev"
       }
     },
     "store": {
@@ -24,11 +24,11 @@
       "channel": "demo",
       "env": {
         "EXPO_PUBLIC_COMMUNITY": "demo",
-        "EXPO_PUBLIC_API_URL": "https://demo.courtpit.app",
-        "COURTPIT_APP_NAME": "Riverside Tennis",
-        "COURTPIT_BUNDLE_ID": "app.courtpit.demo",
-        "COURTPIT_SCHEME": "courtpit-demo",
-        "COURTPIT_WEB_HOST": "demo.courtpit.app"
+        "EXPO_PUBLIC_API_URL": "https://demo.racquetcollective.app",
+        "RACQUETCOLLECTIVE_APP_NAME": "Riverside Tennis",
+        "RACQUETCOLLECTIVE_BUNDLE_ID": "app.racquetcollective.demo",
+        "RACQUETCOLLECTIVE_SCHEME": "racquetcollective-demo",
+        "RACQUETCOLLECTIVE_WEB_HOST": "demo.racquetcollective.app"
       }
     },
     "demo-preview": {

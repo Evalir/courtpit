@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 #
-# Courtpit server image: a release build of `courtpit-server`, the exported web app it serves,
+# Racquet Collective server image: a release build of `racquetcollective-server`, the exported web app it serves,
 # and the Postgres client tools the nightly backup job shells out to (`pg_dump`). Five stages:
 # chef (toolchain + cargo-chef), planner (dependency recipe), builder (cached dependency build,
 # then the workspace), web (the Expo web export), runtime.
 #
 # There is deliberately no ENTRYPOINT: `CMD` runs the server, while Fly's
-# `release_command = "courtpit-server migrate"` and the scheduled `courtpit-server tick`
+# `release_command = "racquetcollective-server migrate"` and the scheduled `racquetcollective-server tick`
 # Machine replace the command and keep working (docs/deploy.md).
 
 # Any Rust >= the workspace `rust-version` (1.88, edition 2024) works; CI builds with stable.
@@ -33,15 +33,15 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 # Dependencies only: this layer is reused until Cargo.toml/Cargo.lock change.
-RUN cargo chef cook --release --locked --package courtpit-server --recipe-path recipe.json
+RUN cargo chef cook --release --locked --package racquetcollective-server --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 # `sqlx::migrate!("../../migrations")` embeds the SQL files at compile time.
 COPY migrations migrations
-RUN cargo build --release --locked --package courtpit-server --bin courtpit-server
+RUN cargo build --release --locked --package racquetcollective-server --bin racquetcollective-server
 
-# The web app: apps/mobile exported for browsers, served by `courtpit-server serve` from
-# COURTPIT_WEB_DIR. One export serves every community host: it is built without
+# The web app: apps/mobile exported for browsers, served by `racquetcollective-server serve` from
+# RACQUETCOLLECTIVE_WEB_DIR. One export serves every community host: it is built without
 # EXPO_PUBLIC_COMMUNITY, so the browser's Host picks the community. Text files get a `.gz`
 # twin that the server sends to clients accepting gzip.
 FROM node:${NODE_VERSION}-slim AS web
@@ -70,10 +70,10 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends "postgresql-client-${PG_MAJOR}" \
     && rm -rf /var/lib/apt/lists/*
-RUN useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin courtpit
-COPY --from=builder /app/target/release/courtpit-server /usr/local/bin/courtpit-server
+RUN useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin racquetcollective
+COPY --from=builder /app/target/release/racquetcollective-server /usr/local/bin/racquetcollective-server
 COPY --from=web /web/dist /app/web
-ENV COURTPIT_WEB_DIR=/app/web
-USER courtpit
+ENV RACQUETCOLLECTIVE_WEB_DIR=/app/web
+USER racquetcollective
 EXPOSE 8080
-CMD ["courtpit-server", "serve"]
+CMD ["racquetcollective-server", "serve"]

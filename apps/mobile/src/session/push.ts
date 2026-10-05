@@ -1,4 +1,4 @@
-import type { CourtpitClient } from "@courtpit/api-client";
+import type { RacquetCollectiveClient } from "@racquetcollective/api-client";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
@@ -40,7 +40,7 @@ export async function pushPermission(): Promise<PushPermission> {
  * "Turn on"), then sends the Expo push token to the server. Returns where permission stands.
  */
 export async function registerForPush(
-  fetch: CourtpitClient,
+  fetch: RacquetCollectiveClient,
   ask: boolean,
 ): Promise<PushPermission> {
   let permission = await pushPermission();
@@ -65,7 +65,7 @@ export async function registerForPush(
 }
 
 /** Stops pushes to this device for the player signing out (best effort). */
-export async function forgetPushDevice(fetch: CourtpitClient): Promise<void> {
+export async function forgetPushDevice(fetch: RacquetCollectiveClient): Promise<void> {
   if (!registered) return;
   const token = registered;
   registered = null;

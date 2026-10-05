@@ -30,7 +30,7 @@ impl WebApp {
         let index: PathBuf = dir.join("index.html");
         anyhow::ensure!(
             index.is_file(),
-            "COURTPIT_WEB_DIR {} has no index.html (run `npm run export:web` in apps/mobile)",
+            "RACQUETCOLLECTIVE_WEB_DIR {} has no index.html (run `npm run export:web` in apps/mobile)",
             dir.display()
         );
         Ok(Self {

@@ -1,6 +1,6 @@
 import { parsePreference, type AppearancePreference } from "./appearance";
 
-const KEY = "courtpit.appearance";
+const KEY = "racquetcollective.appearance";
 
 /**
  * Browser: the choice is kept in `localStorage` (readable synchronously, so the first frame is

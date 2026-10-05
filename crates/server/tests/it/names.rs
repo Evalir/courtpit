@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use axum::http::StatusCode;
-use courtpit_server::seed::seed;
+use racquetcollective_server::seed::seed;
 use serde_json::Value;
 use uuid::Uuid;
 

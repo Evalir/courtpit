@@ -200,7 +200,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
 }
 
 /// The OpenAPI document of [`api_router`]. Served at `/api/v1/openapi.json` and printed by
-/// `courtpit-server openapi`, so the committed client and the live API cannot disagree.
+/// `racquetcollective-server openapi`, so the committed client and the live API cannot disagree.
 pub fn openapi() -> utoipa::openapi::OpenApi {
     api_router().1
 }

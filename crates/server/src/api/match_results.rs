@@ -2,7 +2,7 @@
 
 use axum::{Json, extract::State};
 use chrono::Duration;
-use courtpit_domain::{Event, Resolution, Score, Side};
+use racquetcollective_domain::{Event, Resolution, Score, Side};
 use serde::Deserialize;
 use sqlx::types::Json as SqlJson;
 use utoipa::ToSchema;
