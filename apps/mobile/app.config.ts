@@ -8,6 +8,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * - `COURTPIT_APP_NAME`   store / home-screen name
  * - `COURTPIT_BUNDLE_ID`  iOS bundle identifier and Android package
  * - `COURTPIT_SCHEME`     deep-link scheme
+ * - `COURTPIT_EAS_PROJECT_ID` the EAS project, which push tokens are issued for
  *
  * The community slug and API origin are `EXPO_PUBLIC_*` variables read by the bundle itself
  * (`src/api/config.ts`), so they also apply to the web build.
@@ -38,7 +39,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-font",
     ["expo-splash-screen", { backgroundColor: "#ffffff" }],
+    ["expo-notifications", { defaultChannel: "default" }],
   ],
+  extra: {
+    eas: { projectId: process.env.COURTPIT_EAS_PROJECT_ID },
+  },
   experiments: {
     typedRoutes: true,
     reactCompiler: true,

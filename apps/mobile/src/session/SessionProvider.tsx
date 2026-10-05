@@ -6,6 +6,7 @@ import { useApi } from "@/api/client";
 import { errorCode } from "@/api/errors";
 import { onSessionExpired, queryPath } from "@/api/queryClient";
 
+import { forgetPushDevice } from "./push";
 import { sessionToken } from "./token";
 
 type SessionInfo = components["schemas"]["SessionInfo"];
@@ -94,6 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setPhase("check");
     },
     async signOut() {
+      await forgetPushDevice(fetch).catch(() => undefined);
       await fetch.POST("/api/v1/auth/logout").catch(() => undefined);
       await endLocally("out");
     },

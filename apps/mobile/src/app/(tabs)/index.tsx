@@ -5,6 +5,7 @@ import { useApi } from "@/api/client";
 import { needsYouLine } from "@/features/home";
 import { entriesNeedingYou, entryState, type MyEntry } from "@/features/leagues/entries";
 import { InvitationCard } from "@/features/leagues/InvitationCard";
+import { PushPrompt } from "@/features/notifications/PushPrompt";
 import { groupMatches, type MatchGroups, type MatchView } from "@/features/matches/match";
 import { MatchCard } from "@/features/matches/MatchCard";
 import { nameLookup } from "@/features/players/names";
@@ -63,6 +64,7 @@ export default function Home() {
       <View style={{ marginTop: -space.lg }}>
         <Text tone="textMuted">{needsYouLine(groups.needsYou.length, leagueTodos.length)}</Text>
       </View>
+      <PushPrompt />
       {leagueTodos.length > 0 ? (
         <Section title="Leagues">
           {leagueTodos.map((item) => (

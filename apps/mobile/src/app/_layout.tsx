@@ -7,10 +7,11 @@ import { useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { ApiContext, createApi, type Api } from "@/api/client";
+import { ApiContext, createApi, useApi, type Api } from "@/api/client";
 import { resolveApiConfig } from "@/api/config";
 import { createQueryClient } from "@/api/queryClient";
 import { NoAccess } from "@/session/NoAccess";
+import { registerForPush, useNotificationTaps } from "@/session/push";
 import { returnTo } from "@/session/returnTo";
 import { SessionProvider, useSession, type Session } from "@/session/SessionProvider";
 import { TenantProvider, useCommunity } from "@/tenant/TenantProvider";
@@ -62,6 +63,8 @@ function RootNavigator() {
   const { colors, typography, dark } = useTheme();
   const community = useCommunity();
   useReturnAfterSignIn(session);
+  useNotificationTaps(session.status === "signed-in");
+  useSilentPushRegistration(session.status === "signed-in");
 
   if (session.status === "loading") return <LoadingState />;
   if (session.status === "error")
@@ -126,6 +129,7 @@ function RootNavigator() {
             name="profile/edit"
             options={{ title: "Edit profile", presentation: "modal" }}
           />
+          <Stack.Screen name="profile/notifications" options={{ title: "Notifications" }} />
           <Stack.Screen
             name="profile/password"
             options={{ title: "Password", presentation: "modal" }}
@@ -185,6 +189,14 @@ function useReturnAfterSignIn(session: Session) {
     const subscription = Linking.addEventListener("url", ({ url }) => returnTo.remember(url));
     return () => subscription.remove();
   }, [status]);
+}
+
+/** Once signed in, a device that already allows push registers for this player. */
+function useSilentPushRegistration(signedIn: boolean) {
+  const { fetch } = useApi();
+  useEffect(() => {
+    if (signedIn) void registerForPush(fetch, false).catch(() => undefined);
+  }, [signedIn, fetch]);
 }
 
 /** A native build packaged without a community or API address (see `resolveApiConfig`). */
