@@ -1,47 +1,42 @@
 name: CI
 
+# One job on purpose: GitHub bills every job rounded up to a whole minute and each job pays for
+# its own runner, toolchain and cache restore, so seven small jobs cost about three times the
+# minutes of the work they do. Steps keep running after an earlier check fails (`!cancelled()`),
+# so one run still reports every failure. On pull requests a step runs only when the diff
+# touches what it checks; pushes to main (which gate the deploy) and manual runs check
+# everything, plus the suite again through pgbouncer. Decision 105.
+
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
+    paths-ignore: ["docs/**", "**/*.md"]
+  workflow_dispatch:
+
+# A newer push replaces the run in flight, on main too: merging a stack runs CI once for its tip,
+# and the deploy only ships main's tip anyway.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # dorny/paths-filter lists a pull request's files through the API.
+  pull-requests: read
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # No debug info: faster builds and a smaller cache; panics still report file and line.
+  CARGO_PROFILE_DEV_DEBUG: "0"
   DATABASE_URL: postgres://racquetcollective:racquetcollective@localhost:5432/racquetcollective
 
 jobs:
-  fmt:
+  ci:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
-
-  clippy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-
-  doc:
-    runs-on: ubuntu-latest
-    env:
-      RUSTDOCFLAGS: -D warnings
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --workspace --no-deps --document-private-items
-
-  test:
-    runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -58,80 +53,95 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
 
-  api-client:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
         with:
-          node-version: 22
-          cache: npm
-      # npm workspaces: one lockfile at the root for packages/* and apps/*.
-      - run: npm ci
-      - run: npm run gen
-        working-directory: packages/api-client
-      - name: Committed client matches the server's OpenAPI document
+          filters: |
+            rust: &rust
+              - "crates/**"
+              - "migrations/**"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "clippy.toml"
+              - "rustfmt.toml"
+              - "ci/**"
+              - ".github/workflows/ci.yml"
+            client:
+              - *rust
+              - "packages/api-client/**"
+              - "package.json"
+              - "package-lock.json"
+            mobile:
+              - "apps/mobile/**"
+              - "packages/api-client/**"
+              - "package.json"
+              - "package-lock.json"
+              # The app's checkScore runs the domain's score vectors (decision 86).
+              - "crates/domain/testdata/**"
+              - ".github/workflows/ci.yml"
+
+      - name: Decide what to check
+        id: run
+        env:
+          PR: ${{ github.event_name == 'pull_request' }}
+          RUST: ${{ steps.filter.outputs.rust }}
+          CLIENT: ${{ steps.filter.outputs.client }}
+          MOBILE: ${{ steps.filter.outputs.mobile }}
         run: |
-          if ! git diff --exit-code -- packages/api-client; then
-            echo "::error::packages/api-client is out of date. Run 'npm run gen' in packages/api-client and commit the result."
-            exit 1
+          if [ "$PR" = true ]; then
+            rust=$RUST client=$CLIENT mobile=$MOBILE pooled=false
+          else
+            rust=true client=true mobile=true pooled=true
           fi
-      - run: npm run typecheck
-        working-directory: packages/api-client
+          node=false
+          if [ "$client" = true ] || [ "$mobile" = true ]; then node=true; fi
+          cargo=false
+          if [ "$rust" = true ] || [ "$client" = true ]; then cargo=true; fi
+          {
+            echo "rust=$rust"
+            echo "client=$client"
+            echo "mobile=$mobile"
+            echo "pooled=$pooled"
+            echo "node=$node"
+            echo "cargo=$cargo"
+          } | tee -a "$GITHUB_OUTPUT"
 
-  # The Expo app (apps/mobile): formatting, lint, types (including Expo Router's typed routes,
-  # generated first), unit and router tests, and a production web export.
-  mobile:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/mobile
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Rust: format, lints, docs, tests (all sharing one target directory).
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.run.outputs.cargo == 'true'
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-        working-directory: .
-      - run: npm run format:check
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test -- --ci
-      - run: npm run export:web
-
-  # The whole suite again through pgbouncer in transaction-pooling mode, the way production
-  # reaches Neon's pooled endpoint. App pools use the pooler; admin work (migrations, the
-  # advisory lock, CREATE/DROP DATABASE) uses the direct Postgres URL.
-  test-pooled:
-    runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: postgres://racquetcollective:racquetcollective@127.0.0.1:6432/racquetcollective
-      DATABASE_DIRECT_URL: postgres://racquetcollective:racquetcollective@127.0.0.1:5432/racquetcollective
-      RACQUETCOLLECTIVE_DB_POOLED: "true"
-    services:
-      postgres:
-        image: postgres:16
+          components: rustfmt, clippy
+      # Caches dependencies only. Saved from main, which every branch can restore; pull
+      # requests restoring it don't spend time uploading caches of their own.
+      - uses: Swatinem/rust-cache@v2
+        if: steps.run.outputs.cargo == 'true'
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo fmt
+        if: ${{ !cancelled() && steps.run.outputs.rust == 'true' }}
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        if: ${{ !cancelled() && steps.run.outputs.rust == 'true' }}
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: cargo doc
+        if: ${{ !cancelled() && steps.run.outputs.rust == 'true' }}
         env:
-          POSTGRES_USER: racquetcollective
-          POSTGRES_PASSWORD: racquetcollective
-          POSTGRES_DB: racquetcollective
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U racquetcollective"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --document-private-items
+      - name: cargo test
+        if: ${{ !cancelled() && steps.run.outputs.rust == 'true' }}
+        run: cargo test --workspace
+
+      # The suite again through pgbouncer in transaction-pooling mode, the way production
+      # reaches Neon's pooled endpoint, reusing the binaries built above. App pools use the
+      # pooler; admin work (migrations, the advisory lock, CREATE/DROP DATABASE) uses the direct
+      # Postgres URL.
       - name: Start pgbouncer
+        if: ${{ !cancelled() && steps.run.outputs.pooled == 'true' }}
+        env:
+          DATABASE_URL: postgres://racquetcollective:racquetcollective@127.0.0.1:6432/racquetcollective
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq pgbouncer
@@ -145,9 +155,47 @@ jobs:
           done
           cat "$RUNNER_TEMP/pgbouncer.log"
           exit 1
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
+      - name: cargo test (through pgbouncer)
+        if: ${{ !cancelled() && steps.run.outputs.pooled == 'true' }}
+        env:
+          DATABASE_URL: postgres://racquetcollective:racquetcollective@127.0.0.1:6432/racquetcollective
+          DATABASE_DIRECT_URL: postgres://racquetcollective:racquetcollective@127.0.0.1:5432/racquetcollective
+          RACQUETCOLLECTIVE_DB_POOLED: "true"
+        run: cargo test --workspace
       - name: pgbouncer log
-        if: failure()
-        run: cat "$RUNNER_TEMP/pgbouncer.log"
+        if: ${{ failure() && steps.run.outputs.pooled == 'true' }}
+        run: cat "$RUNNER_TEMP/pgbouncer.log" || true
+
+      # npm workspaces: one lockfile at the root for packages/* and apps/*.
+      - uses: actions/setup-node@v4
+        if: ${{ !cancelled() && steps.run.outputs.node == 'true' }}
+        with:
+          node-version: 22
+          cache: npm
+      - name: npm ci
+        if: ${{ !cancelled() && steps.run.outputs.node == 'true' }}
+        run: npm ci
+
+      # The committed TypeScript client matches the server's OpenAPI document.
+      - name: api-client
+        if: ${{ !cancelled() && steps.run.outputs.client == 'true' }}
+        working-directory: packages/api-client
+        run: |
+          npm run gen
+          if ! git diff --exit-code -- .; then
+            echo "::error::packages/api-client is out of date. Run 'npm run gen' in packages/api-client and commit the result."
+            exit 1
+          fi
+          npm run typecheck
+
+      # The Expo app (apps/mobile): formatting, lint, types (including Expo Router's typed
+      # routes, generated first), unit and router tests, and a production web export.
+      - name: mobile
+        if: ${{ !cancelled() && steps.run.outputs.mobile == 'true' }}
+        working-directory: apps/mobile
+        run: |
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm test -- --ci
+          npm run export:web

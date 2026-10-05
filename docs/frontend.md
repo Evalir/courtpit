@@ -373,7 +373,7 @@ proposed time and place, that opens on its match page (decision 89).
 - `src/boot.test.tsx` mounts the real route tree with a stubbed `fetch`: tenant → theme →
   signed-out deep link lands on sign-in; a failed boot offers a retry; a stored native token
   restores the session and Home shows the match and the league invitation that need the player. Profile, ledger and return-to rules have unit tests next to them.
-- CI (`mobile` job) runs Prettier, ESLint, `tsc` (after generating Expo Router's route types),
+- CI (the `mobile` step, when a pull request touches the app) runs Prettier, ESLint, `tsc` (after generating Expo Router's route types),
   Jest and a production web export.
 
 ## 10. Build order

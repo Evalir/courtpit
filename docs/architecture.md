@@ -248,7 +248,7 @@ No avatar uploads in v1 (avoids object storage); community logos are URLs in the
 
 ## 17. Deployment, operations, observability
 
-One Docker image built from a multi-stage `Dockerfile`: a Debian slim runtime with `postgresql-client` (for `pg_dump`) rather than distroless. GitHub Actions deploys it to Fly.io after CI passes on `main`; migrations run as Fly's release step (`racquetcollective-server migrate`, over a direct database connection); secrets live in Fly's secret store. `tracing` emits JSON logs with the request id; OpenTelemetry export to a hosted backend's free tier comes later. Integration tests run against a real Postgres service container, and a second CI job runs the whole suite through pgbouncer in transaction mode; the domain crate is covered by plain unit tests. Step-by-step setup is in `docs/deploy.md`.
+One Docker image built from a multi-stage `Dockerfile`: a Debian slim runtime with `postgresql-client` (for `pg_dump`) rather than distroless. GitHub Actions deploys it to Fly.io after CI passes on `main`; migrations run as Fly's release step (`racquetcollective-server migrate`, over a direct database connection); secrets live in Fly's secret store. `tracing` emits JSON logs with the request id; OpenTelemetry export to a hosted backend's free tier comes later. Integration tests run against a real Postgres service container, and CI runs the whole suite again through pgbouncer in transaction mode before each deploy; the domain crate is covered by plain unit tests. Step-by-step setup is in `docs/deploy.md`.
 
 **Phase 1 (before payments, about $0/month).**
 
