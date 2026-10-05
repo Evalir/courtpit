@@ -1,11 +1,14 @@
 //! Push notifications: devices, preferences, and who is told what about a match.
 
 use axum::http::StatusCode;
-use courtpit_server::jobs;
+use chrono::{Duration, Utc};
+use courtpit_server::{clock::Clock, jobs};
 use serde_json::{Value, json};
 
 use crate::{
     common::{Session, TestApp},
+    league_lifecycle::at_day,
+    leagues::open_league,
     match_results::{report, straight_sets_a},
     matches::{players, singles},
     proposals::in_days,
@@ -322,5 +325,182 @@ async fn unregistered_devices_are_forgotten_and_banned_players_not_told() {
         .await
         .unwrap();
     assert!(created["id"].is_string());
+    assert!(pushes(&app, &mut seen).await.is_empty());
+}
+
+async fn entry_action(app: &TestApp, session: &Session, league: &str, entry: &Value, action: &str) {
+    let _ = post(
+        app,
+        session,
+        &format!(
+            "/api/v1/leagues/{league}/entries/{}/{action}",
+            entry["id"].as_str().unwrap()
+        ),
+        json!({}),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn partner_invitations_and_their_answers_are_told() {
+    let (app, ana, bo) = setup().await;
+    let cy = app.login("cy@example.test", "demo").await;
+    let _ = app.patch_me(&cy, json!({ "display_name": "Cy" })).await;
+    let admin = app.login("admin@example.test", "demo").await;
+    app.make_admin(&admin).await;
+    let league = open_league(&app, &admin, "doubles").await;
+    let url = format!("/leagues/{league}");
+    let mut seen = 0;
+
+    let entry = app
+        .post(&format!("/api/v1/leagues/{league}/entries"))
+        .as_(&ana)
+        .json(json!({ "partner_id": bo.player_id }))
+        .send()
+        .await
+        .expect(StatusCode::CREATED);
+    let sent = pushes(&app, &mut seen).await;
+    assert_eq!(
+        sent,
+        [(
+            token("bo"),
+            "Ana invited you to partner them".to_owned(),
+            "Autumn doubles: accept or decline before registration closes.".to_owned(),
+            url.clone()
+        )]
+    );
+
+    entry_action(&app, &bo, &league, &entry, "decline").await;
+    let sent = pushes(&app, &mut seen).await;
+    assert_eq!(sent[0].0, token("ana"));
+    assert_eq!(sent[0].1, "Bo declined your invitation");
+
+    // Cy has no device: the invitation comes by email.
+    let _ = post(
+        &app,
+        &ana,
+        &format!(
+            "/api/v1/leagues/{league}/entries/{}/partner",
+            entry["id"].as_str().unwrap()
+        ),
+        json!({ "partner_id": cy.player_id }),
+    )
+    .await;
+    assert!(pushes(&app, &mut seen).await.is_empty());
+    let mail = app.mailer.last_to(&cy.email).unwrap();
+    assert_eq!(mail.subject, "demo club: Ana invited you to partner them");
+    assert!(
+        mail.text
+            .contains(&format!("https://demo.courtpit.app{url}"))
+    );
+
+    entry_action(&app, &cy, &league, &entry, "accept").await;
+    let sent = pushes(&app, &mut seen).await;
+    assert_eq!(sent[0].0, token("ana"));
+    assert_eq!(sent[0].1, "Cy accepted your invitation");
+    assert_eq!(sent[0].2, "You’re entered in Autumn doubles together.");
+}
+
+#[tokio::test]
+async fn entrants_hear_when_their_league_starts() {
+    let (app, ana, bo) = setup().await;
+    let admin = app.login("admin@example.test", "demo").await;
+    app.make_admin(&admin).await;
+    let league = open_league(&app, &admin, "singles").await;
+    for player in [&ana, &bo] {
+        let _ = app
+            .post(&format!("/api/v1/leagues/{league}/entries"))
+            .as_(player)
+            .json(json!({}))
+            .send()
+            .await
+            .expect(StatusCode::CREATED);
+    }
+    let mut seen = 0;
+    at_day(&app, 8).await;
+    let mut sent = pushes(&app, &mut seen).await;
+    sent.sort();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0].0, token("ana"));
+    assert_eq!(sent[0].1, "Autumn singles has started");
+    assert_eq!(sent[0].2, "You’re in Box 1 with 1 match to arrange.");
+    assert_eq!(sent[0].3, format!("/leagues/{league}"));
+}
+
+#[tokio::test]
+async fn players_are_reminded_the_day_before_and_reschedules_move_it() {
+    let (app, ana, bo) = setup().await;
+    let created = singles(&app, &ana, &bo).await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    let schedule = |days: i64| {
+        let app = &app;
+        let (ana, bo, id) = (ana.clone(), bo.clone(), id.clone());
+        async move {
+            let proposed = app
+                .post(&format!("/api/v1/matches/{id}/proposals"))
+                .as_(&ana)
+                .json(json!({ "time": (Utc::now() + Duration::days(days)).to_rfc3339(), "location": "Court 2" }))
+                .send()
+                .await
+                .expect(StatusCode::CREATED);
+            let open = proposed["proposals"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|proposal| proposal["status"] == "open")
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let _ = post(
+                app,
+                &bo,
+                &format!("/api/v1/matches/{id}/proposals/{open}/accept"),
+                json!({}),
+            )
+            .await;
+        }
+    };
+    let mut seen = 0;
+    schedule(3).await;
+    // Moved to five days out before the first reminder was due.
+    schedule(5).await;
+    let _ = pushes(&app, &mut seen).await;
+
+    app.clock
+        .set(Utc::now() + Duration::days(2) + Duration::minutes(1));
+    assert!(
+        pushes(&app, &mut seen).await.is_empty(),
+        "the old reminder moved"
+    );
+    app.clock
+        .set(Utc::now() + Duration::days(4) + Duration::minutes(1));
+    let mut sent = pushes(&app, &mut seen).await;
+    sent.sort();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0].0, token("ana"));
+    assert_eq!(sent[0].1, "Match tomorrow");
+    assert_eq!(sent[0].2, "You play Bo at Court 2. Good luck!");
+
+    // A match arranged for later today gets no reminder at all.
+    let other = singles(&app, &ana, &bo).await;
+    let other_id = other["id"].as_str().unwrap();
+    let proposed = app
+        .post(&format!("/api/v1/matches/{other_id}/proposals"))
+        .as_(&bo)
+        .json(json!({ "time": (app.clock.now() + Duration::hours(6)).to_rfc3339() }))
+        .send()
+        .await
+        .expect(StatusCode::CREATED);
+    let open = proposed["proposals"][0]["id"].as_str().unwrap();
+    let _ = post(
+        &app,
+        &ana,
+        &format!("/api/v1/matches/{other_id}/proposals/{open}/accept"),
+        json!({}),
+    )
+    .await;
+    let _ = pushes(&app, &mut seen).await;
+    app.clock.set(app.clock.now() + Duration::hours(5));
     assert!(pushes(&app, &mut seen).await.is_empty());
 }

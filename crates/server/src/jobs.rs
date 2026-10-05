@@ -87,7 +87,10 @@ impl Job {
     /// Key ensuring at most one pending job of this identity; re-enqueueing reschedules it.
     pub fn dedupe_key(&self) -> Option<String> {
         match self {
-            Self::Noop {} | Self::Notify { .. } => None,
+            Self::Noop {} => None,
+            Self::Notify {
+                player_id, event, ..
+            } => event.dedupe_key(*player_id),
             Self::AutoConfirmMatch { match_id, .. } => Some(format!("auto_confirm:{match_id}")),
             Self::RefreshRankings { community_id } => {
                 Some(format!("refresh_rankings:{community_id}"))

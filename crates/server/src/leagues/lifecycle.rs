@@ -25,7 +25,7 @@ use crate::{
     ApiError, AppState, Tenant, TenantTx,
     jobs::{self, Job},
     matches::{self, LeagueSlot, NewMatch},
-    rankings,
+    notify, rankings,
 };
 
 /// Entries promoted / relegated per box at season end (spec default: top two, bottom two).
@@ -197,6 +197,16 @@ async fn activate(
     }
     schedule(tx, tenant, league, &entries, boxes).await?;
     set_status(tx, league.id, LeagueStatus::Active).await?;
+    let players: Vec<Uuid> = entries
+        .iter()
+        .flat_map(|entry| entry.player_ids.iter().copied())
+        .collect();
+    let event = notify::Event::LeagueStarted {
+        league_id: league.id,
+    };
+    notify::tell(tx, players, event, now)
+        .await
+        .map_err(ApiError::Internal)?;
     tracing::info!(league = %league.id, entries = entries.len(), "league activated");
     Ok(LeagueStatus::Active)
 }

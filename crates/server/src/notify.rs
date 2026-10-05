@@ -2,7 +2,7 @@
 //! the handlers that cause them, and the job that tells them: a push to each of their devices,
 //! or an email when they have none and the news needs an answer.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use courtpit_domain::{MatchStatus, Score, Side};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -13,6 +13,10 @@ use crate::{
     AppState, Tenant, TenantTx,
     communities::CommunitySettings,
     jobs::{self, Job},
+    leagues::{
+        LeagueStatus,
+        entries::{self, EntryStatus},
+    },
     mailer::Email,
     matches::{self, MatchRow},
     players::Names,
@@ -83,6 +87,43 @@ pub enum Event {
         /// Who cancelled.
         by: Uuid,
     },
+    /// The recipient's scheduled match is tomorrow.
+    MatchReminder {
+        /// The match.
+        match_id: Uuid,
+    },
+    /// `by` invited the recipient to complete their league entry.
+    PartnerInvited {
+        /// The league.
+        league_id: Uuid,
+        /// The entry waiting for the recipient.
+        entry_id: Uuid,
+        /// Who invited.
+        by: Uuid,
+    },
+    /// `by` accepted the recipient's invitation: their entry is complete.
+    PartnerAccepted {
+        /// The league.
+        league_id: Uuid,
+        /// The recipient's entry.
+        entry_id: Uuid,
+        /// Who accepted.
+        by: Uuid,
+    },
+    /// `by` declined the recipient's invitation.
+    PartnerDeclined {
+        /// The league.
+        league_id: Uuid,
+        /// The recipient's entry.
+        entry_id: Uuid,
+        /// Who declined.
+        by: Uuid,
+    },
+    /// The recipient's league started: boxes drawn and matches created.
+    LeagueStarted {
+        /// The league.
+        league_id: Uuid,
+    },
 }
 
 /// The groups a player can turn off (`notification_prefs`).
@@ -109,16 +150,25 @@ impl Event {
             | Self::Challenged { .. }
             | Self::RequestFilled { .. }
             | Self::MatchCancelled { .. } => Category::MatchUpdates,
+            Self::PartnerInvited { .. }
+            | Self::PartnerAccepted { .. }
+            | Self::PartnerDeclined { .. }
+            | Self::LeagueStarted { .. } => Category::LeagueUpdates,
+            Self::MatchReminder { .. } => Category::Reminders,
         }
     }
 
     /// Whether a player without a device gets this by email: it asks for an answer before a
-    /// deadline (an unanswered score confirms itself).
+    /// deadline (an unanswered score confirms itself; an invitation lapses with registration).
     pub const fn emails_without_devices(self) -> bool {
-        matches!(self, Self::ScoreReported { .. })
+        matches!(
+            self,
+            Self::ScoreReported { .. } | Self::PartnerInvited { .. }
+        )
     }
 
-    const fn match_id(self) -> Uuid {
+    /// The match the news is about, for match events.
+    const fn match_id(self) -> Option<Uuid> {
         match self {
             Self::ProposalReceived { match_id, .. }
             | Self::ProposalAccepted { match_id, .. }
@@ -128,7 +178,20 @@ impl Event {
             | Self::MatchDecided { match_id }
             | Self::Challenged { match_id, .. }
             | Self::RequestFilled { match_id }
-            | Self::MatchCancelled { match_id, .. } => match_id,
+            | Self::MatchCancelled { match_id, .. }
+            | Self::MatchReminder { match_id } => Some(match_id),
+            Self::PartnerInvited { .. }
+            | Self::PartnerAccepted { .. }
+            | Self::PartnerDeclined { .. }
+            | Self::LeagueStarted { .. } => None,
+        }
+    }
+
+    /// One pending job per player and reminder, so rescheduling moves it instead of adding one.
+    pub fn dedupe_key(self, player: Uuid) -> Option<String> {
+        match self {
+            Self::MatchReminder { match_id } => Some(format!("reminder:{match_id}:{player}")),
+            _ => None,
         }
     }
 }
@@ -149,6 +212,36 @@ pub async fn tell(
             event,
         };
         jobs::enqueue(&mut **tx, job, now).await?;
+    }
+    Ok(())
+}
+
+/// Hours before a scheduled match its players are reminded.
+const REMINDER_HOURS: i64 = 24;
+
+/// Queues each player's reminder for the day before the match. Rescheduling replaces it; a
+/// match less than a day away gets none.
+pub async fn schedule_reminders(
+    tx: &mut TenantTx,
+    found: &MatchRow,
+    now: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    let Some(at) = found.scheduled_at else {
+        return Ok(());
+    };
+    let run_at = at - Duration::hours(REMINDER_HOURS);
+    if run_at <= now {
+        return Ok(());
+    }
+    let community_id = tx.community_id();
+    let event = Event::MatchReminder { match_id: found.id };
+    for &player_id in found.side_a_players.iter().chain(&found.side_b_players) {
+        let job = Job::Notify {
+            community_id,
+            player_id,
+            event,
+        };
+        jobs::enqueue(&mut **tx, job, run_at).await?;
     }
     Ok(())
 }
@@ -222,7 +315,7 @@ pub async fn send(
     if !wants(&mut tx, player_id, event.category()).await? {
         return Ok(());
     }
-    let Some(note) = compose(&mut tx, player_id, event).await? else {
+    let Some(note) = compose(&mut tx, player_id, event, state.clock.now()).await? else {
         return Ok(());
     };
     let tokens: Vec<String> = sqlx::query_scalar(
@@ -329,10 +422,29 @@ async fn email(
     state.mailer.send(&message).await
 }
 
-/// Writes the notification for `player` from the match as it is now, or `None` when the news
-/// no longer holds (the score was answered, the player is no longer in the match).
-async fn compose(tx: &mut TenantTx, player: Uuid, event: Event) -> anyhow::Result<Option<Note>> {
-    let found = matches::load(tx, event.match_id(), false).await?;
+/// Writes the notification for `player` from the state now, or `None` when the news no longer
+/// holds (the score was answered, the invitation lapsed, the match moved or was played).
+async fn compose(
+    tx: &mut TenantTx,
+    player: Uuid,
+    event: Event,
+    now: DateTime<Utc>,
+) -> anyhow::Result<Option<Note>> {
+    match event.match_id() {
+        Some(match_id) => compose_match(tx, player, match_id, event, now).await,
+        None => compose_league(tx, player, event).await,
+    }
+}
+
+/// A match event's words, read from the match as it is now.
+async fn compose_match(
+    tx: &mut TenantTx,
+    player: Uuid,
+    match_id: Uuid,
+    event: Event,
+    now: DateTime<Utc>,
+) -> anyhow::Result<Option<Note>> {
+    let found = matches::load(tx, match_id, false).await?;
     let Some(side) = found.side_of(player) else {
         return Ok(None);
     };
@@ -382,7 +494,6 @@ async fn compose(tx: &mut TenantTx, player: Uuid, event: Event) -> anyhow::Resul
             format!("{} disputed your score", names.name(by)),
             "A club admin will decide the result.".to_owned(),
         ),
-        Event::ScoreDisputed { .. } => None,
         Event::MatchDecided { .. } => decided(&found, side, &them).map(|(title, body)| Note {
             title,
             body,
@@ -403,7 +514,151 @@ async fn compose(tx: &mut TenantTx, player: Uuid, event: Event) -> anyhow::Resul
                 .clone()
                 .unwrap_or_else(|| "It won’t be played.".to_owned()),
         ),
+        Event::MatchReminder { .. } => match found.scheduled_at {
+            // Still on, and still about a day away (a reschedule may have moved it).
+            Some(at)
+                if status == MatchStatus::Scheduled
+                    && at > now
+                    && at - now <= Duration::hours(REMINDER_HOURS + 6) =>
+            {
+                let place = found
+                    .location
+                    .as_ref()
+                    .map(|place| format!(" at {place}"))
+                    .unwrap_or_default();
+                note(
+                    "Match tomorrow".to_owned(),
+                    format!("You play {them}{place}. Good luck!"),
+                )
+            }
+            _ => None,
+        },
+        Event::ScoreDisputed { .. }
+        | Event::PartnerInvited { .. }
+        | Event::PartnerAccepted { .. }
+        | Event::PartnerDeclined { .. }
+        | Event::LeagueStarted { .. } => None,
     })
+}
+
+#[derive(FromRow)]
+struct LeagueFacts {
+    name: String,
+    status: LeagueStatus,
+}
+
+/// A league event's words, read from the league and the entry as they are now.
+async fn compose_league(
+    tx: &mut TenantTx,
+    player: Uuid,
+    event: Event,
+) -> anyhow::Result<Option<Note>> {
+    let (league_id, entry_id, by) = match event {
+        Event::PartnerInvited {
+            league_id,
+            entry_id,
+            by,
+        }
+        | Event::PartnerAccepted {
+            league_id,
+            entry_id,
+            by,
+        }
+        | Event::PartnerDeclined {
+            league_id,
+            entry_id,
+            by,
+        } => (league_id, Some(entry_id), Some(by)),
+        Event::LeagueStarted { league_id } => (league_id, None, None),
+        _ => return Ok(None),
+    };
+    let league: Option<LeagueFacts> =
+        sqlx::query_as("SELECT name, status FROM leagues WHERE community_id = $1 AND id = $2")
+            .bind(tx.community_id())
+            .bind(league_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+    let Some(league) = league else {
+        return Ok(None);
+    };
+    let entry = match entry_id {
+        Some(id) => Some(entries::load(tx, league_id, id).await?),
+        None => None,
+    };
+    let names = Names::load(tx, by).await?;
+    let url = format!("/leagues/{league_id}");
+    let note = |title: String, body: String| {
+        Some(Note {
+            title,
+            body,
+            url: url.clone(),
+        })
+    };
+    Ok(match (event, entry) {
+        (Event::PartnerInvited { by, .. }, Some(entry))
+            if entry.invited_partner_id == Some(player)
+                && entry.status == EntryStatus::PendingPartner
+                && league.status == LeagueStatus::Registration =>
+        {
+            note(
+                format!("{} invited you to partner them", names.name(by)),
+                format!(
+                    "{}: accept or decline before registration closes.",
+                    league.name
+                ),
+            )
+        }
+        (Event::PartnerAccepted { by, .. }, Some(entry))
+            if entry.status == EntryStatus::Confirmed =>
+        {
+            note(
+                format!("{} accepted your invitation", names.name(by)),
+                format!("You’re entered in {} together.", league.name),
+            )
+        }
+        (Event::PartnerDeclined { by, .. }, Some(entry))
+            if entry.status == EntryStatus::PendingPartner =>
+        {
+            note(
+                format!("{} declined your invitation", names.name(by)),
+                format!(
+                    "{}: invite someone else, or look for a partner.",
+                    league.name
+                ),
+            )
+        }
+        (Event::LeagueStarted { .. }, _) if league.status == LeagueStatus::Active => note(
+            format!("{} has started", league.name),
+            box_line(tx, league_id, player).await?,
+        ),
+        _ => None,
+    })
+}
+
+/// "You’re in Box 2 with 6 matches to arrange." for a player whose league just started.
+async fn box_line(tx: &mut TenantTx, league: Uuid, player: Uuid) -> anyhow::Result<String> {
+    let (division, matches): (Option<String>, i64) = sqlx::query_as(
+        "SELECT (SELECT d.name FROM league_entries e
+                   JOIN league_divisions d
+                     ON d.community_id = e.community_id AND d.id = e.division_id
+                  WHERE e.community_id = $1 AND e.league_id = $2 AND e.status = 'confirmed'
+                    AND e.player_ids @> ARRAY[$3]::uuid[]),
+                (SELECT count(*) FROM matches m
+                  WHERE m.community_id = $1 AND m.league_id = $2
+                    AND (m.side_a_players || m.side_b_players) @> ARRAY[$3]::uuid[])",
+    )
+    .bind(tx.community_id())
+    .bind(league)
+    .bind(player)
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(division.map_or_else(
+        || "The boxes are drawn: arrange your matches.".to_owned(),
+        |division| {
+            let noun = if matches == 1 { "match" } else { "matches" };
+            format!("You’re in {division} with {matches} {noun} to arrange.")
+        },
+    ))
 }
 
 /// The words for an admin's decision, by where it left the match.
