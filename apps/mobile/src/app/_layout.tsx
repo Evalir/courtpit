@@ -86,7 +86,15 @@ function RootNavigator() {
       >
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="matches/[id]" options={{ title: "Match" }} />
+          <Stack.Screen name="matches/[id]/index" options={{ title: "Match" }} />
+          <Stack.Screen
+            name="matches/[id]/propose"
+            options={{ title: "Propose a time", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="matches/[id]/report"
+            options={{ title: "Report the score", presentation: "modal" }}
+          />
           <Stack.Screen name="players/[id]" options={{ title: "Player" }} />
           <Stack.Screen name="leagues/[id]" options={{ title: "League" }} />
         </Stack.Protected>

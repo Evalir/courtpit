@@ -10,7 +10,8 @@ module.exports = defineConfig([
   {
     rules: {
       "no-console": ["warn", { allow: ["warn", "error"] }],
-      eqeqeq: ["error", "always"],
+      // `x == null` is the idiomatic null-or-undefined check (API fields are often both).
+      eqeqeq: ["error", "always", { null: "ignore" }],
     },
   },
 ]);

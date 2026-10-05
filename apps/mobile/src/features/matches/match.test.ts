@@ -1,4 +1,11 @@
-import { actionFor, formatScore, groupMatches, sideOf, type MatchView } from "./match";
+import {
+  actionFor,
+  formatScore,
+  groupMatches,
+  matchActions,
+  sideOf,
+  type MatchView,
+} from "./match";
 
 const ME = "00000000-0000-7000-8000-000000000001";
 const PARTNER = "00000000-0000-7000-8000-000000000002";
@@ -123,5 +130,55 @@ describe("groupMatches", () => {
     expect(groups.toArrange).toEqual([proposed]);
     expect(groups.waiting).toEqual([mineReported, disputed]);
     expect(groups.results).toEqual([newResult, oldResult, walkover]);
+  });
+});
+
+describe("matchActions", () => {
+  const proposal = (by: string, status: "open" | "accepted" = "open") => ({
+    id: `p-${by}`,
+    proposed_by: by,
+    proposed_time: "2026-10-10T17:00:00Z",
+    status,
+    created_at: "2026-10-01T00:00:00Z",
+  });
+
+  it("lets players of a friendly arrange, report and cancel it", () => {
+    expect(matchActions(match({ status: "proposed", proposals: [] }), ME, NOW)).toEqual({
+      confirm: false,
+      answer: null,
+      waiting: null,
+      propose: true,
+      report: true,
+      cancel: true,
+    });
+  });
+
+  it("leaves cancelling a league match to admins", () => {
+    const league = match({ status: "scheduled", league_id: "l1" });
+    expect(matchActions(league, ME, NOW)).toMatchObject({ report: true, cancel: false });
+  });
+
+  it("answers the other side's proposal and waits on our own", () => {
+    const theirs = match({ proposals: [proposal(OPP)] });
+    expect(matchActions(theirs, ME, NOW)).toMatchObject({
+      answer: { proposed_by: OPP },
+      waiting: null,
+    });
+    const doubles = match({
+      side_a: [ME, PARTNER],
+      side_b: [OPP, OPP2],
+      proposals: [proposal(PARTNER), proposal(OPP, "accepted")],
+    });
+    expect(matchActions(doubles, ME, NOW)).toMatchObject({
+      answer: null,
+      waiting: { proposed_by: PARTNER },
+    });
+  });
+
+  it("offers nothing on a finished match or to a bystander", () => {
+    const done = matchActions(match({ status: "confirmed" }), ME, NOW);
+    expect(Object.values(done).every((value) => value === false || value === null)).toBe(true);
+    const bystander = matchActions(match({ status: "proposed" }), "someone", NOW);
+    expect(bystander).toMatchObject({ propose: false, report: false, cancel: false });
   });
 });
