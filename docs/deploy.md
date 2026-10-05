@@ -1,4 +1,4 @@
-# Deploying Courtpit
+# Deploying Racquet Collective
 
 Phase 1 (before payments) runs for about nothing a month: one Fly Machine that sleeps when
 idle, a Neon Free database, and Cloudflare R2 for off-platform backups. Phase 2 (when payments
@@ -6,12 +6,12 @@ ship) swaps the database for an always-on Postgres on Fly; see the last section.
 
 | Piece | Where | Notes |
 |---|---|---|
-| API (`courtpit-server serve`) | one Fly Machine, `min_machines_running = 0` | Stops when idle, starts on the next request; billed only while running. Cold starts are accepted. |
+| API (`racquetcollective-server serve`) | one Fly Machine, `min_machines_running = 0` | Stops when idle, starts on the next request; billed only while running. Cold starts are accepted. |
 | Database | Neon Free, **pooled** connection string | Scales to zero after 5 min idle; 1 GB; only 6 h of point-in-time restore, hence the R2 dump. |
-| Due jobs (`courtpit-server tick`) | a Fly **scheduled Machine**, hourly | Nothing polls the jobs table while the API Machine is stopped; the tick drains due jobs and exits. |
+| Due jobs (`racquetcollective-server tick`) | a Fly **scheduled Machine**, hourly | Nothing polls the jobs table while the API Machine is stopped; the tick drains due jobs and exits. |
 | Backups | nightly `pg_dump` streamed to Cloudflare R2 | Run as a job by the server/tick; needs `pg_dump` in the image and Neon's *direct* URL. |
-| Email | Resend | `COURTPIT_MAILER=resend`. |
-| Push | Expo's push service | `COURTPIT_PUSH=expo`; an access token only if the Expo project requires one. |
+| Email | Resend | `RACQUETCOLLECTIVE_MAILER=resend`. |
+| Push | Expo's push service | `RACQUETCOLLECTIVE_PUSH=expo`; an access token only if the Expo project requires one. |
 | Deploys | GitHub Actions | `.github/workflows/deploy.yml` runs after CI passes on `main`. |
 
 Commands below run from the repository root, so `fly` picks the app up from `fly.toml`.
@@ -22,16 +22,16 @@ Commands below run from the repository root, so `fly` picks the app up from `fly
   then `fly auth login`). `jq` is used in a few commands.
 - A Neon account, a Cloudflare account (R2 needs a payment method on file; the free allowance
   is far above what backups use), a Resend account.
-- A domain for the app (these docs say `courtpit.app`) whose DNS you can edit.
+- A domain for the app (these docs say `racquetcollective.app`) whose DNS you can edit.
 
 ## 2. Create the app
 
-App names are global on Fly, so "courtpit" is probably taken; these docs use `my-courtpit`.
+App names are global on Fly, so "racquetcollective" is probably taken; these docs use `my-racquetcollective`.
 Create yours, then edit the two lines marked `CHANGE ME` at the top of `fly.toml` (`app` and
 `primary_region`):
 
 ```sh
-fly apps create my-courtpit
+fly apps create my-racquetcollective
 fly platform regions        # pick the region nearest your Neon project, e.g. ams
 ```
 
@@ -56,7 +56,7 @@ fly secrets set --stage \
   'DATABASE_DIRECT_URL=postgresql://neondb_owner:<password>@ep-xxxx.eu-central-1.aws.neon.tech/neondb?sslmode=require'
 ```
 
-`COURTPIT_DB_POOLED=true` is already set in `fly.toml`.
+`RACQUETCOLLECTIVE_DB_POOLED=true` is already set in `fly.toml`.
 
 Things to know:
 
@@ -77,7 +77,7 @@ Things to know:
 - **Transaction pooling.** The app only uses transaction-scoped state (`SET LOCAL`,
   `set_config(.., true)`) and protocol-level prepared statements, which Neon's PgBouncer
   tracks. Migrations and `pg_dump` take session-level locks and snapshots, so they use the
-  direct URL; `migrate` refuses to run through the pooler when `COURTPIT_DB_POOLED=true` and
+  direct URL; `migrate` refuses to run through the pooler when `RACQUETCOLLECTIVE_DB_POOLED=true` and
   `DATABASE_DIRECT_URL` is missing. Details and the tested combinations are in section 11.
 - **Cold starts.** After 5 idle minutes Neon suspends the compute and the next query waits for
   it to wake (typically under a second; the pool waits up to 5 s for a connection).
@@ -88,7 +88,7 @@ The nightly job dumps with `pg_dump`, which cannot use transaction pooling, so i
 Neon's **direct** URL: it uses `DATABASE_DIRECT_URL` from step 3 unless `BACKUP_DATABASE_URL`
 overrides it.
 
-1. R2 → **Create bucket** (e.g. `courtpit-backups`), private.
+1. R2 → **Create bucket** (e.g. `racquetcollective-backups`), private.
 2. R2 → **Manage API tokens** → create a token with **Object Read & Write**, scoped to that
    bucket. Copy the access key id and secret (shown once) and your account id (the endpoint is
    `https://<account_id>.r2.cloudflarestorage.com`).
@@ -97,18 +97,18 @@ overrides it.
 ```sh
 fly secrets set --stage \
   BACKUP_S3_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com \
-  BACKUP_S3_BUCKET=courtpit-backups \
+  BACKUP_S3_BUCKET=racquetcollective-backups \
   BACKUP_S3_ACCESS_KEY=<access key id> \
   BACKUP_S3_SECRET_KEY=<secret access key>
 ```
 
 Optional overrides (set them with `fly secrets set` too, not in `fly.toml`: the tick Machine
-only inherits `COURTPIT_*` settings from `fly.toml`, and these must match on every Machine):
+only inherits `RACQUETCOLLECTIVE_*` settings from `fly.toml`, and these must match on every Machine):
 
 | Variable | Default |
 |---|---|
 | `BACKUP_S3_REGION` | `auto` |
-| `BACKUP_S3_PREFIX` | `courtpit/` |
+| `BACKUP_S3_PREFIX` | `racquetcollective/` |
 | `BACKUP_RETENTION_DAYS` | `14` |
 | `BACKUP_HOUR_UTC` | `3` |
 
@@ -118,15 +118,15 @@ Add and verify your sending domain in Resend (it lists the SPF/DKIM records to c
 create an API key with sending access:
 
 ```sh
-fly secrets set --stage RESEND_API_KEY=re_xxxx 'COURTPIT_EMAIL_FROM=Courtpit <no-reply@courtpit.app>'
+fly secrets set --stage RESEND_API_KEY=re_xxxx 'RACQUETCOLLECTIVE_EMAIL_FROM=Racquet Collective <no-reply@racquetcollective.app>'
 ```
 
-`COURTPIT_MAILER=resend` is already set in `fly.toml`; the server refuses to start in that
+`RACQUETCOLLECTIVE_MAILER=resend` is already set in `fly.toml`; the server refuses to start in that
 mode without the key. Optionally enable Sign in with Apple/Google by listing the accepted
 audiences (comma-separated; empty disables a provider):
 
 ```sh
-fly secrets set --stage COURTPIT_APPLE_CLIENT_IDS=app.example.club COURTPIT_GOOGLE_CLIENT_IDS=1234.apps.googleusercontent.com
+fly secrets set --stage RACQUETCOLLECTIVE_APPLE_CLIENT_IDS=app.example.club RACQUETCOLLECTIVE_GOOGLE_CLIENT_IDS=1234.apps.googleusercontent.com
 ```
 
 ### App links
@@ -135,9 +135,9 @@ For a community's links to open its app, publish which apps may claim its host. 
 EAS build (step 7) gives you the Apple team id and the Android signing certificate:
 
 ```sh
-fly ssh console -C "courtpit-server set-app-links --slug riverside \
-  --ios-app-id ABCDE12345.app.courtpit.riverside \
-  --android-package app.courtpit.riverside --android-sha256 AB:CD:…:EF"
+fly ssh console -C "racquetcollective-server set-app-links --slug riverside \
+  --ios-app-id ABCDE12345.app.racquetcollective.riverside \
+  --android-package app.racquetcollective.riverside --android-sha256 AB:CD:…:EF"
 ```
 
 The server then answers `/.well-known/apple-app-site-association` and
@@ -146,7 +146,7 @@ the web). Running servers pick the change up within a minute (tenant cache).
 
 ### Push notifications
 
-`COURTPIT_PUSH=expo` (set in `fly.toml`) sends through Expo's push service, which relays to APNs
+`RACQUETCOLLECTIVE_PUSH=expo` (set in `fly.toml`) sends through Expo's push service, which relays to APNs
 and FCM with the credentials EAS stores for each app build. Nothing is sent until a native app
 registers a device (`PUT /api/v1/me/devices/{token}`). If the Expo project has "enhanced push
 security" on, add its access token:
@@ -165,15 +165,15 @@ hourly tick. A player with no registered device gets a score to confirm by email
 fly deploy --remote-only --ha=false
 ```
 
-Fly builds the `Dockerfile` on its remote builder, runs `courtpit-server migrate` in a
+Fly builds the `Dockerfile` on its remote builder, runs `racquetcollective-server migrate` in a
 temporary Machine (the release command; a failure aborts the deploy), then creates the one web
 Machine (`--ha=false` stops Fly adding a spare) and allocates IP addresses. Check:
 
 ```sh
 fly status
 fly ips list                                  # a shared v4 and a v6; if empty: fly ips allocate-v4 --shared && fly ips allocate-v6
-curl https://my-courtpit.fly.dev/healthz       # {"status":"ok"}
-curl https://my-courtpit.fly.dev/readyz        # {"status":"ok"}, wakes Neon: proves DATABASE_URL works
+curl https://my-racquetcollective.fly.dev/healthz       # {"status":"ok"}
+curl https://my-racquetcollective.fly.dev/readyz        # {"status":"ok"}, wakes Neon: proves DATABASE_URL works
 fly logs                                       # JSON lines
 ```
 
@@ -184,7 +184,7 @@ you name it with `--machine`:
 
 ```sh
 WEB=$(fly machines list --json | jq -r '.[] | select(.config.metadata.fly_process_group == "app") | .id')
-fly ssh console --machine "$WEB" -C "courtpit-server create-community --slug demo --name 'Demo Club' --owner-email you@example.com"
+fly ssh console --machine "$WEB" -C "racquetcollective-server create-community --slug demo --name 'Demo Club' --owner-email you@example.com"
 ```
 
 Slugs are lowercase letters, digits and dashes; do not use `api` or `www`, which are host names
@@ -192,13 +192,13 @@ you will point at the app. The owner signs in with an emailed one-time code. Unt
 up, address a community with its header:
 
 ```sh
-curl -H 'X-Courtpit-Community: demo' https://my-courtpit.fly.dev/api/v1/tenant
+curl -H 'X-RacquetCollective-Community: demo' https://my-racquetcollective.fly.dev/api/v1/tenant
 ```
 
 ## 7. The hourly tick Machine
 
-`courtpit-server tick` drains due jobs and exits (`--max-seconds`, or
-`COURTPIT_TICK_MAX_SECONDS`, caps a run at 300 s by default). Fly can start a Machine on an
+`racquetcollective-server tick` drains due jobs and exits (`--max-seconds`, or
+`RACQUETCOLLECTIVE_TICK_MAX_SECONDS`, caps a run at 300 s by default). Fly can start a Machine on an
 hourly schedule, but only for Machines created with `fly machine run`; `fly.toml` cannot
 express it (its process groups get always-on Machines). Create it once, after the first
 deploy, from the image the web Machine runs:
@@ -206,31 +206,31 @@ deploy, from the image the web Machine runs:
 ```sh
 IMAGE=$(fly machines list --json | jq -r '[.[] | select(.config.metadata.fly_process_group == "app")][0].config.image')
 fly machine run \
-  --app my-courtpit --region ams \
-  --name courtpit-tick \
+  --app my-racquetcollective --region ams \
+  --name racquetcollective-tick \
   --schedule hourly \
   --restart no \
   --vm-size shared-cpu-1x --vm-memory 512 \
-  --metadata courtpit_role=tick \
-  --env COURTPIT_ENV=production \
-  --env COURTPIT_LOG_FORMAT=json \
-  --env COURTPIT_MAILER=resend \
-  --env COURTPIT_BASE_DOMAIN=courtpit.app \
-  --env COURTPIT_DB_MAX_CONNECTIONS=5 \
-  --env COURTPIT_DB_POOLED=true \
-  "$IMAGE" courtpit-server tick
+  --metadata racquetcollective_role=tick \
+  --env RACQUETCOLLECTIVE_ENV=production \
+  --env RACQUETCOLLECTIVE_LOG_FORMAT=json \
+  --env RACQUETCOLLECTIVE_MAILER=resend \
+  --env RACQUETCOLLECTIVE_BASE_DOMAIN=racquetcollective.app \
+  --env RACQUETCOLLECTIVE_DB_MAX_CONNECTIONS=5 \
+  --env RACQUETCOLLECTIVE_DB_POOLED=true \
+  "$IMAGE" racquetcollective-server tick
 ```
 
 - It inherits the app's secrets (`DATABASE_URL`, `DATABASE_DIRECT_URL`, `RESEND_API_KEY`,
   `BACKUP_*`) automatically but **not** `fly.toml`'s `[env]`, hence the `--env` flags; keep
-  them equal to `fly.toml`. The deploy workflow copies every `COURTPIT_*` value from the web Machine onto it after each
+  them equal to `fly.toml`. The deploy workflow copies every `RACQUETCOLLECTIVE_*` value from the web Machine onto it after each
   deploy.
 - `--restart no`: a failed run waits for the next hour instead of looping; interrupted jobs
   are re-claimed once their lease expires.
 - Hourly means "every hour from creation", not on the hour. Re-create the Machine to move it.
 - `fly deploy` only updates Machines that Fly Launch manages (those carrying the
   `fly_platform_version=v2` metadata), so it leaves this one alone and never touches its
-  schedule. The `courtpit_role=tick` metadata is how the deploy workflow finds it, and the
+  schedule. The `racquetcollective_role=tick` metadata is how the deploy workflow finds it, and the
   workflow runs `fly machine update <id> --image <web image> --skip-start --yes`, which keeps
   the schedule and keeps the tick on the exact image of each release. Without such a Machine
   the workflow prints a warning and carries on.
@@ -238,7 +238,7 @@ fly machine run \
 To run a tick right now without waiting, in the web Machine's environment:
 
 ```sh
-fly ssh console --machine "$WEB" -C "courtpit-server tick"
+fly ssh console --machine "$WEB" -C "racquetcollective-server tick"
 ```
 
 and read the scheduled runs with `fly logs --machine <tick id>`. `fly machines list` shows the
@@ -246,33 +246,33 @@ tick `stopped` between runs.
 
 ## 8. DNS and certificates
 
-Tenants are reached as `{slug}.courtpit.app` (a wildcard), or on a community's own domain. On
-another domain, change `COURTPIT_BASE_DOMAIN` in `fly.toml` (and in the tick command).
+Tenants are reached as `{slug}.racquetcollective.app` (a wildcard), or on a community's own domain. On
+another domain, change `RACQUETCOLLECTIVE_BASE_DOMAIN` in `fly.toml` (and in the tick command).
 
 ```sh
-fly certs add courtpit.app            # the apex
-fly certs add "*.courtpit.app"        # every community, and api.courtpit.app
+fly certs add racquetcollective.app            # the apex
+fly certs add "*.racquetcollective.app"        # every community, and api.racquetcollective.app
 fly ips list                          # the addresses to point at
-fly certs show "*.courtpit.app"       # prints the DNS records still missing
+fly certs show "*.racquetcollective.app"       # prints the DNS records still missing
 ```
 
 Create, at your DNS provider:
 
 | Type | Name | Value |
 |---|---|---|
-| A | `courtpit.app` | the shared IPv4 from `fly ips list` |
-| AAAA | `courtpit.app` | the IPv6 |
-| A / AAAA | `*.courtpit.app` | the same two addresses |
-| CNAME | `_acme-challenge.courtpit.app` | exactly what `fly certs show "*.courtpit.app"` prints (looks like `courtpit.app.<id>.flydns.net`) |
+| A | `racquetcollective.app` | the shared IPv4 from `fly ips list` |
+| AAAA | `racquetcollective.app` | the IPv6 |
+| A / AAAA | `*.racquetcollective.app` | the same two addresses |
+| CNAME | `_acme-challenge.racquetcollective.app` | exactly what `fly certs show "*.racquetcollective.app"` prints (looks like `racquetcollective.app.<id>.flydns.net`) |
 
 A wildcard certificate can only be issued by DNS validation, hence the `_acme-challenge`
 CNAME; it must be a CNAME (no TXT record at that name) and, on Cloudflare DNS, not proxied.
-`fly certs check "*.courtpit.app"` reports progress. The wildcard does not cover the apex,
-which is why both certificates are added. Native apps can use `https://api.courtpit.app`
-with the `X-Courtpit-Community: <slug>` header, which takes precedence over the host.
+`fly certs check "*.racquetcollective.app"` reports progress. The wildcard does not cover the apex,
+which is why both certificates are added. Native apps can use `https://api.racquetcollective.app`
+with the `X-RacquetCollective-Community: <slug>` header, which takes precedence over the host.
 
 **Per-community custom domains** (e.g. `tennis.example.org`): add the certificate, have the
-club point the name at the app (`CNAME` to `my-courtpit.fly.dev`, or `A`/`AAAA` to the same
+club point the name at the app (`CNAME` to `my-racquetcollective.fly.dev`, or `A`/`AAAA` to the same
 addresses), and register it on the community. Use a dedicated name, not the club's apex
 (`example.org`): responses carry HSTS with `includeSubDomains`, which would make browsers refuse
 plain HTTP on every one of the club's subdomains for two years.
@@ -313,9 +313,9 @@ gh secret set FLY_API_TOKEN
 
 `Dockerfile` is multi-stage: cargo-chef caches the dependency build, `cargo build --release`
 embeds `migrations/` at compile time, and the runtime is `debian:trixie-slim` with
-`ca-certificates`, a non-root user (uid 10001), the binary at `/usr/local/bin/courtpit-server`
+`ca-certificates`, a non-root user (uid 10001), the binary at `/usr/local/bin/racquetcollective-server`
 and `postgresql-client-18` from the PostgreSQL (PGDG) apt repository. `CMD` is
-`courtpit-server serve` and there is no `ENTRYPOINT`, so `release_command` and the tick
+`racquetcollective-server serve` and there is no `ENTRYPOINT`, so `release_command` and the tick
 Machine replace the command cleanly.
 
 `pg_dump` must be at least as new as the server. Neon creates Postgres 18 projects by default
@@ -324,17 +324,17 @@ PGDG, and a newer client dumps every older server. When Neon moves its default p
 `PG_MAJOR` in the `Dockerfile`.
 
 ```sh
-docker build -t courtpit .
-docker run --rm courtpit courtpit-server --help
-docker run --rm courtpit pg_dump --version
+docker build -t racquetcollective .
+docker run --rm racquetcollective racquetcollective-server --help
+docker run --rm racquetcollective pg_dump --version
 ```
 
 ### The web app
 
 A `web` stage (`node:22-slim`) runs `npm ci` at the repository root and
 `expo export --platform web` in `apps/mobile`, then writes a `.gz` twin of every text file.
-The runtime copies the export to `/app/web` and sets `COURTPIT_WEB_DIR=/app/web`, so
-`courtpit-server serve` answers every path outside `/api`, `/healthz` and `/readyz` with the app
+The runtime copies the export to `/app/web` and sets `RACQUETCOLLECTIVE_WEB_DIR=/app/web`, so
+`racquetcollective-server serve` answers every path outside `/api`, `/healthz` and `/readyz` with the app
 (decisions 77, 88):
 
 - A path naming a file (`/_expo/static/js/web/entry-<hash>.js`, `/favicon.ico`) is served from
@@ -347,20 +347,20 @@ The runtime copies the export to `/app/web` and sets `COURTPIT_WEB_DIR=/app/web`
 - Every response, the API's included, carries `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and
   `Content-Security-Policy: frame-ancestors 'none'` (the app cannot be framed), plus
-  `Strict-Transport-Security` (two years, subdomains included) while `COURTPIT_COOKIE_SECURE`
-  is on (decision 103).
+  `Strict-Transport-Security` (two years, subdomains included) while
+  `RACQUETCOLLECTIVE_COOKIE_SECURE` is on (decision 104).
 
 The export is built without `EXPO_PUBLIC_COMMUNITY`, so one image serves every community: the
-browser's `Host` (`{slug}.courtpit.app` or a custom domain, section 8) picks the community and the
-session is the httpOnly cookie. Leave `COURTPIT_WEB_DIR` unset to run the API alone; the server
+browser's `Host` (`{slug}.racquetcollective.app` or a custom domain, section 8) picks the community and the
+session is the httpOnly cookie. Leave `RACQUETCOLLECTIVE_WEB_DIR` unset to run the API alone; the server
 refuses to start if it is set to a directory without `index.html`.
 
 To try the same thing locally without Docker:
 
 ```sh
-(cd apps/mobile && npx expo export --platform web --output-dir /tmp/courtpit-web)
-COURTPIT_WEB_DIR=/tmp/courtpit-web COURTPIT_BASE_DOMAIN=localhost COURTPIT_COOKIE_SECURE=false \
-  cargo run -p courtpit-server -- serve
+(cd apps/mobile && npx expo export --platform web --output-dir /tmp/racquetcollective-web)
+RACQUETCOLLECTIVE_WEB_DIR=/tmp/racquetcollective-web RACQUETCOLLECTIVE_BASE_DOMAIN=localhost RACQUETCOLLECTIVE_COOKIE_SECURE=false \
+  cargo run -p racquetcollective-server -- serve
 # then open http://demo.localhost:8080 (browsers resolve *.localhost to this machine)
 ```
 
@@ -375,14 +375,14 @@ and the direct one for anything that needs a session.
 | Variable | Value on Neon | Used by |
 | --- | --- | --- |
 | `DATABASE_URL` | pooled (`-pooler`) URL, `?sslmode=require` | `serve`, `tick`, `create-community`, `seed` |
-| `COURTPIT_DB_POOLED` | `true` | turns off sqlx's prepared-statement cache for `DATABASE_URL` |
+| `RACQUETCOLLECTIVE_DB_POOLED` | `true` | turns off sqlx's prepared-statement cache for `DATABASE_URL` |
 | `DATABASE_DIRECT_URL` | direct URL, `?sslmode=require` | `migrate` (Fly's `release_command`) |
 | `BACKUP_DATABASE_URL` | unset (defaults to `DATABASE_DIRECT_URL`) | `pg_dump` backups |
 
-Section 3 sets these; `COURTPIT_DB_POOLED` lives in `fly.toml`.
+Section 3 sets these; `RACQUETCOLLECTIVE_DB_POOLED` lives in `fly.toml`.
 
-`courtpit-server migrate` connects to `DATABASE_DIRECT_URL` and falls back to `DATABASE_URL`
-when it is unset. With `COURTPIT_DB_POOLED=true` and no direct URL it refuses to run, so a
+`racquetcollective-server migrate` connects to `DATABASE_DIRECT_URL` and falls back to `DATABASE_URL`
+when it is unset. With `RACQUETCOLLECTIVE_DB_POOLED=true` and no direct URL it refuses to run, so a
 misconfigured `release_command` fails the deploy instead of migrating through the pooler.
 sqlx's connection options ignore unknown URL parameters (it logs a warning), so Neon's
 `channel_binding=require` can stay in the string.
@@ -407,7 +407,7 @@ exactly the things that survive that:
   That only works if the pooler tracks them: pgbouncer 1.21+ with `max_prepared_statements > 0`
   (Neon's pooler has this on). Tested against pgbouncer 1.22, whole integration suite:
 
-  | pgbouncer `max_prepared_statements` | `COURTPIT_DB_POOLED` | result |
+  | pgbouncer `max_prepared_statements` | `RACQUETCOLLECTIVE_DB_POOLED` | result |
   | --- | --- | --- |
   | 200 (Neon-like) | `true` | all pass (this is what CI runs) |
   | 200 | `false` | all pass |
@@ -419,7 +419,7 @@ exactly the things that survive that:
   `Parse` and the `Bind` in separate round trips. So a pooler without prepared-statement
   support is unsupported, whatever the flag says.
 
-`COURTPIT_DB_POOLED=true` sets `statement_cache_capacity(0)`: no query is ever re-executed from
+`RACQUETCOLLECTIVE_DB_POOLED=true` sets `statement_cache_capacity(0)`: no query is ever re-executed from
 a cached statement, so a migration can't invalidate a plan an older instance still holds and the
 app does not depend on the pooler's per-connection statement bookkeeping. The price is one more
 round trip per query and a few bytes of pgbouncer client-side state per statement until the
@@ -446,7 +446,7 @@ extra round trip ever shows up in latency.
 
 CI's `test-pooled` job runs the suite through pgbouncer with `ci/pgbouncer/` (transaction mode,
 Neon-like `max_prepared_statements`, a wildcard `* = host=… port=…` entry so the per-test
-databases are reachable, `courtpit/courtpit` credentials). Locally, run a copy of it with the
+databases are reachable, `racquetcollective/racquetcollective` credentials). Locally, run a copy of it with the
 ports of your own cluster (here Postgres on 5432, pgbouncer on 6433):
 
 ```sh
@@ -456,9 +456,9 @@ sed -i "s/6432/$POOL_PORT/; s/port=5432/port=$PG_PORT/" /tmp/pgb/pgbouncer.ini
 # auth_file is relative, so start it from that directory (as a non-root user)
 (cd /tmp/pgb && ulimit -n 4096 && exec pgbouncer pgbouncer.ini > pgbouncer.log 2>&1) &
 
-export DATABASE_URL=postgres://courtpit:courtpit@127.0.0.1:$POOL_PORT/courtpit
-export DATABASE_DIRECT_URL=postgres://courtpit:courtpit@127.0.0.1:$PG_PORT/courtpit
-export COURTPIT_DB_POOLED=true
+export DATABASE_URL=postgres://racquetcollective:racquetcollective@127.0.0.1:$POOL_PORT/racquetcollective
+export DATABASE_DIRECT_URL=postgres://racquetcollective:racquetcollective@127.0.0.1:$PG_PORT/racquetcollective
+export RACQUETCOLLECTIVE_DB_POOLED=true
 cargo test --workspace
 ```
 
@@ -476,7 +476,7 @@ awake:
   runs continuously, so the tick Machine and its workflow step can go
   (`fly machine destroy <id>`).
 - `DATABASE_URL` becomes the Postgres app's internal address and the pooled/direct split
-  disappears: set `COURTPIT_DB_POOLED = "false"` in `fly.toml` and unset `DATABASE_DIRECT_URL`
+  disappears: set `RACQUETCOLLECTIVE_DB_POOLED = "false"` in `fly.toml` and unset `DATABASE_DIRECT_URL`
   (`migrate` falls back to `DATABASE_URL`). Keep `BACKUP_*` pointed at the new
   database: the nightly dump to R2 continues unchanged.
 - Nothing in the schema or the server changes between phases.

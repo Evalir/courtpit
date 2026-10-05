@@ -14,7 +14,7 @@ use crate::common::{TestApp, test_config};
 const KEY_PEM: &[u8] = include_bytes!("fixtures/oidc_test_key.pem");
 const JWKS: &str = include_str!("fixtures/oidc_test_jwks.json");
 const GOOGLE_AUD: &str = "test-google-client";
-const APPLE_AUD: &str = "app.courtpit.demo";
+const APPLE_AUD: &str = "app.racquetcollective.demo";
 
 struct Oidc {
     app: TestApp,
@@ -39,7 +39,7 @@ async fn spawn() -> Oidc {
         async move { axum::serve(listener, router).await },
     ));
     let url = format!("http://{addr}/jwks");
-    let app = TestApp::spawn_with(courtpit_server::Config {
+    let app = TestApp::spawn_with(racquetcollective_server::Config {
         google_client_ids: vec![GOOGLE_AUD.to_owned()],
         apple_client_ids: vec![APPLE_AUD.to_owned()],
         google_jwks_url: url.clone(),

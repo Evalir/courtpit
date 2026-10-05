@@ -1,9 +1,9 @@
-//! `courtpit-server seed`: the demo club, a league in every state, and idempotence.
+//! `racquetcollective-server seed`: the demo club, a league in every state, and idempotence.
 
 use axum::http::StatusCode;
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::{MatchFormat, Score, validate_score};
-use courtpit_server::seed::seed;
+use racquetcollective_domain::{MatchFormat, Score, validate_score};
+use racquetcollective_server::seed::seed;
 use serde_json::Value;
 use uuid::Uuid;
 

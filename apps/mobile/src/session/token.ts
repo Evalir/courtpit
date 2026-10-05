@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 
-const KEY = "courtpit.session";
+const KEY = "racquetcollective.session";
 let current: string | undefined;
 
 /**

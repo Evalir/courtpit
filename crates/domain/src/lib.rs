@@ -1,4 +1,4 @@
-//! Courtpit domain logic.
+//! Racquet Collective domain logic.
 //!
 //! Everything in this crate is pure: no IO, no async runtime, no database. Rules that decide
 //! outcomes (score validation, match state transitions, pairings, scoring) live here so they

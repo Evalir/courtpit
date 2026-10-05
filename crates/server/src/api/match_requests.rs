@@ -7,7 +7,7 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::Discipline;
+use racquetcollective_domain::Discipline;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Postgres, QueryBuilder};

@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 import { useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 

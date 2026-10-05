@@ -2,7 +2,7 @@
 
 use axum::{Json, extract::State};
 use chrono::{DateTime, Utc};
-use courtpit_domain::Discipline;
+use racquetcollective_domain::Discipline;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Postgres, QueryBuilder};
 use utoipa::ToSchema;

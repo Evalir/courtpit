@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use chrono::{Duration, Utc};
-use courtpit_server::jobs::{self, Job};
+use racquetcollective_server::jobs::{self, Job};
 use uuid::Uuid;
 
 use crate::common::TestApp;

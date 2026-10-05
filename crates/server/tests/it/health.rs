@@ -1,9 +1,9 @@
 use axum::http::{HeaderName, StatusCode, header};
-use courtpit_server::Config;
+use racquetcollective_server::Config;
 
 use crate::common::{Res, TestApp, test_config};
 
-/// Asserts the security headers every response carries (decision 103); HSTS only over HTTPS.
+/// Asserts the security headers every response carries (decision 104); HSTS only over HTTPS.
 #[track_caller]
 pub(crate) fn assert_security_headers(res: &Res, https: bool) {
     let get = |name: HeaderName| res.headers.get(name).map(|value| value.to_str().unwrap());
@@ -57,7 +57,7 @@ async fn openapi_route_serves_the_generated_document() {
         .send()
         .await
         .expect(StatusCode::OK);
-    let generated = serde_json::to_value(courtpit_server::app::openapi()).unwrap();
+    let generated = serde_json::to_value(racquetcollective_server::app::openapi()).unwrap();
     assert_eq!(served, generated);
 }
 

@@ -290,7 +290,7 @@ pub struct ExportedIdentity {
     pub created_at: DateTime<Utc>,
 }
 
-/// Everything Courtpit stores about the account (GDPR export).
+/// Everything Racquet Collective stores about the account (GDPR export).
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AccountExport {
     /// When the export was generated.

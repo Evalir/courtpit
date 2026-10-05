@@ -5,32 +5,32 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * identity from the environment its EAS build profile sets; colors are not baked in, they come
  * from `GET /api/v1/tenant` at runtime. Locally everything falls back to development values.
  *
- * - `COURTPIT_APP_NAME`   store / home-screen name
- * - `COURTPIT_BUNDLE_ID`  iOS bundle identifier and Android package
- * - `COURTPIT_SCHEME`     deep-link scheme
- * - `COURTPIT_EAS_PROJECT_ID` the community's EAS project: push tokens are issued for it and
+ * - `RACQUETCOLLECTIVE_APP_NAME`   store / home-screen name
+ * - `RACQUETCOLLECTIVE_BUNDLE_ID`  iOS bundle identifier and Android package
+ * - `RACQUETCOLLECTIVE_SCHEME`     deep-link scheme
+ * - `RACQUETCOLLECTIVE_EAS_PROJECT_ID` the community's EAS project: push tokens are issued for it and
  *                         EAS Update serves its JS updates (none without it)
- * - `COURTPIT_ICON`       the community's app icon (a path under `apps/mobile`), if it has one
- * - `COURTPIT_GOOGLE_IOS_URL_SCHEME` the reversed iOS OAuth client id
+ * - `RACQUETCOLLECTIVE_ICON`       the community's app icon (a path under `apps/mobile`), if it has one
+ * - `RACQUETCOLLECTIVE_GOOGLE_IOS_URL_SCHEME` the reversed iOS OAuth client id
  *                         (`com.googleusercontent.apps.…`); Google sign-in is built in only with it.
  *                         The client ids themselves are `EXPO_PUBLIC_GOOGLE_*_CLIENT_ID` (decision 100).
- * - `COURTPIT_WEB_HOST`   the community's web host (`riverside.courtpit.app`): its https links
+ * - `RACQUETCOLLECTIVE_WEB_HOST`   the community's web host (`riverside.racquetcollective.app`): its https links
  *                         open in the app (universal links / app links, decision 99)
  *
  * The community slug and API origin are `EXPO_PUBLIC_*` variables read by the bundle itself
  * (`src/api/config.ts`), so they also apply to the web build.
  */
-const webHost = process.env.COURTPIT_WEB_HOST;
-const projectId = process.env.COURTPIT_EAS_PROJECT_ID;
-const googleUrlScheme = process.env.COURTPIT_GOOGLE_IOS_URL_SCHEME;
+const webHost = process.env.RACQUETCOLLECTIVE_WEB_HOST;
+const projectId = process.env.RACQUETCOLLECTIVE_EAS_PROJECT_ID;
+const googleUrlScheme = process.env.RACQUETCOLLECTIVE_GOOGLE_IOS_URL_SCHEME;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: process.env.COURTPIT_APP_NAME ?? "Courtpit (dev)",
-  slug: "courtpit",
+  name: process.env.RACQUETCOLLECTIVE_APP_NAME ?? "Racquet Collective (dev)",
+  slug: "racquetcollective",
   version: "0.1.0",
-  scheme: process.env.COURTPIT_SCHEME ?? "courtpit",
-  ...(process.env.COURTPIT_ICON ? { icon: process.env.COURTPIT_ICON } : {}),
+  scheme: process.env.RACQUETCOLLECTIVE_SCHEME ?? "racquetcollective",
+  ...(process.env.RACQUETCOLLECTIVE_ICON ? { icon: process.env.RACQUETCOLLECTIVE_ICON } : {}),
   orientation: "portrait",
   // JS updates reach builds of the same app version (EAS Update, spec §16).
   runtimeVersion: { policy: "appVersion" },
@@ -39,7 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // Android needs expo-system-ui installed for this to apply.
   userInterfaceStyle: "automatic",
   ios: {
-    bundleIdentifier: process.env.COURTPIT_BUNDLE_ID ?? "app.courtpit.dev",
+    bundleIdentifier: process.env.RACQUETCOLLECTIVE_BUNDLE_ID ?? "app.racquetcollective.dev",
     supportsTablet: true,
     usesAppleSignIn: true,
     // Only HTTPS and the OS's own crypto, which are exempt: App Store Connect then skips the
@@ -48,7 +48,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(webHost ? { associatedDomains: [`applinks:${webHost}`, `webcredentials:${webHost}`] } : {}),
   },
   android: {
-    package: process.env.COURTPIT_BUNDLE_ID ?? "app.courtpit.dev",
+    package: process.env.RACQUETCOLLECTIVE_BUNDLE_ID ?? "app.racquetcollective.dev",
     ...(webHost
       ? {
           intentFilters: [

@@ -7,7 +7,7 @@ const rgb = (value: string) => {
   return parsed;
 };
 
-// The demo community's branding, as `courtpit-server seed` writes it.
+// The demo community's branding, as `racquetcollective-server seed` writes it.
 const riverside = {
   display_name: "Riverside Tennis Club",
   logo_url: "https://example.com/demo/riverside-logo.png",
@@ -35,7 +35,7 @@ describe("themeFromBranding", () => {
     expect(typography).toBe("inter");
   });
 
-  it("falls back to Courtpit's defaults for missing or malformed colors", () => {
+  it("falls back to Racquet Collective's defaults for missing or malformed colors", () => {
     const { colors, typography } = themeFromBranding({ colors: { primary: "not a color" } });
     expect(colors.primary).toBe(defaultBrandColors.primary);
     expect(colors.background).toBe(defaultBrandColors.background);
@@ -92,7 +92,7 @@ describe("themeFromBranding in dark mode", () => {
   });
 
   it.each([
-    ["Courtpit's defaults", undefined],
+    ["Racquet Collective's defaults", undefined],
     ["the demo club", riverside],
     ["a navy primary", { colors: { primary: "#0b1f4d", secondary: "#e63946" } }],
     ["a pale primary", { colors: { primary: "#ffe14d" } }],

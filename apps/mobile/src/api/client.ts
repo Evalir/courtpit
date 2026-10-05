@@ -1,4 +1,8 @@
-import { createCourtpitClient, type CourtpitClient, type paths } from "@courtpit/api-client";
+import {
+  createRacquetCollectiveClient,
+  type RacquetCollectiveClient,
+  type paths,
+} from "@racquetcollective/api-client";
 import createQueryHooks, { type OpenapiQueryClient } from "openapi-react-query";
 import { createContext, use } from "react";
 
@@ -9,7 +13,7 @@ import type { ApiConfig } from "./config";
 /** The typed transport plus the TanStack Query hooks built on it. */
 export interface Api {
   /** `openapi-fetch` client for imperative calls (sign-in, sign-out). */
-  fetch: CourtpitClient;
+  fetch: RacquetCollectiveClient;
   /** `$api.useQuery("get", "/api/v1/...")` / `$api.useMutation(...)`, typed from the spec. */
   $api: OpenapiQueryClient<paths>;
   config: ApiConfig;
@@ -17,7 +21,7 @@ export interface Api {
 
 /** Builds the API for a configuration; the session token is read per request. */
 export function createApi(config: ApiConfig): Api {
-  const fetch = createCourtpitClient({ ...config, token: sessionToken.current });
+  const fetch = createRacquetCollectiveClient({ ...config, token: sessionToken.current });
   return { fetch, $api: createQueryHooks(fetch), config };
 }
 

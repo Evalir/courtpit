@@ -1,8 +1,8 @@
 {
-  "name": "@courtpit/api-client",
+  "name": "@racquetcollective/api-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Typed client for the Courtpit REST API, generated from the server's OpenAPI document.",
+  "description": "Typed client for the Racquet Collective REST API, generated from the server's OpenAPI document.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -14,7 +14,7 @@
     "openapi.json"
   ],
   "scripts": {
-    "gen": "cargo run -q -p courtpit-server -- openapi --out openapi.json && openapi-typescript openapi.json -o src/schema.d.ts",
+    "gen": "cargo run -q -p racquetcollective-server -- openapi --out openapi.json && openapi-typescript openapi.json -o src/schema.d.ts",
     "check": "npm run gen && git diff --exit-code -- .",
     "typecheck": "tsc --noEmit"
   },

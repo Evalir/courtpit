@@ -6,40 +6,56 @@ use axum_client_ip::ClientIpSource;
 
 use crate::db::DbConfig;
 
-/// Configuration for `courtpit-server serve`. Every field has an env var; see `.env.example`.
+/// Configuration for `racquetcollective-server serve`. Every field has an env var; see `.env.example`.
 #[derive(Debug, Clone, clap::Args)]
 pub struct Config {
     /// Address the HTTP server binds to.
-    #[arg(long, env = "COURTPIT_BIND", default_value = "0.0.0.0:8080")]
+    #[arg(long, env = "RACQUETCOLLECTIVE_BIND", default_value = "0.0.0.0:8080")]
     pub bind: SocketAddr,
     /// Base domain for `{slug}.{base}` tenant hosts.
-    #[arg(long, env = "COURTPIT_BASE_DOMAIN", default_value = "courtpit.app")]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_BASE_DOMAIN",
+        default_value = "racquetcollective.app"
+    )]
     pub base_domain: String,
     /// Seconds a resolved community stays cached.
-    #[arg(long, env = "COURTPIT_TENANT_CACHE_TTL_SECS", default_value_t = 60)]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_TENANT_CACHE_TTL_SECS",
+        default_value_t = 60
+    )]
     pub tenant_cache_ttl_secs: u64,
     /// Where the client IP comes from: `ConnectInfo` (the socket peer) unless behind a proxy you
     /// control, then e.g. `FlyClientIp` or `RightmostXForwardedFor`.
-    #[arg(long, env = "COURTPIT_CLIENT_IP_SOURCE", default_value = "ConnectInfo")]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_CLIENT_IP_SOURCE",
+        default_value = "ConnectInfo"
+    )]
     pub client_ip_source: ClientIpSource,
     /// Session lifetime in days.
-    #[arg(long, env = "COURTPIT_SESSION_TTL_DAYS", default_value_t = 30)]
+    #[arg(long, env = "RACQUETCOLLECTIVE_SESSION_TTL_DAYS", default_value_t = 30)]
     pub session_ttl_days: i64,
     /// Served over HTTPS: marks the session cookie `Secure` and sends `Strict-Transport-Security`
     /// (disable only for plain-HTTP local development).
-    #[arg(long, env = "COURTPIT_COOKIE_SECURE", default_value_t = true, action = clap::ArgAction::Set)]
+    #[arg(long, env = "RACQUETCOLLECTIVE_COOKIE_SECURE", default_value_t = true, action = clap::ArgAction::Set)]
     pub cookie_secure: bool,
     /// Auth requests (code requests, verifications, logins) allowed per client IP per hour.
-    #[arg(long, env = "COURTPIT_AUTH_IP_LIMIT_PER_HOUR", default_value_t = 30)]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_AUTH_IP_LIMIT_PER_HOUR",
+        default_value_t = 30
+    )]
     pub auth_ip_limit_per_hour: u32,
     /// Email transport.
-    #[arg(long, env = "COURTPIT_MAILER", value_enum, default_value_t)]
+    #[arg(long, env = "RACQUETCOLLECTIVE_MAILER", value_enum, default_value_t)]
     pub mailer: MailerKind,
     /// Resend API key (required with `--mailer resend`).
     #[arg(long, env = "RESEND_API_KEY", hide_env_values = true)]
     pub resend_api_key: Option<String>,
     /// Push transport.
-    #[arg(long, env = "COURTPIT_PUSH", value_enum, default_value_t)]
+    #[arg(long, env = "RACQUETCOLLECTIVE_PUSH", value_enum, default_value_t)]
     pub push: PushKind,
     /// Expo access token, when the Expo project requires authenticated push requests.
     #[arg(long, env = "EXPO_ACCESS_TOKEN", hide_env_values = true)]
@@ -47,39 +63,47 @@ pub struct Config {
     /// Sender address for outgoing email.
     #[arg(
         long,
-        env = "COURTPIT_EMAIL_FROM",
-        default_value = "Courtpit <no-reply@courtpit.app>"
+        env = "RACQUETCOLLECTIVE_EMAIL_FROM",
+        default_value = "Racquet Collective <no-reply@racquetcollective.app>"
     )]
     pub email_from: String,
     /// Accepted `aud` values for Sign in with Apple (bundle ids / service ids), comma-separated.
-    #[arg(long, env = "COURTPIT_APPLE_CLIENT_IDS", value_delimiter = ',')]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_APPLE_CLIENT_IDS",
+        value_delimiter = ','
+    )]
     pub apple_client_ids: Vec<String>,
     /// Accepted `aud` values for Google sign-in (OAuth client ids), comma-separated.
-    #[arg(long, env = "COURTPIT_GOOGLE_CLIENT_IDS", value_delimiter = ',')]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_GOOGLE_CLIENT_IDS",
+        value_delimiter = ','
+    )]
     pub google_client_ids: Vec<String>,
     /// Apple's JWKS endpoint.
     #[arg(
         long,
-        env = "COURTPIT_APPLE_JWKS_URL",
+        env = "RACQUETCOLLECTIVE_APPLE_JWKS_URL",
         default_value = "https://appleid.apple.com/auth/keys"
     )]
     pub apple_jwks_url: String,
     /// Google's JWKS endpoint.
     #[arg(
         long,
-        env = "COURTPIT_GOOGLE_JWKS_URL",
+        env = "RACQUETCOLLECTIVE_GOOGLE_JWKS_URL",
         default_value = "https://www.googleapis.com/oauth2/v3/certs"
     )]
     pub google_jwks_url: String,
     /// Run the background job loop in this process.
-    #[arg(long, env = "COURTPIT_JOBS_ENABLED", default_value_t = true, action = clap::ArgAction::Set)]
+    #[arg(long, env = "RACQUETCOLLECTIVE_JOBS_ENABLED", default_value_t = true, action = clap::ArgAction::Set)]
     pub jobs_enabled: bool,
     /// Job loop poll interval in milliseconds.
-    #[arg(long, env = "COURTPIT_JOB_POLL_MS", default_value_t = 1000)]
+    #[arg(long, env = "RACQUETCOLLECTIVE_JOB_POLL_MS", default_value_t = 1000)]
     pub job_poll_ms: u64,
     /// Directory of the exported web app (`npm run export:web` in `apps/mobile`), served for
     /// every path outside the API. Unset: the API only.
-    #[arg(long, env = "COURTPIT_WEB_DIR")]
+    #[arg(long, env = "RACQUETCOLLECTIVE_WEB_DIR")]
     pub web_dir: Option<std::path::PathBuf>,
     /// Database settings.
     #[command(flatten)]
@@ -124,7 +148,7 @@ pub struct BackupConfig {
     #[arg(
         long = "backup-s3-prefix",
         env = "BACKUP_S3_PREFIX",
-        default_value = "courtpit/"
+        default_value = "racquetcollective/"
     )]
     pub s3_prefix: String,
     /// Days to keep dumps; older ones are deleted after a successful upload.
@@ -162,7 +186,7 @@ impl Default for BackupConfig {
             s3_access_key: None,
             s3_secret_key: None,
             s3_region: "auto".to_owned(),
-            s3_prefix: "courtpit/".to_owned(),
+            s3_prefix: "racquetcollective/".to_owned(),
             retention_days: 14,
             hour_utc: 3,
             dump_database_url: None,
@@ -194,7 +218,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             bind: SocketAddr::from(([0, 0, 0, 0], 8080)),
-            base_domain: "courtpit.app".to_owned(),
+            base_domain: "racquetcollective.app".to_owned(),
             tenant_cache_ttl_secs: 60,
             client_ip_source: ClientIpSource::ConnectInfo,
             session_ttl_days: 30,
@@ -204,7 +228,7 @@ impl Default for Config {
             resend_api_key: None,
             push: PushKind::Log,
             expo_access_token: None,
-            email_from: "Courtpit <no-reply@courtpit.app>".to_owned(),
+            email_from: "Racquet Collective <no-reply@racquetcollective.app>".to_owned(),
             jobs_enabled: true,
             job_poll_ms: 1000,
             apple_client_ids: Vec::new(),
@@ -213,7 +237,9 @@ impl Default for Config {
             google_jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_owned(),
             web_dir: None,
             db: DbConfig {
-                database_url: "postgres://courtpit:courtpit@127.0.0.1/courtpit".to_owned(),
+                database_url:
+                    "postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective"
+                        .to_owned(),
                 database_direct_url: None,
                 db_pooled: false,
                 db_max_connections: 10,

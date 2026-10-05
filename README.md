@@ -1,4 +1,4 @@
-# Courtpit
+# Racquet Collective
 
 White-label, multi-tenant tennis community app: player directory, friendly-match finder,
 seasonal ranked leagues (and later tournaments), self-reported scores confirmed by opponents.
@@ -18,23 +18,23 @@ Requires Rust (edition 2024, 1.88+) and Postgres 16. Node 22 is needed for the a
 ```sh
 # 1. A local Postgres role that may create databases (the integration tests make one per test)
 #    and roles (the first migration creates the RLS-bound `courtpit_app` role).
-sudo -u postgres psql -c "CREATE ROLE courtpit LOGIN PASSWORD 'courtpit' CREATEDB CREATEROLE"
-sudo -u postgres createdb -O courtpit courtpit
+sudo -u postgres psql -c "CREATE ROLE racquetcollective LOGIN PASSWORD 'racquetcollective' CREATEDB CREATEROLE"
+sudo -u postgres createdb -O racquetcollective racquetcollective
 
 # 2. Configuration comes from the environment (clap reads it; `.env` is not loaded for you).
-cp .env.example .env            # defaults: DATABASE_URL=postgres://courtpit:courtpit@127.0.0.1/courtpit
+cp .env.example .env            # defaults: DATABASE_URL=postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective
 set -a; . ./.env; set +a
-export COURTPIT_COOKIE_SECURE=false   # plain-HTTP localhost
+export RACQUETCOLLECTIVE_COOKIE_SECURE=false   # plain-HTTP localhost
 
 # 3. Schema, demo data, server.
-cargo run -p courtpit-server -- migrate
-cargo run -p courtpit-server -- seed     # demo community `demo` (`--slug` to change); refused when COURTPIT_ENV=production
-cargo run -p courtpit-server -- serve    # API on :8080, background job loop included
+cargo run -p racquetcollective-server -- migrate
+cargo run -p racquetcollective-server -- seed     # demo community `demo` (`--slug` to change); refused when RACQUETCOLLECTIVE_ENV=production
+cargo run -p racquetcollective-server -- serve    # API on :8080, background job loop included
 curl localhost:8080/healthz
-curl -H 'X-Courtpit-Community: demo' localhost:8080/api/v1/tenant
+curl -H 'X-RacquetCollective-Community: demo' localhost:8080/api/v1/tenant
 ```
 
-Sign in as the owner `seed` prints (`marcus.hale@example.com`); with `COURTPIT_MAILER=log` the
+Sign in as the owner `seed` prints (`marcus.hale@example.com`); with `RACQUETCOLLECTIVE_MAILER=log` the
 emailed code appears in the server log. Re-running `seed` is safe: it updates in place.
 
 The app, against that server:

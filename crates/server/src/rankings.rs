@@ -1,7 +1,7 @@
 //! The ranking ledger: appending events and materialising the rolling 52-week rankings.
 
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::{
+use racquetcollective_domain::{
     Discipline, MatchStatus, Outcome, PlayerId, RankingEvent, RankingSource, ScoringConfig,
     league_match_events,
 };

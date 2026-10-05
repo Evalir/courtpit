@@ -30,10 +30,14 @@ pub struct DbConfig {
     pub database_direct_url: Option<String>,
     /// `DATABASE_URL` points at a transaction pooler (pgbouncer, Neon's pooled endpoint):
     /// disables sqlx's prepared-statement cache.
-    #[arg(long, env = "COURTPIT_DB_POOLED", default_value_t = false, action = clap::ArgAction::Set)]
+    #[arg(long, env = "RACQUETCOLLECTIVE_DB_POOLED", default_value_t = false, action = clap::ArgAction::Set)]
     pub db_pooled: bool,
     /// Maximum pool size.
-    #[arg(long, env = "COURTPIT_DB_MAX_CONNECTIONS", default_value_t = 10)]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_DB_MAX_CONNECTIONS",
+        default_value_t = 10
+    )]
     pub db_max_connections: u32,
 }
 
@@ -58,12 +62,12 @@ pub async fn connect(cfg: &DbConfig) -> anyhow::Result<PgPool> {
 
 /// Opens a small pool on [`DbConfig::session_url`] for session-level work (migrations).
 ///
-/// Refuses when `COURTPIT_DB_POOLED=true` and no direct URL is set: the only URL left is the
+/// Refuses when `RACQUETCOLLECTIVE_DB_POOLED=true` and no direct URL is set: the only URL left is the
 /// pooler's, which cannot hold the session advisory lock migrations rely on.
 pub async fn connect_direct(cfg: &DbConfig) -> anyhow::Result<PgPool> {
     if cfg.db_pooled && cfg.database_direct_url.is_none() {
         anyhow::bail!(
-            "COURTPIT_DB_POOLED=true but DATABASE_DIRECT_URL is not set: migrations take a \
+            "RACQUETCOLLECTIVE_DB_POOLED=true but DATABASE_DIRECT_URL is not set: migrations take a \
              session-level advisory lock that a transaction pooler cannot hold. Set \
              DATABASE_DIRECT_URL to the direct (non-pooler) Postgres endpoint"
         );

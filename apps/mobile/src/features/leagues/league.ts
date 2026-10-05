@@ -1,4 +1,4 @@
-import type { components } from "@courtpit/api-client";
+import type { components } from "@racquetcollective/api-client";
 
 import { formatDate, formatLastDay } from "@/features/format";
 import type { BadgeTone } from "@/ui/Badge";

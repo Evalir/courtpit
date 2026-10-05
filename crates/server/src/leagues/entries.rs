@@ -1,7 +1,7 @@
 //! League entries: rows, eligibility checks and loaders.
 
 use chrono::{DateTime, Utc};
-use courtpit_domain::Discipline;
+use racquetcollective_domain::Discipline;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -235,7 +235,8 @@ pub async fn check_mixed(
             "every player of a mixed entry must be a member of this community",
         ));
     }
-    let genders: Vec<courtpit_domain::Gender> = genders.into_iter().map(Into::into).collect();
+    let genders: Vec<racquetcollective_domain::Gender> =
+        genders.into_iter().map(Into::into).collect();
     CommunitySettings::of(tenant)
         .mixed_eligibility
         .check(&genders)

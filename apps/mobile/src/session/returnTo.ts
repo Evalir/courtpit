@@ -6,7 +6,7 @@ const NOT_DESTINATIONS = new Set(["/", "/sign-in", "/verify", "/profile/delete"]
 
 /**
  * The in-app path (and query) a link points at, if signing in should end there. Takes
- * `https://club.example/leagues/1?x=1`, `courtpit://leagues/1`, Expo Go's
+ * `https://club.example/leagues/1?x=1`, `racquetcollective://leagues/1`, Expo Go's
  * `exp://host:8081/--/leagues/1` or a bare path. React Native's `URL` lacks `pathname`, hence
  * plain string work.
  */
@@ -20,7 +20,7 @@ export function returnPathOf(url: string | null | undefined): string | null {
     const parts = /^([a-z][a-z0-9+.-]*):\/\/([^/?]*)(.*)$/i.exec(path);
     if (parts) {
       const [, scheme = "", host = "", rest = ""] = parts;
-      // A custom scheme's "host" is the first path segment: courtpit://leagues/1.
+      // A custom scheme's "host" is the first path segment: racquetcollective://leagues/1.
       path = /^https?$/i.test(scheme) ? rest : `/${`${host}${rest}`.replace(/^\/+/, "")}`;
     }
   }

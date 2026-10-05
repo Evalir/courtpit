@@ -117,11 +117,11 @@ pub fn normalized_prefix(prefix: &str) -> String {
     }
 }
 
-/// The object key of the dump taken at `at`: `{prefix}{YYYY}/{MM}/courtpit-{YYYYMMDDTHHMMSSZ}.dump`.
+/// The object key of the dump taken at `at`: `{prefix}{YYYY}/{MM}/racquetcollective-{YYYYMMDDTHHMMSSZ}.dump`.
 /// `prefix` is empty or ends with `/` (see [`normalized_prefix`]).
 pub fn object_key(prefix: &str, at: DateTime<Utc>) -> String {
     format!(
-        "{prefix}{}/courtpit-{}.dump",
+        "{prefix}{}/racquetcollective-{}.dump",
         at.format("%Y/%m"),
         at.format(STAMP)
     )
@@ -245,12 +245,15 @@ mod tests {
     #[test]
     fn keys_have_a_fixed_layout_and_roundtrip() {
         let taken = at(4, 3, 0);
-        let key = object_key("courtpit/", taken);
-        assert_eq!(key, "courtpit/2026/10/courtpit-20261004T030005Z.dump");
-        assert_eq!(parse_key("courtpit/", &key), Some(taken));
+        let key = object_key("racquetcollective/", taken);
+        assert_eq!(
+            key,
+            "racquetcollective/2026/10/racquetcollective-20261004T030005Z.dump"
+        );
+        assert_eq!(parse_key("racquetcollective/", &key), Some(taken));
         assert_eq!(
             object_key("", taken),
-            "2026/10/courtpit-20261004T030005Z.dump"
+            "2026/10/racquetcollective-20261004T030005Z.dump"
         );
         assert_eq!(normalized_prefix("backups"), "backups/");
         assert_eq!(normalized_prefix(" b/ "), "b/");
@@ -259,20 +262,20 @@ mod tests {
 
     #[test]
     fn only_exact_keys_parse() {
-        let key = "courtpit/2026/10/courtpit-20261004T030005Z.dump";
+        let key = "racquetcollective/2026/10/racquetcollective-20261004T030005Z.dump";
         for foreign in [
-            "courtpit/notes.txt",
-            "other/2026/10/courtpit-20261004T030005Z.dump",
-            "courtpit/2026/09/courtpit-20261004T030005Z.dump",
-            "courtpit/2026/10/courtpit-20261004T030005Z.dump.bak",
-            "courtpit/2026/10/courtpit-20261304T030005Z.dump",
-            "courtpit/2026/10/courtpit-.dump",
-            "courtpit/2026/10/é.dump",
-            "courtpit/extra/2026/10/courtpit-20261004T030005Z.dump",
+            "racquetcollective/notes.txt",
+            "other/2026/10/racquetcollective-20261004T030005Z.dump",
+            "racquetcollective/2026/09/racquetcollective-20261004T030005Z.dump",
+            "racquetcollective/2026/10/racquetcollective-20261004T030005Z.dump.bak",
+            "racquetcollective/2026/10/racquetcollective-20261304T030005Z.dump",
+            "racquetcollective/2026/10/racquetcollective-.dump",
+            "racquetcollective/2026/10/é.dump",
+            "racquetcollective/extra/2026/10/racquetcollective-20261004T030005Z.dump",
         ] {
-            assert_eq!(parse_key("courtpit/", foreign), None, "{foreign}");
+            assert_eq!(parse_key("racquetcollective/", foreign), None, "{foreign}");
         }
-        assert!(parse_key("courtpit/", key).is_some());
+        assert!(parse_key("racquetcollective/", key).is_some());
     }
 
     #[test]

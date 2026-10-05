@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use axum::http::StatusCode;
 use chrono::Duration;
-use courtpit_server::{clock::Clock, jobs};
+use racquetcollective_server::{clock::Clock, jobs};
 use serde_json::{Value, json};
 use uuid::Uuid;
 

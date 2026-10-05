@@ -26,10 +26,10 @@ function resolved(name: string): Profile {
 const IDENTITY = [
   "EXPO_PUBLIC_COMMUNITY",
   "EXPO_PUBLIC_API_URL",
-  "COURTPIT_APP_NAME",
-  "COURTPIT_BUNDLE_ID",
-  "COURTPIT_SCHEME",
-  "COURTPIT_WEB_HOST",
+  "RACQUETCOLLECTIVE_APP_NAME",
+  "RACQUETCOLLECTIVE_BUNDLE_ID",
+  "RACQUETCOLLECTIVE_SCHEME",
+  "RACQUETCOLLECTIVE_WEB_HOST",
 ];
 
 const communityProfiles = Object.keys(eas.build).filter(
@@ -45,13 +45,17 @@ describe("eas.json", () => {
     const { env = {}, channel } = resolved(name);
     for (const key of IDENTITY) expect(env[key]).toBeTruthy();
     expect(channel).toBe(name);
-    expect(env.EXPO_PUBLIC_API_URL).toBe(`https://${env.COURTPIT_WEB_HOST}`);
-    expect(env.COURTPIT_BUNDLE_ID).toMatch(/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/);
-    expect(env.COURTPIT_SCHEME).toMatch(/^[a-z][a-z0-9+.-]*$/);
+    expect(env.EXPO_PUBLIC_API_URL).toBe(`https://${env.RACQUETCOLLECTIVE_WEB_HOST}`);
+    expect(env.RACQUETCOLLECTIVE_BUNDLE_ID).toMatch(/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/);
+    expect(env.RACQUETCOLLECTIVE_SCHEME).toMatch(/^[a-z][a-z0-9+.-]*$/);
   });
 
   it("gives every community its own app, scheme and update channel", () => {
-    for (const key of ["COURTPIT_BUNDLE_ID", "COURTPIT_SCHEME", "COURTPIT_WEB_HOST"]) {
+    for (const key of [
+      "RACQUETCOLLECTIVE_BUNDLE_ID",
+      "RACQUETCOLLECTIVE_SCHEME",
+      "RACQUETCOLLECTIVE_WEB_HOST",
+    ]) {
       const values = communityProfiles.map((name) => resolved(name).env?.[key]);
       expect(new Set(values).size).toBe(values.length);
     }

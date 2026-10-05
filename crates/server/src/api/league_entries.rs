@@ -5,7 +5,7 @@
 //! row first, which serialises registration per league.
 
 use axum::{Json, extract::State, http::StatusCode};
-use courtpit_domain::Discipline;
+use racquetcollective_domain::Discipline;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder};
 use utoipa::ToSchema;

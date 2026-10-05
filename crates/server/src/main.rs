@@ -1,4 +1,4 @@
-//! `courtpit-server` binary: `serve`, `tick`, `migrate`, `create-community`, `openapi`,
+//! `racquetcollective-server` binary: `serve`, `tick`, `migrate`, `create-community`, `openapi`,
 //! `seed`.
 #![deny(unsafe_code)]
 
@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use courtpit_server::{
+use racquetcollective_server::{
     AppState, Config,
     app::openapi,
     applinks::{self, AndroidApp, AppLinks},
@@ -19,15 +19,15 @@ use courtpit_server::{
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "courtpit-server",
+    name = "racquetcollective-server",
     version,
-    about = "Courtpit API server and admin CLI"
+    about = "Racquet Collective API server and admin CLI"
 )]
 struct Cli {
     /// Log output format.
     #[arg(
         long,
-        env = "COURTPIT_LOG_FORMAT",
+        env = "RACQUETCOLLECTIVE_LOG_FORMAT",
         value_enum,
         default_value_t,
         global = true
@@ -56,7 +56,7 @@ enum Command {
         out: Option<PathBuf>,
     },
     /// Fill a development/staging database with a demo community (refused when
-    /// `COURTPIT_ENV=production`).
+    /// `RACQUETCOLLECTIVE_ENV=production`).
     Seed(SeedArgs),
 }
 
@@ -65,7 +65,11 @@ struct TickArgs {
     #[command(flatten)]
     config: Config,
     /// Stop starting new jobs after this many seconds (a running job is always finished).
-    #[arg(long, env = "COURTPIT_TICK_MAX_SECONDS", default_value_t = 300)]
+    #[arg(
+        long,
+        env = "RACQUETCOLLECTIVE_TICK_MAX_SECONDS",
+        default_value_t = 300
+    )]
     max_seconds: u64,
 }
 
@@ -82,7 +86,7 @@ struct SeedArgs {
 struct CreateCommunityArgs {
     #[command(flatten)]
     db: db::DbConfig,
-    /// URL slug: lowercase letters, digits and dashes (`{slug}.courtpit.app`).
+    /// URL slug: lowercase letters, digits and dashes (`{slug}.racquetcollective.app`).
     #[arg(long)]
     slug: String,
     /// Display name.
@@ -178,7 +182,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Seed(args) => {
-            seed::ensure_not_production(std::env::var("COURTPIT_ENV").ok().as_deref())?;
+            seed::ensure_not_production(std::env::var("RACQUETCOLLECTIVE_ENV").ok().as_deref())?;
             let pool = db::connect(&args.db).await?;
             let config = Config {
                 db: args.db,

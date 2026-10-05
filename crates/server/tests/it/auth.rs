@@ -126,7 +126,7 @@ async fn code_requests_are_rate_limited_per_email_and_ip() {
         .expect(StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(body["error"]["code"], "rate_limited");
 
-    let app = TestApp::spawn_with(courtpit_server::Config {
+    let app = TestApp::spawn_with(racquetcollective_server::Config {
         auth_ip_limit_per_hour: 2,
         ..test_config()
     })
@@ -215,7 +215,7 @@ async fn web_clients_get_an_httponly_cookie() {
     let res = app
         .post("/api/v1/auth/otp/verify")
         .community("demo")
-        .header("x-courtpit-client", "web")
+        .header("x-racquetcollective-client", "web")
         .json(json!({ "email": email, "code": app.last_code(email) }))
         .send()
         .await;

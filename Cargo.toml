@@ -100,7 +100,7 @@ useless_let_if_seq = "warn"
 all = "warn"
 
 [workspace.dependencies]
-courtpit-domain = { path = "crates/domain" }
+racquetcollective-domain = { path = "crates/domain" }
 anyhow = "1"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }

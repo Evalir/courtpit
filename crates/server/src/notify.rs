@@ -3,7 +3,7 @@
 //! or an email when they have none and the news needs an answer.
 
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::{MatchStatus, Score, Side};
+use racquetcollective_domain::{MatchStatus, Score, Side};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::FromRow;
@@ -731,7 +731,7 @@ fn score_line(score: &Score, side: Side) -> String {
 
 #[cfg(test)]
 mod tests {
-    use courtpit_domain::SetScore;
+    use racquetcollective_domain::SetScore;
 
     use super::*;
 

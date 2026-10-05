@@ -1,9 +1,9 @@
-//! The exported web app served beside the API (`COURTPIT_WEB_DIR`).
+//! The exported web app served beside the API (`RACQUETCOLLECTIVE_WEB_DIR`).
 
 use std::{fs, path::PathBuf};
 
 use axum::http::{StatusCode, header};
-use courtpit_server::{Config, web::WebApp};
+use racquetcollective_server::{Config, web::WebApp};
 use uuid::Uuid;
 
 use crate::{
@@ -16,7 +16,7 @@ pub(crate) struct Export(PathBuf);
 
 impl Export {
     pub(crate) fn new() -> Self {
-        let dir = std::env::temp_dir().join(format!("courtpit-web-{}", Uuid::now_v7()));
+        let dir = std::env::temp_dir().join(format!("racquetcollective-web-{}", Uuid::now_v7()));
         let bundles = dir.join("_expo/static/js/web");
         fs::create_dir_all(&bundles).unwrap();
         fs::write(dir.join("index.html"), "<!doctype html><title>app</title>").unwrap();

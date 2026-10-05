@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Courtpit API",
-    "description": "Courtpit REST API.\n\n**Community.** Every request is scoped to one community. Native clients send `X-Courtpit-Community: <slug>`; browsers are resolved from the host (`<slug>.courtpit.app` or a registered custom domain). The header wins over the host. A request without a resolvable community answers `400`, an unknown one `404`.\n\n**Authentication.** A session is an opaque token, sent as `Authorization: Bearer <token>` (native) or as the `courtpit_session` cookie (web; ask for it at sign-in with `X-Courtpit-Client: web`). Either one authenticates.\n\n**Errors.** Every error is `{ \"error\": { \"code\", \"message\" } }`; clients switch on `code`.\n\n**Lists** are cursor-paginated: `?cursor=&limit=` in, `{ items, next_cursor }` out.",
+    "title": "Racquet Collective API",
+    "description": "Racquet Collective REST API.\n\n**Community.** Every request is scoped to one community. Native clients send `X-RacquetCollective-Community: <slug>`; browsers are resolved from the host (`<slug>.racquetcollective.app` or a registered custom domain). The header wins over the host. A request without a resolvable community answers `400`, an unknown one `404`.\n\n**Authentication.** A session is an opaque token, sent as `Authorization: Bearer <token>` (native) or as the `racquetcollective_session` cookie (web; ask for it at sign-in with `X-RacquetCollective-Client: web`). Either one authenticates.\n\n**Errors.** Every error is `{ \"error\": { \"code\", \"message\" } }`; clients switch on `code`.\n\n**Lists** are cursor-paginated: `?cursor=&limit=` in, `{ items, next_cursor }` out.",
     "license": {
       "name": "UNLICENSED",
       "identifier": "UNLICENSED"
@@ -5001,7 +5001,7 @@
       },
       "AccountExport": {
         "type": "object",
-        "description": "Everything Courtpit stores about the account (GDPR export).",
+        "description": "Everything Racquet Collective stores about the account (GDPR export).",
         "required": [
           "exported_at",
           "user",
@@ -5036,7 +5036,7 @@
       },
       "AuthSession": {
         "type": "object",
-        "description": "A new session. `token` is omitted when it was delivered as a cookie\n(`X-Courtpit-Client: web`).",
+        "description": "A new session. `token` is omitted when it was delivered as a cookie\n(`X-RacquetCollective-Client: web`).",
         "required": [
           "expires_at",
           "user_id",
@@ -7835,7 +7835,7 @@
       "session_cookie": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "courtpit_session",
+        "name": "racquetcollective_session",
         "description": "Session cookie (web clients); alternative to the bearer token."
       }
     }

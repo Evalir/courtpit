@@ -201,7 +201,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
 }
 
 /// The OpenAPI document of [`api_router`]. Served at `/api/v1/openapi.json` and printed by
-/// `courtpit-server openapi`, so the committed client and the live API cannot disagree.
+/// `racquetcollective-server openapi`, so the committed client and the live API cannot disagree.
 pub fn openapi() -> utoipa::openapi::OpenApi {
     api_router().1
 }
@@ -212,7 +212,7 @@ async fn no_such_route() -> ApiError {
 }
 
 /// Adds the security headers every response carries, API and web app alike, unless a handler
-/// set its own (decision 103). HSTS only when served over HTTPS (`cookie_secure`), so a
+/// set its own (decision 104). HSTS only when served over HTTPS (`cookie_secure`), so a
 /// plain-HTTP development server never pins a browser to HTTPS.
 fn with_security_headers(app: Router<AppState>, https: bool) -> Router<AppState> {
     let headers = [

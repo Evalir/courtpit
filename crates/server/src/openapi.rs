@@ -28,21 +28,21 @@ const BEARER: &str = "bearer";
 /// Name of the session-cookie security scheme (added next to [`BEARER`] by [`ApiConventions`]).
 const SESSION_COOKIE_SCHEME: &str = "session_cookie";
 
-const DESCRIPTION: &str = "Courtpit REST API.\n\n\
+const DESCRIPTION: &str = "Racquet Collective REST API.\n\n\
 **Community.** Every request is scoped to one community. Native clients send \
-`X-Courtpit-Community: <slug>`; browsers are resolved from the host (`<slug>.courtpit.app` or a \
+`X-RacquetCollective-Community: <slug>`; browsers are resolved from the host (`<slug>.racquetcollective.app` or a \
 registered custom domain). The header wins over the host. A request without a resolvable \
 community answers `400`, an unknown one `404`.\n\n\
 **Authentication.** A session is an opaque token, sent as `Authorization: Bearer <token>` \
-(native) or as the `courtpit_session` cookie (web; ask for it at sign-in with \
-`X-Courtpit-Client: web`). Either one authenticates.\n\n\
+(native) or as the `racquetcollective_session` cookie (web; ask for it at sign-in with \
+`X-RacquetCollective-Client: web`). Either one authenticates.\n\n\
 **Errors.** Every error is `{ \"error\": { \"code\", \"message\" } }`; clients switch on `code`.\n\n\
 **Lists** are cursor-paginated: `?cursor=&limit=` in, `{ items, next_cursor }` out.";
 
 /// The document every route registers into; [`ApiConventions`] finishes it.
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "Courtpit API", version = "0.1.0", description = DESCRIPTION),
+    info(title = "Racquet Collective API", version = "0.1.0", description = DESCRIPTION),
     components(schemas(ErrorBody)),
     tags(
         (name = "health", description = "Liveness and readiness probes."),

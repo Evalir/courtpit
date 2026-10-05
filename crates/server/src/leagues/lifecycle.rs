@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
-use courtpit_domain::{
+use racquetcollective_domain::{
     EntryId, Placed, PlayerId, Previous, RankingEvent, RankingSource, Seed, movements, place,
     playable, round_robin,
 };

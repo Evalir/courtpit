@@ -156,7 +156,7 @@ pub struct OtpVerify {
 }
 
 /// A new session. `token` is omitted when it was delivered as a cookie
-/// (`X-Courtpit-Client: web`).
+/// (`X-RacquetCollective-Client: web`).
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AuthSession {
     /// Bearer token for the session.

@@ -1,7 +1,7 @@
 //! League rows, effective rules (format and scoring) and the shared loaders.
 
 use chrono::{DateTime, Utc};
-use courtpit_domain::{BoxSize, Discipline, MatchFormat, ScoringConfig};
+use racquetcollective_domain::{BoxSize, Discipline, MatchFormat, ScoringConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{FromRow, types::Json};

@@ -11,7 +11,7 @@ import { Text } from "@/ui/Text";
 
 import { promptDue } from "./prompt";
 
-const SNOOZED_KEY = "courtpit.pushPromptSnoozedAt";
+const SNOOZED_KEY = "racquetcollective.pushPromptSnoozedAt";
 
 /**
  * Offers push on Home, where its value is obvious, instead of asking at launch. Shown only while
