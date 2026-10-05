@@ -212,6 +212,7 @@ fly machine run \
   --restart no \
   --vm-size shared-cpu-1x --vm-memory 512 \
   --metadata courtpit_role=tick \
+  --env COURTPIT_ENV=production \
   --env COURTPIT_LOG_FORMAT=json \
   --env COURTPIT_MAILER=resend \
   --env COURTPIT_BASE_DOMAIN=courtpit.app \
@@ -272,7 +273,9 @@ with the `X-Courtpit-Community: <slug>` header, which takes precedence over the 
 
 **Per-community custom domains** (e.g. `tennis.example.org`): add the certificate, have the
 club point the name at the app (`CNAME` to `my-courtpit.fly.dev`, or `A`/`AAAA` to the same
-addresses), and register it on the community:
+addresses), and register it on the community. Use a dedicated name, not the club's apex
+(`example.org`): responses carry HSTS with `includeSubDomains`, which would make browsers refuse
+plain HTTP on every one of the club's subdomains for two years.
 
 ```sh
 fly certs add tennis.example.org
@@ -341,6 +344,11 @@ The runtime copies the export to `/app/web` and sets `COURTPIT_WEB_DIR=/app/web`
 - Content-hashed files under `/_expo/static/` and `/assets/` are cached for a year
   (`immutable`); everything else is `no-cache`, so a deploy reaches users on their next load.
 - Unknown `/api/…` paths answer with the usual JSON `not_found` error, never the app.
+- Every response, the API's included, carries `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and
+  `Content-Security-Policy: frame-ancestors 'none'` (the app cannot be framed), plus
+  `Strict-Transport-Security` (two years, subdomains included) while `COURTPIT_COOKIE_SECURE`
+  is on (decision 103).
 
 The export is built without `EXPO_PUBLIC_COMMUNITY`, so one image serves every community: the
 browser's `Host` (`{slug}.courtpit.app` or a custom domain, section 8) picks the community and the

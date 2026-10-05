@@ -24,6 +24,8 @@ release_command = "courtpit-server migrate"
 # specific to one deployment goes through `fly secrets set` instead (docs/deploy.md).
 # The deploy workflow copies the COURTPIT_* values below onto the tick Machine as well.
 [env]
+# Marks the deployment as production: `courtpit-server seed` refuses to run here.
+COURTPIT_ENV = "production"
 COURTPIT_BIND = "0.0.0.0:8080"
 COURTPIT_LOG_FORMAT = "json"
 # Fly's proxy sets `Fly-Client-IP`; trust only that header for per-IP auth rate limits.

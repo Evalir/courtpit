@@ -25,7 +25,8 @@ pub struct Config {
     /// Session lifetime in days.
     #[arg(long, env = "COURTPIT_SESSION_TTL_DAYS", default_value_t = 30)]
     pub session_ttl_days: i64,
-    /// Mark the session cookie `Secure` (disable only for plain-HTTP local development).
+    /// Served over HTTPS: marks the session cookie `Secure` and sends `Strict-Transport-Security`
+    /// (disable only for plain-HTTP local development).
     #[arg(long, env = "COURTPIT_COOKIE_SECURE", default_value_t = true, action = clap::ArgAction::Set)]
     pub cookie_secure: bool,
     /// Auth requests (code requests, verifications, logins) allowed per client IP per hour.

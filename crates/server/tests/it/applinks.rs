@@ -1,10 +1,10 @@
 //! Universal-link and app-link association files, per community.
 
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use courtpit_server::applinks::{self, AndroidApp, AppLinks};
 use serde_json::json;
 
-use crate::{common::TestApp, web::Export};
+use crate::{common::TestApp, health::assert_security_headers, web::Export};
 
 #[tokio::test]
 async fn communities_publish_the_apps_that_open_their_links() {
@@ -23,12 +23,15 @@ async fn communities_publish_the_apps_that_open_their_links() {
     assert!(applinks::store(&app.db, "demo", &links).await.unwrap());
     assert!(!applinks::store(&app.db, "nobody", &links).await.unwrap());
 
-    let apple = app
+    let res = app
         .get("/.well-known/apple-app-site-association")
         .community("demo")
         .send()
-        .await
-        .expect(StatusCode::OK);
+        .await;
+    // Apple and Google fetch these as JSON; the security headers change nothing for them.
+    assert_eq!(res.headers[header::CONTENT_TYPE], "application/json");
+    assert_security_headers(&res, false);
+    let apple = res.expect(StatusCode::OK);
     let details = &apple["applinks"]["details"][0];
     assert_eq!(details["appIDs"], json!(["TEAM123.app.courtpit.demo"]));
     assert_eq!(
@@ -36,12 +39,14 @@ async fn communities_publish_the_apps_that_open_their_links() {
         json!({ "/": "/api/*", "exclude": true, "comment": "The API is not a page" })
     );
     assert_eq!(details["components"][1], json!({ "/": "*" }));
-    let android = app
+    let res = app
         .get("/.well-known/assetlinks.json")
         .community("demo")
         .send()
-        .await
-        .expect(StatusCode::OK);
+        .await;
+    assert_eq!(res.headers[header::CONTENT_TYPE], "application/json");
+    assert_security_headers(&res, false);
+    let android = res.expect(StatusCode::OK);
     assert_eq!(
         android,
         json!([{
