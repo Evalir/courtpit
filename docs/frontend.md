@@ -69,8 +69,9 @@ to `COURTPIT_DEV_API` (default `http://127.0.0.1:8080`); Expo Go on a phone reac
 same way, through the host it loaded the bundle from.
 
 App identity for native builds (`COURTPIT_APP_NAME`, `COURTPIT_BUNDLE_ID`, `COURTPIT_SCHEME`,
-`COURTPIT_EAS_PROJECT_ID`, `COURTPIT_WEB_HOST`) is read by `app.config.ts`; per-community EAS
-build profiles that set these arrive with spec step 7.
+`COURTPIT_EAS_PROJECT_ID`, `COURTPIT_WEB_HOST`, `COURTPIT_ICON`) is read by `app.config.ts` and
+set per community by its EAS build profile in `eas.json`; `docs/release.md` walks through
+shipping a community's app (decision 101).
 
 **Links.** With `COURTPIT_WEB_HOST` set, the build claims the community's https links: iOS
 `associatedDomains` (`applinks:` and `webcredentials:`) and an Android `VIEW` intent filter with
@@ -366,7 +367,7 @@ proposed time and place, that opens on its match page (decision 89).
 | F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in (done) |
 | F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
 | F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation (done) |
-| F8 | Native: Apple/Google sign-in, push and deep links (spec step 6), per-community EAS profiles and store submission (spec step 7) |
+| F8 | Native: Apple/Google sign-in, push and deep links (spec step 6), per-community EAS profiles and store submission (spec step 7) (done) |
 
 Payments (spec step 4) and tournaments (step 5) slot in after F4 as the server gains them.
 

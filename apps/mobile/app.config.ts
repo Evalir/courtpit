@@ -8,7 +8,9 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * - `COURTPIT_APP_NAME`   store / home-screen name
  * - `COURTPIT_BUNDLE_ID`  iOS bundle identifier and Android package
  * - `COURTPIT_SCHEME`     deep-link scheme
- * - `COURTPIT_EAS_PROJECT_ID` the EAS project, which push tokens are issued for
+ * - `COURTPIT_EAS_PROJECT_ID` the community's EAS project: push tokens are issued for it and
+ *                         EAS Update serves its JS updates (none without it)
+ * - `COURTPIT_ICON`       the community's app icon (a path under `apps/mobile`), if it has one
  * - `COURTPIT_GOOGLE_IOS_URL_SCHEME` the reversed iOS OAuth client id
  *                         (`com.googleusercontent.apps.…`); Google sign-in is built in only with it.
  *                         The client ids themselves are `EXPO_PUBLIC_GOOGLE_*_CLIENT_ID` (decision 100).
@@ -19,6 +21,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * (`src/api/config.ts`), so they also apply to the web build.
  */
 const webHost = process.env.COURTPIT_WEB_HOST;
+const projectId = process.env.COURTPIT_EAS_PROJECT_ID;
 const googleUrlScheme = process.env.COURTPIT_GOOGLE_IOS_URL_SCHEME;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
@@ -27,7 +30,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "courtpit",
   version: "0.1.0",
   scheme: process.env.COURTPIT_SCHEME ?? "courtpit",
+  ...(process.env.COURTPIT_ICON ? { icon: process.env.COURTPIT_ICON } : {}),
   orientation: "portrait",
+  // JS updates reach builds of the same app version (EAS Update, spec §16).
+  runtimeVersion: { policy: "appVersion" },
+  ...(projectId ? { updates: { url: `https://u.expo.dev/${projectId}` } } : {}),
   // Branding defines a light palette only; see docs/frontend.md (Theming).
   userInterfaceStyle: "light",
   ios: {
@@ -73,7 +80,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       : []),
   ],
   extra: {
-    eas: { projectId: process.env.COURTPIT_EAS_PROJECT_ID },
+    eas: { projectId },
   },
   experiments: {
     typedRoutes: true,
