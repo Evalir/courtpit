@@ -6,7 +6,7 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use courtpit_domain::Discipline;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -16,7 +16,7 @@ use crate::{
     auth::CurrentPlayer,
     extract::{ApiJson, ApiPath, ApiQuery},
     leagues::{
-        self, LeagueRow, LeagueStatus,
+        self, LEAGUE_COLUMNS, LeagueRow, LeagueStatus, LeagueView,
         entries::{self, ENTRY_COLUMNS, EntryRow, EntryStatus, EntryView},
     },
     players,
@@ -62,6 +62,34 @@ pub struct Register {
     pub looking_for_partner: bool,
 }
 
+/// Checks a doubles/mixed partner choice: an invited partner who may play with the caller
+/// (a partner still on their own solo entry may be invited; accepting withdraws it), or a
+/// solo listing as looking for one.
+async fn check_partner(
+    tx: &mut TenantTx,
+    player: &CurrentPlayer,
+    league: Uuid,
+    discipline: Discipline,
+    body: Register,
+) -> ApiResult<()> {
+    match body.partner_id {
+        Some(partner) => {
+            if partner == player.id {
+                return Err(ApiError::validation("you cannot partner yourself"));
+            }
+            players::require_active_members(tx, &[partner]).await?;
+            entries::require_unpaired(tx, league, partner, "your partner is").await?;
+            entries::check_mixed(tx, &player.tenant, discipline, &[player.id, partner]).await
+        }
+        None if body.looking_for_partner => {
+            entries::check_mixed(tx, &player.tenant, discipline, &[player.id]).await
+        }
+        None => Err(ApiError::validation(
+            "name a partner_id or set looking_for_partner",
+        )),
+    }
+}
+
 /// Registers the caller. Singles entries are confirmed immediately; doubles and mixed
 /// entries wait for the invited partner (or a pairing) as `pending_partner`.
 #[utoipa::path(post, path = "/api/v1/leagues/{id}/entries", tag = "leagues",
@@ -81,30 +109,14 @@ pub async fn register(
     let league = open_league(&state, &mut tx, league_id, &player).await?;
     let discipline = league.discipline();
     entries::require_not_entered(&mut tx, league_id, player.id, "you are").await?;
-    let status = match (discipline, body.partner_id, body.looking_for_partner) {
-        (Discipline::Singles, None, false) => EntryStatus::Confirmed,
-        (Discipline::Singles, _, _) => {
+    let status = if discipline == Discipline::Singles {
+        if body.partner_id.is_some() || body.looking_for_partner {
             return Err(ApiError::validation("singles entries have no partner"));
         }
-        (_, None, false) => {
-            return Err(ApiError::validation(
-                "name a partner_id or set looking_for_partner",
-            ));
-        }
-        (_, Some(partner), _) => {
-            if partner == player.id {
-                return Err(ApiError::validation("you cannot partner yourself"));
-            }
-            players::require_active_members(&mut tx, &[partner]).await?;
-            entries::require_not_entered(&mut tx, league_id, partner, "your partner is").await?;
-            entries::check_mixed(&mut tx, &player.tenant, discipline, &[player.id, partner])
-                .await?;
-            EntryStatus::PendingPartner
-        }
-        (_, None, true) => {
-            entries::check_mixed(&mut tx, &player.tenant, discipline, &[player.id]).await?;
-            EntryStatus::PendingPartner
-        }
+        EntryStatus::Confirmed
+    } else {
+        check_partner(&mut tx, &player, league_id, discipline, body).await?;
+        EntryStatus::PendingPartner
     };
     let id = Uuid::now_v7();
     let _ = sqlx::query(
@@ -174,8 +186,10 @@ pub async fn list_entries(
     Ok(Json(views))
 }
 
-/// Completes a pending doubles/mixed entry with its second player and confirms it.
+/// Completes a pending doubles/mixed entry with its second player and confirms it. Other
+/// entries' invitations to either player lapse, so their creators can ask someone else.
 async fn complete(tx: &mut TenantTx, entry: &EntryRow, partner: Uuid) -> ApiResult<()> {
+    let pair = vec![entry.created_by, partner];
     let _ = sqlx::query(
         "UPDATE league_entries SET player_ids = $3, status = 'confirmed',
             looking_for_partner = false, invited_partner_id = NULL, updated_at = now()
@@ -183,7 +197,17 @@ async fn complete(tx: &mut TenantTx, entry: &EntryRow, partner: Uuid) -> ApiResu
     )
     .bind(tx.community_id())
     .bind(entry.id)
-    .bind(vec![entry.created_by, partner])
+    .bind(&pair)
+    .execute(&mut **tx)
+    .await?;
+    let _ = sqlx::query(
+        "UPDATE league_entries SET invited_partner_id = NULL, updated_at = now()
+         WHERE community_id = $1 AND league_id = $2 AND status = 'pending_partner'
+           AND invited_partner_id = ANY($3)",
+    )
+    .bind(tx.community_id())
+    .bind(entry.league_id)
+    .bind(&pair)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -269,6 +293,113 @@ pub async fn decline_invite(
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
     Ok(res)
+}
+
+/// Changes who a solo doubles/mixed entry waits for: invites a partner (replacing any open
+/// invitation, e.g. after a decline) or lists the entry as looking for one. Only its creator,
+/// only while registration is open.
+#[utoipa::path(post, path = "/api/v1/leagues/{id}/entries/{entry_id}/partner", tag = "leagues",
+    params(("id" = Uuid, Path), ("entry_id" = Uuid, Path)), request_body = Register,
+    security(("bearer" = [])),
+    responses((status = 200, body = EntryView), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody),
+        (status = 422, body = crate::error::ErrorBody)))]
+pub async fn change_partner(
+    State(state): State<AppState>,
+    player: CurrentPlayer,
+    ApiPath((league_id, entry_id)): ApiPath<(Uuid, Uuid)>,
+    ApiJson(body): ApiJson<Register>,
+) -> ApiResult<Json<EntryView>> {
+    player.require_verified()?;
+    let mut tx = player.tenant.begin(&state.db).await?;
+    let league = open_league(&state, &mut tx, league_id, &player).await?;
+    let entry = entries::load(&mut tx, league_id, entry_id).await?;
+    if entry.created_by != player.id {
+        return Err(ApiError::forbidden(
+            "only the player who registered the entry can change its partner",
+        ));
+    }
+    if entry.status != EntryStatus::PendingPartner || entry.player_ids.len() != 1 {
+        return Err(ApiError::conflict(
+            "this entry is no longer waiting for a partner",
+        ));
+    }
+    check_partner(&mut tx, &player, league_id, league.discipline(), body).await?;
+    let _ = sqlx::query(
+        "UPDATE league_entries SET invited_partner_id = $3, looking_for_partner = $4,
+            updated_at = now()
+         WHERE community_id = $1 AND id = $2",
+    )
+    .bind(tx.community_id())
+    .bind(entry_id)
+    .bind(body.partner_id)
+    .bind(body.partner_id.is_none())
+    .execute(&mut *tx)
+    .await?;
+    let res = respond(&mut tx, league_id, entry_id, &player).await?;
+    tx.commit().await?;
+    Ok(res)
+}
+
+/// One of the caller's entries or invitations, with its league.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyEntry {
+    /// The league the entry is in.
+    pub league: LeagueView,
+    /// The entry, as its players see it.
+    pub entry: EntryView,
+}
+
+/// The caller's live entries (their own, and entries inviting them as partner) in leagues
+/// that have not finished or been cancelled, by league start. Bounded by the community's
+/// live leagues, so not paginated.
+#[utoipa::path(get, path = "/api/v1/me/entries", tag = "me", security(("bearer" = [])),
+    responses((status = 200, body = Vec<MyEntry>)))]
+pub async fn my_entries(
+    State(state): State<AppState>,
+    player: CurrentPlayer,
+) -> ApiResult<Json<Vec<MyEntry>>> {
+    let mut tx = player.tenant.begin(&state.db).await?;
+    let leagues: Vec<LeagueRow> = sqlx::query_as(&format!(
+        "SELECT {LEAGUE_COLUMNS} FROM leagues
+         WHERE community_id = $1 AND status IN ('draft', 'registration', 'active')
+           AND id IN (SELECT league_id FROM league_entries
+                      WHERE community_id = $1 AND status <> 'withdrawn'
+                        AND (player_ids @> ARRAY[$2]::uuid[] OR invited_partner_id = $2))
+         ORDER BY starts_at, id"
+    ))
+    .bind(tx.community_id())
+    .bind(player.id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let ids: Vec<Uuid> = leagues.iter().map(|league| league.id).collect();
+    let rows: Vec<EntryRow> = sqlx::query_as(&format!(
+        "SELECT {ENTRY_COLUMNS} FROM league_entries
+         WHERE community_id = $1 AND league_id = ANY($3) AND status <> 'withdrawn'
+           AND (player_ids @> ARRAY[$2]::uuid[] OR invited_partner_id = $2)
+         ORDER BY created_at, id"
+    ))
+    .bind(tx.community_id())
+    .bind(player.id)
+    .bind(&ids)
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut views = EntryView::for_viewer(&mut tx, rows, &player).await?;
+    tx.commit().await?;
+    let mut mine = Vec::with_capacity(views.len());
+    for league in leagues {
+        let id = league.id;
+        let view = LeagueView::new(league, &player.tenant)?;
+        let (here, rest): (Vec<_>, Vec<_>) =
+            views.into_iter().partition(|entry| entry.league_id == id);
+        views = rest;
+        mine.extend(here.into_iter().map(|entry| MyEntry {
+            league: view.clone(),
+            entry,
+        }));
+    }
+    Ok(Json(mine))
 }
 
 /// Withdraws an entry: its players while registration is open, admins until the league

@@ -434,6 +434,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leagues/{id}/entries/{entry_id}/partner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Changes who a solo doubles/mixed entry waits for: invites a partner (replacing any open
+         *     invitation, e.g. after a decline) or lists the entry as looking for one. Only its creator,
+         *     only while registration is open.
+         */
+        post: operations["change_partner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leagues/{id}/entries/{entry_id}/withdraw": {
         parameters: {
             query?: never;
@@ -747,6 +768,27 @@ export interface paths {
         head?: never;
         /** Updates the signed-in player's profile. */
         patch: operations["patch_me"];
+        trace?: never;
+    };
+    "/api/v1/me/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's live entries (their own, and entries inviting them as partner) in leagues
+         *     that have not finished or been cancelled, by league start. Bounded by the community's
+         *     live leagues, so not paginated.
+         */
+        get: operations["my_entries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/me/export": {
@@ -1542,6 +1584,13 @@ export interface components {
             account: components["schemas"]["Account"];
             /** @description Profile in the request community. */
             player: components["schemas"]["PlayerProfile"];
+        };
+        /** @description One of the caller's entries or invitations, with its league. */
+        MyEntry: {
+            /** @description The entry, as its players see it. */
+            entry: components["schemas"]["EntryView"];
+            /** @description The league the entry is in. */
+            league: components["schemas"]["LeagueView"];
         };
         /** @description Body for OIDC sign-in and linking. */
         OidcLogin: {
@@ -3862,6 +3911,87 @@ export interface operations {
             };
         };
     };
+    change_partner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Register"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryView"];
+                };
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     withdraw: {
         parameters: {
             query?: never;
@@ -5133,6 +5263,44 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    my_entries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEntry"][];
+                };
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
