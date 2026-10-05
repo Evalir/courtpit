@@ -1,0 +1,48 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_COMMUNITY": "demo",
+        "EXPO_PUBLIC_API_URL": "https://demo.courtpit.app",
+        "COURTPIT_APP_NAME": "Courtpit (dev)",
+        "COURTPIT_BUNDLE_ID": "app.courtpit.dev",
+        "COURTPIT_SCHEME": "courtpit-dev"
+      }
+    },
+    "store": {
+      "distribution": "store",
+      "autoIncrement": true
+    },
+    "demo": {
+      "extends": "store",
+      "channel": "demo",
+      "env": {
+        "EXPO_PUBLIC_COMMUNITY": "demo",
+        "EXPO_PUBLIC_API_URL": "https://demo.courtpit.app",
+        "COURTPIT_APP_NAME": "Riverside Tennis",
+        "COURTPIT_BUNDLE_ID": "app.courtpit.demo",
+        "COURTPIT_SCHEME": "courtpit-demo",
+        "COURTPIT_WEB_HOST": "demo.courtpit.app"
+      }
+    },
+    "demo-preview": {
+      "extends": "demo",
+      "distribution": "internal",
+      "channel": "demo-preview"
+    }
+  },
+  "submit": {
+    "demo": {
+      "android": {
+        "serviceAccountKeyPath": "./secrets/demo-play-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}

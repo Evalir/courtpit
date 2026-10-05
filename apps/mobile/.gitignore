@@ -5,3 +5,6 @@ web-build/
 ios/
 android/
 *.tsbuildinfo
+
+# Store credentials for `eas submit` (see docs/release.md); never committed.
+secrets/
