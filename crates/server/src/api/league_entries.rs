@@ -19,7 +19,7 @@ use crate::{
         self, LEAGUE_COLUMNS, LeagueRow, LeagueStatus, LeagueView,
         entries::{self, ENTRY_COLUMNS, EntryRow, EntryStatus, EntryView},
     },
-    players,
+    notify, players,
 };
 
 /// Loads a league the caller can see, locked, and requires registration to be open now.
@@ -90,6 +90,24 @@ async fn check_partner(
     }
 }
 
+/// Tells an invited partner (if any) about the entry waiting for them.
+async fn invite(
+    state: &AppState,
+    tx: &mut TenantTx,
+    league_id: Uuid,
+    entry_id: Uuid,
+    player: &CurrentPlayer,
+    partner: Option<Uuid>,
+) -> ApiResult<()> {
+    let event = notify::Event::PartnerInvited {
+        league_id,
+        entry_id,
+        by: player.id,
+    };
+    notify::tell(tx, partner, event, state.clock.now()).await?;
+    Ok(())
+}
+
 /// Registers the caller. Singles entries are confirmed immediately; doubles and mixed
 /// entries wait for the invited partner (or a pairing) as `pending_partner`.
 #[utoipa::path(post, path = "/api/v1/leagues/{id}/entries", tag = "leagues",
@@ -134,6 +152,7 @@ pub async fn register(
     .bind(body.partner_id)
     .execute(&mut *tx)
     .await?;
+    invite(&state, &mut tx, league_id, id, &player, body.partner_id).await?;
     let res = respond(&mut tx, league_id, id, &player).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, res))
@@ -261,6 +280,12 @@ pub async fn accept_invite(
     let pair = [entry.created_by, player.id];
     entries::check_mixed(&mut tx, &player.tenant, league.discipline(), &pair).await?;
     complete(&mut tx, &entry, player.id).await?;
+    let event = notify::Event::PartnerAccepted {
+        league_id,
+        entry_id,
+        by: player.id,
+    };
+    notify::tell(&mut tx, [entry.created_by], event, state.clock.now()).await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
     Ok(res)
@@ -290,6 +315,12 @@ pub async fn decline_invite(
     .bind(entry_id)
     .execute(&mut *tx)
     .await?;
+    let event = notify::Event::PartnerDeclined {
+        league_id,
+        entry_id,
+        by: player.id,
+    };
+    notify::tell(&mut tx, [entry.created_by], event, state.clock.now()).await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;
     Ok(res)
@@ -336,6 +367,15 @@ pub async fn change_partner(
     .bind(body.partner_id)
     .bind(body.partner_id.is_none())
     .execute(&mut *tx)
+    .await?;
+    invite(
+        &state,
+        &mut tx,
+        league_id,
+        entry_id,
+        &player,
+        body.partner_id,
+    )
     .await?;
     let res = respond(&mut tx, league_id, entry_id, &player).await?;
     tx.commit().await?;

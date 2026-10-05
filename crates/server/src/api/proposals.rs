@@ -165,6 +165,7 @@ pub async fn accept_proposal(
     let proposers = match_row.players(proposed_by).to_vec();
     notify::tell(&mut tx, proposers, event, state.clock.now()).await?;
     let match_row = matches::load(&mut tx, id, false).await?;
+    notify::schedule_reminders(&mut tx, &match_row, state.clock.now()).await?;
     let view = matches::view_with_proposals(&mut tx, match_row).await?;
     tx.commit().await?;
     Ok(Json(view))
