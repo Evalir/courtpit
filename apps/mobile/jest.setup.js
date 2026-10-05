@@ -29,3 +29,21 @@ jest.mock("expo-notifications", () => ({
   AndroidImportance: { DEFAULT: 3 },
 }));
 jest.mock("expo-device", () => ({ isDevice: false }));
+
+// Apple and Google sign-in are native modules; tests see them unavailable.
+jest.mock("@react-native-google-signin/google-signin", () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(async () => true),
+    signIn: jest.fn(),
+  },
+  isSuccessResponse: (response) => response?.type === "success",
+}));
+jest.mock("expo-apple-authentication", () => ({
+  isAvailableAsync: jest.fn(async () => false),
+  signInAsync: jest.fn(),
+  AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+  AppleAuthenticationButton: () => null,
+  AppleAuthenticationButtonType: { CONTINUE: 1 },
+  AppleAuthenticationButtonStyle: { BLACK: 2 },
+}));

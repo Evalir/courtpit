@@ -9,6 +9,9 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * - `COURTPIT_BUNDLE_ID`  iOS bundle identifier and Android package
  * - `COURTPIT_SCHEME`     deep-link scheme
  * - `COURTPIT_EAS_PROJECT_ID` the EAS project, which push tokens are issued for
+ * - `COURTPIT_GOOGLE_IOS_URL_SCHEME` the reversed iOS OAuth client id
+ *                         (`com.googleusercontent.apps.…`); Google sign-in is built in only with it.
+ *                         The client ids themselves are `EXPO_PUBLIC_GOOGLE_*_CLIENT_ID` (decision 100).
  * - `COURTPIT_WEB_HOST`   the community's web host (`riverside.courtpit.app`): its https links
  *                         open in the app (universal links / app links, decision 99)
  *
@@ -16,6 +19,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * (`src/api/config.ts`), so they also apply to the web build.
  */
 const webHost = process.env.COURTPIT_WEB_HOST;
+const googleUrlScheme = process.env.COURTPIT_GOOGLE_IOS_URL_SCHEME;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -29,6 +33,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: process.env.COURTPIT_BUNDLE_ID ?? "app.courtpit.dev",
     supportsTablet: true,
+    usesAppleSignIn: true,
     ...(webHost ? { associatedDomains: [`applinks:${webHost}`, `webcredentials:${webHost}`] } : {}),
   },
   android: {
@@ -57,6 +62,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-font",
     ["expo-splash-screen", { backgroundColor: "#ffffff" }],
     ["expo-notifications", { defaultChannel: "default" }],
+    "expo-apple-authentication",
+    ...(googleUrlScheme
+      ? [
+          ["@react-native-google-signin/google-signin", { iosUrlScheme: googleUrlScheme }] as [
+            string,
+            object,
+          ],
+        ]
+      : []),
   ],
   extra: {
     eas: { projectId: process.env.COURTPIT_EAS_PROJECT_ID },

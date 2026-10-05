@@ -1,10 +1,10 @@
-import Constants from "expo-constants";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Platform, View } from "react-native";
+import { View } from "react-native";
 
 import { useApi } from "@/api/client";
 import { describeError } from "@/api/errors";
+import { deviceLabel } from "@/session/device";
 import { useSession } from "@/session/SessionProvider";
 import { createStyles } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
@@ -16,8 +16,6 @@ import { TextField } from "@/ui/TextField";
 const CODE_LENGTH = 6;
 
 /** Shown in the account's session list ("Ana's iPhone"). */
-const deviceLabel =
-  Constants.deviceName ?? (Platform.OS === "web" ? "Web browser" : `${Platform.OS} app`);
 
 /** Step 2 of sign-in: the emailed code. Submits by itself once six digits are in. */
 export default function Verify() {
