@@ -4,6 +4,18 @@ import * as SecureStore from "expo-secure-store";
 // Also installs the router's Jest mocks (linking, native modules).
 import { getMockContext } from "expo-router/testing-library";
 
+import { themeFromBranding } from "@/theme/theme";
+
+// The device's light/dark setting; light unless a test says otherwise.
+let mockSystemScheme: "light" | "dark" = "light";
+jest.mock("react-native/Libraries/Utilities/useColorScheme", () => ({
+  __esModule: true,
+  default: () => mockSystemScheme,
+}));
+afterEach(() => {
+  mockSystemScheme = "light";
+});
+
 // The demo community as `GET /api/v1/tenant` returns it.
 const tenant = {
   slug: "demo",
@@ -64,6 +76,18 @@ describe("boot", () => {
     // Native: the community header on every request; no stored token, so no session check.
     expect(requests.map((request) => new URL(request.url).pathname)).toEqual(["/api/v1/tenant"]);
     expect(requests[0]?.headers.get("X-Courtpit-Community")).toBe("demo");
+  });
+
+  it("draws the community's dark theme on a device set to dark", async () => {
+    mockSystemScheme = "dark";
+    stubApi({ "/api/v1/tenant": () => ({ status: 200, body: tenant }) });
+
+    const view = await renderApp();
+
+    const heading = await view.findByText("Sign in or join", {}, slow);
+    const { colors } = themeFromBranding(tenant.branding, "dark");
+    expect(heading).toHaveStyle({ color: colors.text });
+    expect(colors.text).not.toBe(themeFromBranding(tenant.branding, "light").colors.text);
   });
 
   it("explains a failed boot and offers a retry", async () => {

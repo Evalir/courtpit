@@ -5,6 +5,7 @@ import { useApi } from "@/api/client";
 import { formatDate, formatUtr, playPrefLabel } from "@/features/format";
 import { Detail, DetailsCard, gearLine, socialsLine } from "@/features/players/ProfileDetails";
 import { isAdmin } from "@/features/admin/roles";
+import { AppearancePicker } from "@/features/profile/AppearancePicker";
 import { ExportButton } from "@/features/profile/ExportButton";
 import { useSession } from "@/session/SessionProvider";
 import { useCommunity } from "@/tenant/TenantProvider";
@@ -103,6 +104,9 @@ export default function Profile() {
             .filter(Boolean)
             .join(", ")}
         />
+      </DetailsCard>
+      <DetailsCard title="Appearance">
+        <AppearancePicker />
       </DetailsCard>
       {isAdmin(player.role) ? (
         <Button
