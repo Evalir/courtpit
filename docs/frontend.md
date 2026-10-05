@@ -180,7 +180,7 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Match: settle, walk over, cancel (admins) | `/matches/[id]`, `/admin/matches/[id]/resolve` (modal) | `POST /admin/matches/{id}/resolve`, `…/walkover`, `POST /matches/{id}/cancel` | built |
 | Club admin: create a league, drafts | `/admin`, `/admin/leagues/new` (modal) | `POST /admin/leagues`, `GET /leagues?status=draft` | built |
 | League: edit, publish, cancel (admins) | `/leagues/[id]`, `/admin/leagues/[id]/edit` (modal) | `PATCH /admin/leagues/{id}`, `…/publish`, `…/cancel` | built |
-| League: pair solo entries, unresolved matches, finish (admins) | `/leagues/[id]` | `POST /admin/leagues/{id}/pair`, `GET …/unresolved`, `POST …/finish` | F7 |
+| League: pair solo entries, unresolved matches, finish (admins) | `/leagues/[id]` | `POST /admin/leagues/{id}/pair`, `GET …/unresolved`, `POST …/finish?force=` | built |
 
 ## 7. Data conventions
 
@@ -284,6 +284,11 @@ may moderate admins).
   server's rules (`features/admin/leagueForm.ts`) and an edit sends only what changed. A
   league page shows admins Publish (drafts), Edit (until registration opens) and Cancel; the
   hub lists drafts.
+- **Seasons.** While a doubles or mixed league takes entries, admins see its solo entries and
+  pair two (the first keeps the entry; the server applies the mixed rule). Once it is active,
+  they see the matches still waiting for a result and, after its last day, "Finish the season";
+  with matches still open it asks before finishing anyway (`force`), which leaves them out of
+  the final table.
 
 ### Match requests
 
@@ -326,7 +331,7 @@ proposed time and place, that opens on its match page (decision 89).
 | F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view (done) |
 | F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in (done) |
 | F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
-| F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation |
+| F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation (done) |
 | F8 | Native: Apple/Google sign-in, push and deep links (spec step 6), per-community EAS profiles and store submission (spec step 7) |
 
 Payments (spec step 4) and tournaments (step 5) slot in after F4 as the server gains them.
