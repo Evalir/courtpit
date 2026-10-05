@@ -187,23 +187,28 @@ pub struct ClaimedJob {
     pub attempts: i32,
 }
 
-/// Claims up to `limit` jobs due at `now`. Concurrent callers never receive the same job.
-pub async fn claim(
-    db: &PgPool,
+/// Claims up to `limit` jobs due at `now`, earliest due first. Concurrent callers never
+/// receive the same job.
+pub async fn claim<'e>(
+    db: impl PgExecutor<'e>,
     worker: &str,
     limit: i64,
     now: DateTime<Utc>,
 ) -> Result<Vec<ClaimedJob>, sqlx::Error> {
     sqlx::query_as(
-        "UPDATE jobs SET locked_at = $4, locked_by = $1, attempts = attempts + 1
-         WHERE id IN (
-             SELECT id FROM jobs
-             WHERE completed_at IS NULL AND failed_at IS NULL AND run_at <= $4
-               AND (locked_at IS NULL OR locked_at < $4 - make_interval(secs => $3))
-             ORDER BY run_at, id
-             LIMIT $2
-             FOR UPDATE SKIP LOCKED)
-         RETURNING id, kind, payload, attempts",
+        // `RETURNING` follows the join plan, not the subquery's order, so the batch is sorted
+        // again outside: callers run it in order, and a job due earlier must run first.
+        "WITH claimed AS (
+             UPDATE jobs SET locked_at = $4, locked_by = $1, attempts = attempts + 1
+             WHERE id IN (
+                 SELECT id FROM jobs
+                 WHERE completed_at IS NULL AND failed_at IS NULL AND run_at <= $4
+                   AND (locked_at IS NULL OR locked_at < $4 - make_interval(secs => $3))
+                 ORDER BY run_at, id
+                 LIMIT $2
+                 FOR UPDATE SKIP LOCKED)
+             RETURNING id, kind, payload, attempts, run_at)
+         SELECT id, kind, payload, attempts FROM claimed ORDER BY run_at, id",
     )
     .bind(worker)
     .bind(limit)
