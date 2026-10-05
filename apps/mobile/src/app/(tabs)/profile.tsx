@@ -1,8 +1,10 @@
+import { router } from "expo-router";
 import { View } from "react-native";
 
 import { useApi } from "@/api/client";
 import { formatDate, formatUtr, playPrefLabel } from "@/features/format";
 import { Detail, DetailsCard, gearLine, socialsLine } from "@/features/players/ProfileDetails";
+import { ExportButton } from "@/features/profile/ExportButton";
 import { useSession } from "@/session/SessionProvider";
 import { useCommunity } from "@/tenant/TenantProvider";
 import { space } from "@/theme/tokens";
@@ -44,6 +46,22 @@ export default function Profile() {
         <Text variant="caption" tone="textMuted">
           Member of {community.name} since {formatDate(player.created_at)}
         </Text>
+        <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.sm }}>
+          <Button
+            label="Edit profile"
+            variant="secondary"
+            size="sm"
+            icon="create-outline"
+            onPress={() => router.push("/profile/edit")}
+          />
+          <Button
+            label="Points history"
+            variant="secondary"
+            size="sm"
+            icon="podium-outline"
+            onPress={() => router.push("/rankings/me")}
+          />
+        </View>
       </View>
       <DetailsCard title="Tennis">
         <Detail icon="tennisball-outline" label="Plays" value={playPrefLabel[player.play_pref]} />
@@ -86,11 +104,25 @@ export default function Profile() {
         />
       </DetailsCard>
       <Button
+        label={account.has_password ? "Change password" : "Set a password"}
+        variant="secondary"
+        icon="key-outline"
+        block
+        onPress={() => router.push("/profile/password")}
+      />
+      <ExportButton />
+      <Button
         label="Sign out"
         variant="danger"
         icon="log-out-outline"
         block
         onPress={() => void signOut()}
+      />
+      <Button
+        label="Delete account"
+        variant="ghost"
+        block
+        onPress={() => router.push("/profile/delete")}
       />
     </Screen>
   );

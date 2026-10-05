@@ -87,8 +87,14 @@ read by `app.config.ts`; per-community EAS build profiles that set these arrive 
   and drops every cached response except the community's.
 - **Guards.** The root stack wraps signed-in and signed-out screens in `Stack.Protected`; a
   signed-out deep link lands on sign-in.
-- **Not yet:** password sign-in and "set a password", Apple and Google, and returning to the
-  deep link after signing in.
+- **Returning.** Signing in carries on where the player was headed, pushed over Home so back
+  works: the link that opened the app (web reads the address before the router replaces it),
+  a link opened while signed out (native), or the screen the session expired on
+  (`session/returnTo.ts`, decision 92). Home, sign-in, verify and the delete screen are no
+  destinations.
+- **Passwords.** A signed-in player can set or change a password from Profile
+  (`PUT /auth/password`); email codes keep working.
+- **Not yet:** password sign-in on the sign-in screen, Apple and Google.
 
 ## 5. Theming (white-label)
 
@@ -125,7 +131,7 @@ Five tabs, chosen around what a club player does weekly:
 | **Play** | Open match requests (join one or post your own) and the player directory; challenge a player from their page |
 | **Leagues** | Seasons by status, marked where the player is in or invited; a league's dates, format, registration and box tables (the player's box first) |
 | **Rankings** | 52-week points per discipline (singles / doubles / mixed, by feature flag) |
-| **Profile** | The player's profile, contact visibility and account; editing next |
+| **Profile** | The player's profile and account: edit it, points history, password, data export, sign out, delete the account |
 
 Tab screens have no navigation header: a large title sits under the status bar. Detail screens
 (match, league, player) are pushed on the root stack with a header and back button. On web a
@@ -162,9 +168,12 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | League | `/leagues/[id]` | `GET /leagues/{id}`, `GET /leagues/{id}/standings` | built |
 | League: enter, partner invites, withdraw | `/leagues/[id]` | `GET/POST /leagues/{id}/entries`, `…/{entry_id}/accept`, `…/decline`, `…/partner`, `…/withdraw` | built |
 | Rankings | `/rankings` | `GET /rankings?discipline=` | built |
-| Points history | `/rankings/me` | `GET /rankings/events` | F5 |
+| Points history | `/rankings/me` | `GET /rankings/events?player_id=` | built |
 | Profile | `/profile` | `GET /me` | built |
-| Edit profile, password, export, delete account | `/profile/*` | `PATCH /me`, `PUT /auth/password`, `GET /me/export`, `DELETE /me` | F5 |
+| Edit profile | `/profile/edit` (modal) | `PATCH /me` | built |
+| Password | `/profile/password` (modal) | `PUT /auth/password` | built |
+| Download my data | `/profile` | `GET /me/export` (web: a JSON download; native: the share sheet) | built |
+| Delete account | `/profile/delete` (modal) | `DELETE /me` | built |
 | Admin: leagues, disputes, moderation | `/admin/*` | `/admin/*` | F7 |
 
 ## 7. Data conventions
@@ -228,6 +237,22 @@ viewer's entry, with the number of complete entries beside the heading.
 - **Leagues** marks each league "You’re in", "Entry pending" or "Invited" from `GET /me/entries`.
 - **An active league** lists the viewer's box first, titled "Your box".
 
+### Profile and account
+
+- **Edit profile** (`features/profile/profileForm.ts`, unit-tested) checks the server's limits
+  as the player types and sends only what changed (`PATCH /me`); an emptied optional field
+  clears it. UTR and tension accept a comma. Social handles are offered for Instagram, Facebook
+  and X; other networks a profile holds are sent back untouched. Visibility uses a themed
+  `Toggle` (React Native `Switch`).
+- **Points history** groups the ledger by month, links league matches and season finishes,
+  and greys out results older than 52 weeks (they no longer count, spec §12).
+- **Download my data** saves `courtpit-export-<date>.json` on web and opens the share sheet
+  on native (`saveExport.ts` / `.web.ts`, no new native module).
+- **Delete account** lists what happens and asks for the account's email before
+  `DELETE /me`, then signs the device out.
+- Modals close with `closeModal(fallback)`: back when there is history, else the fallback
+  (a modal opened straight from a link has nothing behind it).
+
 ### Match requests
 
 Play opens on the community's open requests when the `match_requests` feature is on (the
@@ -255,7 +280,7 @@ proposed time and place, that opens on its match page (decision 89).
   grouping, league dates and format descriptions) has plain unit tests next to the code.
 - `src/boot.test.tsx` mounts the real route tree with a stubbed `fetch`: tenant → theme →
   signed-out deep link lands on sign-in; a failed boot offers a retry; a stored native token
-  restores the session and Home shows the match and the league invitation that need the player.
+  restores the session and Home shows the match and the league invitation that need the player. Profile, ledger and return-to rules have unit tests next to them.
 - CI (`mobile` job) runs Prettier, ESLint, `tsc` (after generating Expo Router's route types),
   Jest and a production web export.
 
@@ -267,7 +292,7 @@ proposed time and place, that opens on its match page (decision 89).
 | F2 | Match actions: propose a time (day-and-slot picker), format-aware score entry checked like the server, cancel a friendly (done) |
 | F3 | Play: open match requests (list, create, join, leave), propose a friendly from a player page (done) |
 | F4 | League registration: enter, invite a partner, accept/decline, withdraw; "your box" view (done) |
-| F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in |
+| F5 | Profile editing, password, data export, account deletion, points history; return to the deep link after sign-in (done) |
 | F6 | `courtpit-server` serves the web export (same origin, SPA fallback, a Node stage in the Dockerfile) (done) |
 | F7 | Admin: create/publish leagues, resolve disputes, walkovers, moderation |
 | F8 | Native: Apple/Google sign-in, push and deep links (spec step 6), per-community EAS profiles and store submission (spec step 7) |

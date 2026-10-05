@@ -95,8 +95,8 @@ pub struct ProfilePatch {
     pub phone: Option<Option<String>>,
     /// Whether the phone number is public.
     pub phone_visible: Option<bool>,
-    /// New social handles (object of strings).
-    #[schema(value_type = Option<Object>)]
+    /// New social handles keyed by network (up to 10 strings).
+    #[schema(value_type = Option<std::collections::HashMap<String, String>>)]
     pub socials: Option<Value>,
     /// Whether social handles are public.
     pub socials_visible: Option<bool>,

@@ -1,6 +1,5 @@
 import type { components } from "@courtpit/api-client";
 import { useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -12,6 +11,7 @@ import { startOfDay } from "@/features/matches/when";
 import { WhenPicker } from "@/features/matches/WhenPicker";
 import { PlayerPicker } from "@/features/players/PlayerPicker";
 import { bandAround, levelLabel, windowLabel } from "@/features/requests/request";
+import { closeModal } from "@/features/navigation";
 import { useCommunity } from "@/tenant/TenantProvider";
 import { space } from "@/theme/tokens";
 import { Button } from "@/ui/Button";
@@ -43,7 +43,7 @@ export default function NewRequest() {
   const create = $api.useMutation("post", "/api/v1/match-requests", {
     onSuccess: async () => {
       await refreshAfterWrite(queryClient);
-      router.back();
+      closeModal("/play");
     },
   });
 

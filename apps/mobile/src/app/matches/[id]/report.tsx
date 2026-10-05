@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 
 import { useApi } from "@/api/client";
@@ -9,6 +9,7 @@ import { formatScore, sideOf } from "@/features/matches/match";
 import { ScoreForm } from "@/features/matches/ScoreForm";
 import { checkRows, scoreRows, type RowInput } from "@/features/matches/scoreForm";
 import { nameLookup, sideName } from "@/features/players/names";
+import { closeModal } from "@/features/navigation";
 import { useSignedIn } from "@/session/SessionProvider";
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
@@ -30,7 +31,7 @@ export default function ReportScore() {
   const report = $api.useMutation("post", "/api/v1/matches/{id}/score", {
     onSuccess: async () => {
       await refreshAfterWrite(queryClient);
-      router.back();
+      closeModal({ pathname: "/matches/[id]", params: { id } });
     },
   });
 

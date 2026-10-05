@@ -6514,7 +6514,13 @@
                     "object",
                     "null"
                   ],
-                  "description": "Social handles; only when the player opted in and the viewer is verified."
+                  "description": "Social handles; only when the player opted in and the viewer is verified.",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "propertyNames": {
+                    "type": "string"
+                  }
                 },
                 "strings": {
                   "type": [
@@ -6819,7 +6825,13 @@
           },
           "socials": {
             "type": "object",
-            "description": "Social handles keyed by network."
+            "description": "Social handles keyed by network.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "socials_visible": {
             "type": "boolean",
@@ -6908,7 +6920,13 @@
               "object",
               "null"
             ],
-            "description": "Social handles; only when the player opted in and the viewer is verified."
+            "description": "Social handles; only when the player opted in and the viewer is verified.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "strings": {
             "type": [
@@ -7041,7 +7059,13 @@
               "object",
               "null"
             ],
-            "description": "New social handles (object of strings)."
+            "description": "New social handles keyed by network (up to 10 strings).",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "socials_visible": {
             "type": [
