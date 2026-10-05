@@ -22,6 +22,7 @@ function match(overrides: Partial<MatchView>): MatchView {
       final_set: "match_tiebreak_10",
     },
     created_at: "2026-09-01T00:00:00Z",
+    names: [],
     ...overrides,
   };
 }

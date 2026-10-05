@@ -1178,6 +1178,8 @@ export interface components {
             league_id: string;
             /** @description Solo entry listed as looking for a partner. */
             looking_for_partner: boolean;
+            /** @description Names for the entry's players, its creator and (when shown) the invited partner. */
+            names: components["schemas"]["PlayerRef"][];
             /** @description The entry's players: one for singles or a solo entry, two for a pair. */
             player_ids: string[];
             /** @description Where the entry stands. */
@@ -1409,6 +1411,8 @@ export interface components {
              * @description The match created when the request filled.
              */
             match_id?: string | null;
+            /** @description Names of `players`, in the same order. */
+            names: components["schemas"]["PlayerRef"][];
             /** @description Creator, their partner (if they brought one), then joiners in join order. */
             players: string[];
             /**
@@ -1484,6 +1488,11 @@ export interface components {
             location?: string | null;
             /** @description Format the match is played in. */
             match_format: components["schemas"]["MatchFormat"];
+            /**
+             * @description Names for every player id this match mentions (both sides, reporter, disputer,
+             *     resolver, proposers).
+             */
+            names: components["schemas"]["PlayerRef"][];
             /** @description Scheduling history; included on single-match responses only. */
             proposals?: components["schemas"]["Proposal"][] | null;
             /**
@@ -1660,6 +1669,8 @@ export interface components {
                  * @description The match created when the request filled.
                  */
                 match_id?: string | null;
+                /** @description Names of `players`, in the same order. */
+                names: components["schemas"]["PlayerRef"][];
                 /** @description Creator, their partner (if they brought one), then joiners in join order. */
                 players: string[];
                 /**
@@ -1735,6 +1746,11 @@ export interface components {
                 location?: string | null;
                 /** @description Format the match is played in. */
                 match_format: components["schemas"]["MatchFormat"];
+                /**
+                 * @description Names for every player id this match mentions (both sides, reporter, disputer,
+                 *     resolver, proposers).
+                 */
+                names: components["schemas"]["PlayerRef"][];
                 /** @description Scheduling history; included on single-match responses only. */
                 proposals?: components["schemas"]["Proposal"][] | null;
                 /**
@@ -2003,6 +2019,19 @@ export interface components {
             utr?: number | null;
         };
         /**
+         * @description A player id with the name to show for it. Views that list player ids carry these so
+         *     clients can render names without a request per player.
+         */
+        PlayerRef: {
+            /** @description Name shown to other members ("Deleted player" for a deleted account). */
+            display_name: string;
+            /**
+             * Format: uuid
+             * @description Player id.
+             */
+            id: string;
+        };
+        /**
          * @description A player's role in a community.
          * @enum {string}
          */
@@ -2209,6 +2238,8 @@ export interface components {
              * @description Matches lost.
              */
             lost: number;
+            /** @description Names of `player_ids`, in the same order. */
+            names: components["schemas"]["PlayerRef"][];
             /**
              * Format: int32
              * @description Matches with a result.

@@ -12,6 +12,7 @@ use super::LeagueRow;
 use crate::{
     ApiError, TenantTx,
     matches::{MATCH_COLUMNS, MatchRow, results::check_score},
+    players::{Names, PlayerRef},
 };
 
 /// One line of a box table.
@@ -23,6 +24,8 @@ pub struct StandingLine {
     pub entry_id: Uuid,
     /// Players of the entry (one for singles, two for doubles).
     pub player_ids: Vec<Uuid>,
+    /// Names of `player_ids`, in the same order.
+    pub names: Vec<PlayerRef>,
     /// Matches with a result.
     pub played: u32,
     /// Matches won.
@@ -139,6 +142,11 @@ pub async fn compute(
     .bind(league.id)
     .fetch_all(&mut **tx)
     .await?;
+    let names = Names::load(
+        tx,
+        entries.iter().flat_map(|entry| entry.player_ids.clone()),
+    )
+    .await?;
 
     let mut out = Vec::with_capacity(divisions.len());
     for division in divisions {
@@ -158,15 +166,17 @@ pub async fn compute(
         let table = standings(&ids, &results, points)
             .into_iter()
             .zip(1..)
-            .map(
-                |(row, position): (StandingRow<EntryId>, u32)| StandingLine {
+            .map(|(row, position): (StandingRow<EntryId>, u32)| {
+                let player_ids = members
+                    .iter()
+                    .find(|entry| entry.id == row.entry.0)
+                    .map(|entry| entry.player_ids.clone())
+                    .unwrap_or_default();
+                StandingLine {
                     position,
                     entry_id: row.entry.0,
-                    player_ids: members
-                        .iter()
-                        .find(|entry| entry.id == row.entry.0)
-                        .map(|entry| entry.player_ids.clone())
-                        .unwrap_or_default(),
+                    names: names.refs(player_ids.iter().copied()),
+                    player_ids,
                     played: row.played,
                     won: row.won,
                     lost: row.lost,
@@ -175,8 +185,8 @@ pub async fn compute(
                     sets_lost: row.sets_lost,
                     games_won: row.games_won,
                     games_lost: row.games_lost,
-                },
-            )
+                }
+            })
             .collect();
         out.push(DivisionStanding {
             division_id: division.id,

@@ -8,7 +8,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    ApiError, Tenant, TenantTx, auth::CurrentPlayer, communities::CommunitySettings, models::Gender,
+    ApiError, Tenant, TenantTx,
+    auth::CurrentPlayer,
+    communities::CommunitySettings,
+    models::Gender,
+    players::{Names, PlayerRef},
 };
 
 /// Where an entry stands.
@@ -74,25 +78,68 @@ pub struct EntryView {
     pub invited_partner_id: Option<Uuid>,
     /// When the entry was registered.
     pub created_at: DateTime<Utc>,
+    /// Names for the entry's players, its creator and (when shown) the invited partner.
+    pub names: Vec<PlayerRef>,
 }
 
 impl EntryView {
-    /// The view of `e` for `viewer`.
-    pub fn for_viewer(entry: EntryRow, viewer: &CurrentPlayer) -> Self {
-        let involved = viewer.role.is_admin()
-            || entry.player_ids.contains(&viewer.id)
-            || entry.invited_partner_id == Some(viewer.id);
-        Self {
-            id: entry.id,
-            league_id: entry.league_id,
-            division_id: entry.division_id,
-            invited_partner_id: entry.invited_partner_id.filter(|_| involved),
-            player_ids: entry.player_ids,
-            created_by: entry.created_by,
-            status: entry.status,
-            looking_for_partner: entry.looking_for_partner,
-            created_at: entry.created_at,
-        }
+    /// The views of `entries` for `viewer`, with every name loaded in one query.
+    pub async fn for_viewer(
+        tx: &mut TenantTx,
+        entries: Vec<EntryRow>,
+        viewer: &CurrentPlayer,
+    ) -> Result<Vec<Self>, ApiError> {
+        let mentioned = |entry: &EntryRow| -> Vec<Uuid> {
+            entry
+                .player_ids
+                .iter()
+                .copied()
+                .chain([entry.created_by])
+                .chain(entry.invited_partner_id)
+                .collect()
+        };
+        let names = Names::load(tx, entries.iter().flat_map(mentioned)).await?;
+        Ok(entries
+            .into_iter()
+            .map(|entry| {
+                let involved = viewer.role.is_admin()
+                    || entry.player_ids.contains(&viewer.id)
+                    || entry.invited_partner_id == Some(viewer.id);
+                let invited_partner_id = entry.invited_partner_id.filter(|_| involved);
+                let names = names.refs(
+                    entry
+                        .player_ids
+                        .iter()
+                        .copied()
+                        .chain([entry.created_by])
+                        .chain(invited_partner_id),
+                );
+                Self {
+                    id: entry.id,
+                    league_id: entry.league_id,
+                    division_id: entry.division_id,
+                    invited_partner_id,
+                    player_ids: entry.player_ids,
+                    created_by: entry.created_by,
+                    status: entry.status,
+                    looking_for_partner: entry.looking_for_partner,
+                    created_at: entry.created_at,
+                    names,
+                }
+            })
+            .collect())
+    }
+
+    /// The view of one entry for `viewer`.
+    pub async fn one_for_viewer(
+        tx: &mut TenantTx,
+        entry: EntryRow,
+        viewer: &CurrentPlayer,
+    ) -> Result<Self, ApiError> {
+        Self::for_viewer(tx, vec![entry], viewer)
+            .await?
+            .pop()
+            .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("entry view vanished")))
     }
 }
 

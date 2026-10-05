@@ -21,7 +21,7 @@ use crate::{
     extract::{ApiJson, ApiPath, ApiQuery},
     matches::{self, DbDiscipline, NewMatch},
     models::{Page, PageParams, paginate},
-    players,
+    players::{self, Names, PlayerRef},
 };
 
 /// Furthest ahead a request's window may end.
@@ -105,12 +105,16 @@ pub struct MatchRequestView {
     pub match_id: Option<Uuid>,
     /// When the request was opened.
     pub created_at: DateTime<Utc>,
+    /// Names of `players`, in the same order.
+    pub names: Vec<PlayerRef>,
 }
 
-impl From<RequestRow> for MatchRequestView {
-    fn from(row: RequestRow) -> Self {
+impl MatchRequestView {
+    fn new(row: RequestRow, names: &Names) -> Self {
+        let players = row.participants();
         Self {
-            players: row.participants(),
+            names: names.refs(players.iter().copied()),
+            players,
             id: row.id,
             created_by: row.created_by,
             discipline: row.discipline.into(),
@@ -125,6 +129,22 @@ impl From<RequestRow> for MatchRequestView {
             created_at: row.created_at,
         }
     }
+}
+
+/// Views of `rows`, with every name loaded in one query.
+async fn views(tx: &mut TenantTx, rows: Vec<RequestRow>) -> ApiResult<Vec<MatchRequestView>> {
+    let names = Names::load(tx, rows.iter().flat_map(RequestRow::participants)).await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| MatchRequestView::new(row, &names))
+        .collect())
+}
+
+/// The view of one request.
+async fn load_view(tx: &mut TenantTx, id: Uuid) -> ApiResult<MatchRequestView> {
+    let row = load(tx, id, false).await?;
+    let names = Names::load(tx, row.participants()).await?;
+    Ok(MatchRequestView::new(row, &names))
 }
 
 async fn load(tx: &mut TenantTx, id: Uuid, lock: bool) -> ApiResult<RequestRow> {
@@ -233,9 +253,9 @@ pub async fn create_request(
     .bind(location)
     .execute(&mut *tx)
     .await?;
-    let row = load(&mut tx, id, false).await?;
+    let view = load_view(&mut tx, id).await?;
     tx.commit().await?;
-    Ok((StatusCode::CREATED, Json(row.into())))
+    Ok((StatusCode::CREATED, Json(view)))
 }
 
 /// Filters for `GET /match-requests`.
@@ -315,7 +335,6 @@ pub async fn list_requests(
         .push(" ORDER BY r.time_window_end, r.id LIMIT ")
         .push_bind(limit + 1);
     let rows: Vec<RequestRow> = qb.build_query_as().fetch_all(&mut *tx).await?;
-    tx.commit().await?;
     let page = paginate(rows, limit, |row| {
         format!(
             "{}|{}",
@@ -324,8 +343,10 @@ pub async fn list_requests(
             row.id
         )
     });
+    let items = views(&mut tx, page.items).await?;
+    tx.commit().await?;
     Ok(Json(Page {
-        items: page.items.into_iter().map(Into::into).collect(),
+        items,
         next_cursor: page.next_cursor,
     }))
 }
@@ -341,9 +362,9 @@ pub async fn get_request(
     ApiPath(id): ApiPath<Uuid>,
 ) -> ApiResult<Json<MatchRequestView>> {
     let mut tx = player.tenant.begin(&state.db).await?;
-    let row = load(&mut tx, id, false).await?;
+    let view = load_view(&mut tx, id).await?;
     tx.commit().await?;
-    Ok(Json(row.into()))
+    Ok(Json(view))
 }
 
 /// Takes a slot. Taking the last one fills the request and creates the match (status
@@ -407,9 +428,9 @@ pub async fn join_request(
     if slots_open == 0 {
         fill(&player, &mut tx, id, now).await?;
     }
-    let row = load(&mut tx, id, false).await?;
+    let view = load_view(&mut tx, id).await?;
     tx.commit().await?;
-    Ok(Json(row.into()))
+    Ok(Json(view))
 }
 
 /// Creates the match for a request whose last slot was just taken.
@@ -497,9 +518,9 @@ pub async fn leave_request(
     .bind(id)
     .execute(&mut *tx)
     .await?;
-    let row = load(&mut tx, id, false).await?;
+    let view = load_view(&mut tx, id).await?;
     tx.commit().await?;
-    Ok(Json(row.into()))
+    Ok(Json(view))
 }
 
 /// Withdraws an open request (its creator or an admin).
@@ -532,7 +553,7 @@ pub async fn cancel_request(
     .bind(id)
     .execute(&mut *tx)
     .await?;
-    let row = load(&mut tx, id, false).await?;
+    let view = load_view(&mut tx, id).await?;
     tx.commit().await?;
-    Ok(Json(row.into()))
+    Ok(Json(view))
 }

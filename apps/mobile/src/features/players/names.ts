@@ -1,38 +1,17 @@
-import { useQueries } from "@tanstack/react-query";
+import type { components } from "@courtpit/api-client";
 
-import { useApi } from "@/api/client";
-import { errorCode } from "@/api/errors";
+type PlayerRef = components["schemas"]["PlayerRef"];
 
 /**
- * Display names for player ids. Matches, entries and standings carry ids only, so each id is
- * fetched once with `GET /players/{id}` and cached for ten minutes; TanStack Query dedupes the
- * requests across every card on screen.
- *
- * Returns a lookup: the viewer is "You", a player who left or is hidden is "Former member",
- * and a name still loading is an ellipsis.
+ * A name for every player id a view mentions. Matches, standings lines, entries and match
+ * requests carry `names` (decision 85), so no screen fetches players one by one. The viewer
+ * reads "You"; an id the view did not name (a player removed from the community) reads
+ * "Former member".
  */
-export function usePlayerNames(ids: readonly string[], me?: string): (id: string) => string {
-  const { $api } = useApi();
-  const unique = [...new Set(ids)].filter((id) => id !== me);
-  const results = useQueries({
-    queries: unique.map((id) =>
-      $api.queryOptions(
-        "get",
-        "/api/v1/players/{id}",
-        { params: { path: { id } } },
-        // A missing player stays missing; don't retry or report it as an outage.
-        { staleTime: 10 * 60_000, retry: false },
-      ),
-    ),
-  });
+export function nameLookup(refs: Iterable<PlayerRef>, me?: string): (id: string) => string {
   const names = new Map<string, string>();
-  unique.forEach((id, index) => {
-    const result = results[index];
-    if (result?.data) names.set(id, result.data.display_name);
-    else if (result?.error && errorCode(result.error) === "not_found")
-      names.set(id, "Former member");
-  });
-  return (id) => (id === me ? "You" : (names.get(id) ?? "…"));
+  for (const ref of refs) names.set(ref.id, ref.display_name);
+  return (id) => (id === me ? "You" : (names.get(id) ?? "Former member"));
 }
 
 /** "You & Ben Ortiz", "Ana Ruiz". */
