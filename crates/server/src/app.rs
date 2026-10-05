@@ -21,9 +21,10 @@ use crate::{
     auth::{oidc::OidcVerifier, rate_limit::RateLimiter},
     backup::Backup,
     clock::{Clock, SystemClock},
-    config::{Config, MailerKind},
+    config::{Config, MailerKind, PushKind},
     mailer::{LogMailer, Mailer, ResendMailer},
     openapi::{ApiConventions, ApiDoc},
+    push::{ExpoPusher, LogPusher, Pusher},
     tenancy::TenantCache,
     web::WebApp,
 };
@@ -39,6 +40,8 @@ pub struct AppState {
     pub tenants: TenantCache,
     /// Outbound email.
     pub mailer: Arc<dyn Mailer>,
+    /// Outbound push notifications.
+    pub pusher: Arc<dyn Pusher>,
     /// Per-IP / per-key auth rate limits (`auth_ip_limit_per_hour`).
     pub limiter: RateLimiter,
     /// Apple / Google ID-token verification.
@@ -61,6 +64,7 @@ impl AppState {
             db,
             tenants,
             mailer,
+            pusher: Arc::new(LogPusher::default()),
             limiter,
             clock: Arc::new(SystemClock),
             backup: None,
@@ -71,6 +75,13 @@ impl AppState {
     #[must_use]
     pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
         self.clock = clock;
+        self
+    }
+
+    /// Replaces the push transport (tests pass a shared [`LogPusher`]).
+    #[must_use]
+    pub fn with_pusher(mut self, pusher: Arc<dyn Pusher>) -> Self {
+        self.pusher = pusher;
         self
     }
 
@@ -93,7 +104,13 @@ impl AppState {
             }
         };
         let backup = Backup::from_config(&config)?;
-        Ok(Self::new(config, db, mailer).with_backup(backup))
+        let pusher: Arc<dyn Pusher> = match config.push {
+            PushKind::Log => Arc::new(LogPusher::default()),
+            PushKind::Expo => Arc::new(ExpoPusher::new(config.expo_access_token.clone())),
+        };
+        Ok(Self::new(config, db, mailer)
+            .with_backup(backup)
+            .with_pusher(pusher))
     }
 }
 
@@ -122,6 +139,14 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         ))
         .routes(routes!(api::me::join))
         .routes(routes!(api::me::export))
+        .routes(routes!(
+            api::devices::register_device,
+            api::devices::forget_device
+        ))
+        .routes(routes!(
+            api::devices::get_notifications,
+            api::devices::set_notifications
+        ))
         .routes(routes!(api::players::list_players))
         .routes(routes!(api::players::get_player))
         .routes(routes!(api::players::ban_player))

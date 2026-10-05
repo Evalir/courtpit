@@ -11,6 +11,7 @@ ship) swaps the database for an always-on Postgres on Fly; see the last section.
 | Due jobs (`courtpit-server tick`) | a Fly **scheduled Machine**, hourly | Nothing polls the jobs table while the API Machine is stopped; the tick drains due jobs and exits. |
 | Backups | nightly `pg_dump` streamed to Cloudflare R2 | Run as a job by the server/tick; needs `pg_dump` in the image and Neon's *direct* URL. |
 | Email | Resend | `COURTPIT_MAILER=resend`. |
+| Push | Expo's push service | `COURTPIT_PUSH=expo`; an access token only if the Expo project requires one. |
 | Deploys | GitHub Actions | `.github/workflows/deploy.yml` runs after CI passes on `main`. |
 
 Commands below run from the repository root, so `fly` picks the app up from `fly.toml`.
@@ -127,6 +128,21 @@ audiences (comma-separated; empty disables a provider):
 ```sh
 fly secrets set --stage COURTPIT_APPLE_CLIENT_IDS=app.example.club COURTPIT_GOOGLE_CLIENT_IDS=1234.apps.googleusercontent.com
 ```
+
+### Push notifications
+
+`COURTPIT_PUSH=expo` (set in `fly.toml`) sends through Expo's push service, which relays to APNs
+and FCM with the credentials EAS stores for each app build. Nothing is sent until a native app
+registers a device (`PUT /api/v1/me/devices/{token}`). If the Expo project has "enhanced push
+security" on, add its access token:
+
+```sh
+fly secrets set --stage EXPO_ACCESS_TOKEN=xxxx
+```
+
+Notifications are jobs, so they go out from whichever process runs the job loop: within a second
+while the API Machine is up (it just handled the request that caused them), otherwise at the next
+hourly tick. A player with no registered device gets a score to confirm by email instead.
 
 ## 6. First deploy
 

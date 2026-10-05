@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Utc};
-use courtpit_domain::{Discipline, Event, MatchFormat, MatchStatus};
+use courtpit_domain::{Actor, Discipline, Event, MatchFormat, MatchStatus};
 use serde::Deserialize;
 use sqlx::{Postgres, QueryBuilder};
 use utoipa::ToSchema;
@@ -19,7 +19,7 @@ use crate::{
     extract::{ApiJson, ApiPath, ApiQuery},
     matches::{self, DbMatchStatus, MATCH_COLUMNS, MatchRow, MatchView, NewMatch},
     models::{Page, PageParams, paginate},
-    players,
+    notify, players,
 };
 
 use super::proposals;
@@ -123,6 +123,12 @@ pub async fn create_match(
         let _ = matches::insert_proposal(&mut tx, id, player.id, time, location.as_deref()).await?;
     }
     let found = matches::load(&mut tx, id, false).await?;
+    let event = notify::Event::Challenged {
+        match_id: id,
+        by: player.id,
+    };
+    let players = notify::everyone_but(&found, player.id);
+    notify::tell(&mut tx, players, event, state.clock.now()).await?;
     let view = matches::view_with_proposals(&mut tx, found).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(view)))
@@ -269,6 +275,15 @@ pub async fn cancel_match(
     .execute(&mut *tx)
     .await?;
     matches::supersede_open_proposals(&mut tx, id).await?;
+    let event = match actor {
+        Actor::Admin => notify::Event::MatchDecided { match_id: id },
+        _ => notify::Event::MatchCancelled {
+            match_id: id,
+            by: player.id,
+        },
+    };
+    let players = notify::everyone_but(&found, player.id);
+    notify::tell(&mut tx, players, event, state.clock.now()).await?;
     let found = matches::load(&mut tx, id, false).await?;
     let view = matches::view_with_proposals(&mut tx, found).await?;
     tx.commit().await?;

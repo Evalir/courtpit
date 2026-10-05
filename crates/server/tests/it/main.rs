@@ -6,10 +6,6 @@
 
 mod auth;
 mod backup;
-#[expect(
-    dead_code,
-    reason = "helpers are shared; not every module uses every one"
-)]
 mod common;
 mod directory;
 mod health;
@@ -22,6 +18,7 @@ mod match_requests;
 mod match_results;
 mod matches;
 mod names;
+mod notify;
 mod oidc;
 mod pooling;
 mod profiles;

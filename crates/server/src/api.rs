@@ -1,6 +1,7 @@
 //! HTTP handlers, grouped by resource.
 
 pub mod auth;
+pub mod devices;
 pub mod health;
 pub mod league_entries;
 pub mod leagues;

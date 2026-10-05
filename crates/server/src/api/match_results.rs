@@ -15,7 +15,7 @@ use crate::{
     communities::CommunitySettings,
     extract::{ApiJson, ApiPath},
     matches::{self, DbMatchStatus, DbSide, MatchView, results},
-    rankings,
+    notify, rankings,
 };
 
 /// Writes ledger events if the match now has a result (league matches only).
@@ -65,6 +65,11 @@ pub async fn report_score(
         window,
     )
     .await?;
+    let event = notify::Event::ScoreReported {
+        match_id: id,
+        by: player.id,
+    };
+    notify::tell(&mut tx, notify::other_side(&found, player.id), event, now).await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)
@@ -128,6 +133,12 @@ pub async fn dispute_score(
     .bind(note)
     .execute(&mut *tx)
     .await?;
+    let event = notify::Event::ScoreDisputed {
+        match_id: id,
+        by: player.id,
+    };
+    let reporters = notify::other_side(&found, player.id);
+    notify::tell(&mut tx, reporters, event, state.clock.now()).await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)
@@ -197,6 +208,14 @@ pub async fn resolve_match(
     .execute(&mut *tx)
     .await?;
     record_result(&state, &mut tx, id).await?;
+    let players = notify::everyone_but(&found, admin.id);
+    notify::tell(
+        &mut tx,
+        players,
+        notify::Event::MatchDecided { match_id: id },
+        state.clock.now(),
+    )
+    .await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)
@@ -243,6 +262,14 @@ pub async fn walkover_match(
     .execute(&mut *tx)
     .await?;
     record_result(&state, &mut tx, id).await?;
+    let players = notify::everyone_but(&found, admin.id);
+    notify::tell(
+        &mut tx,
+        players,
+        notify::Event::MatchDecided { match_id: id },
+        state.clock.now(),
+    )
+    .await?;
     let res = respond(&mut tx, id).await?;
     tx.commit().await?;
     Ok(res)

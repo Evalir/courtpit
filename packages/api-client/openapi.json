@@ -4084,6 +4084,130 @@
         ]
       }
     },
+    "/api/v1/me/devices/{token}": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Registers (or refreshes) this device's push token for the signed-in player. A token another\nmember registered on this device moves to the caller.",
+        "operationId": "register_device",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The device's Expo push token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDevice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Missing, invalid or expired session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any other error; see `error.code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session_cookie": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Stops pushing to this device (signing out). Unknown tokens are fine.",
+        "operationId": "forget_device",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The device's Expo push token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Missing, invalid or expired session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any other error; see `error.code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session_cookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/me/entries": {
       "get": {
         "tags": [
@@ -4206,6 +4330,122 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any other error; see `error.code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/notifications": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "The signed-in player's notification preferences.",
+        "operationId": "get_notifications",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPrefs"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any other error; see `error.code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "session_cookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Sets the signed-in player's notification preferences.",
+        "operationId": "set_notifications",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPrefs"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPrefs"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body is malformed or breaks a rule.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5089,6 +5329,14 @@
           "golden_point"
         ]
       },
+      "DevicePlatform": {
+        "type": "string",
+        "description": "The operating system a push token belongs to.",
+        "enum": [
+          "ios",
+          "android"
+        ]
+      },
       "Discipline": {
         "type": "string",
         "description": "What kind of tennis is played. Ranked separately (see `mixed_pooling` in scoring).",
@@ -5924,6 +6172,30 @@
             "description": "The league the entry is in."
           }
         }
+      },
+      "NotificationPrefs": {
+        "type": "object",
+        "description": "Which notifications the player wants. Everything is on until they say otherwise.",
+        "required": [
+          "match_updates",
+          "league_updates",
+          "reminders"
+        ],
+        "properties": {
+          "league_updates": {
+            "type": "boolean",
+            "description": "Partner invitations and league news."
+          },
+          "match_updates": {
+            "type": "boolean",
+            "description": "Proposals, scores, disputes and rulings on the player's matches."
+          },
+          "reminders": {
+            "type": "boolean",
+            "description": "Reminders before scheduled matches."
+          }
+        },
+        "additionalProperties": false
       },
       "OidcLogin": {
         "type": "object",
@@ -7247,6 +7519,20 @@
             ],
             "format": "uuid",
             "description": "Doubles/mixed: invite this partner; the entry confirms when they accept."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RegisterDevice": {
+        "type": "object",
+        "description": "Body of `PUT /me/devices/{token}`.",
+        "required": [
+          "platform"
+        ],
+        "properties": {
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatform",
+            "description": "The device's operating system."
           }
         },
         "additionalProperties": false

@@ -30,6 +30,7 @@ COURTPIT_LOG_FORMAT = "json"
 COURTPIT_CLIENT_IP_SOURCE = "FlyClientIp"
 COURTPIT_COOKIE_SECURE = "true"
 COURTPIT_MAILER = "resend"
+COURTPIT_PUSH = "expo"
 # `{slug}.{base domain}` hosts resolve to communities; change if you do not own courtpit.app.
 COURTPIT_BASE_DOMAIN = "courtpit.app"
 # Neon's pooled endpoint multiplexes client connections, so a small pool is plenty.

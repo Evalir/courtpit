@@ -770,6 +770,27 @@ export interface paths {
         patch: operations["patch_me"];
         trace?: never;
     };
+    "/api/v1/me/devices/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Registers (or refreshes) this device's push token for the signed-in player. A token another
+         *     member registered on this device moves to the caller.
+         */
+        put: operations["register_device"];
+        post?: never;
+        /** Stops pushing to this device (signing out). Unknown tokens are fine. */
+        delete: operations["forget_device"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/entries": {
         parameters: {
             query?: never;
@@ -823,6 +844,24 @@ export interface paths {
         put?: never;
         /** Joins the request's community with the signed-in account (open join policy). */
         post: operations["join"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in player's notification preferences. */
+        get: operations["get_notifications"];
+        /** Sets the signed-in player's notification preferences. */
+        put: operations["set_notifications"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1157,6 +1196,11 @@ export interface components {
          * @enum {string}
          */
         Deuce: "advantage" | "golden_point";
+        /**
+         * @description The operating system a push token belongs to.
+         * @enum {string}
+         */
+        DevicePlatform: "ios" | "android";
         /**
          * @description What kind of tennis is played. Ranked separately (see `mixed_pooling` in scoring).
          * @enum {string}
@@ -1594,6 +1638,15 @@ export interface components {
             entry: components["schemas"]["EntryView"];
             /** @description The league the entry is in. */
             league: components["schemas"]["LeagueView"];
+        };
+        /** @description Which notifications the player wants. Everything is on until they say otherwise. */
+        NotificationPrefs: {
+            /** @description Partner invitations and league news. */
+            league_updates: boolean;
+            /** @description Proposals, scores, disputes and rulings on the player's matches. */
+            match_updates: boolean;
+            /** @description Reminders before scheduled matches. */
+            reminders: boolean;
         };
         /** @description Body for OIDC sign-in and linking. */
         OidcLogin: {
@@ -2212,6 +2265,11 @@ export interface components {
              * @description Doubles/mixed: invite this partner; the entry confirms when they accept.
              */
             partner_id?: string | null;
+        };
+        /** @description Body of `PUT /me/devices/{token}`. */
+        RegisterDevice: {
+            /** @description The device's operating system. */
+            platform: components["schemas"]["DevicePlatform"];
         };
         /**
          * @description Postgres `match_request_status`.
@@ -5296,6 +5354,97 @@ export interface operations {
             };
         };
     };
+    register_device: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The device's Expo push token */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterDevice"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    forget_device: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The device's Expo push token */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     my_entries: {
         parameters: {
             query?: never;
@@ -5392,6 +5541,95 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPrefs"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+            /** @description Missing, invalid or expired session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is malformed or breaks a rule. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
