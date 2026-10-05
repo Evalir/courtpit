@@ -836,7 +836,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Lists verified, active players of the community (excluding the caller). */
+        /**
+         * Lists verified, active players of the community (excluding the caller); admins may list
+         *     banned or deleted members instead.
+         */
         get: operations["list_players"];
         put?: never;
         post?: never;
@@ -1871,6 +1874,8 @@ export interface components {
                 socials?: {
                     [key: string]: string;
                 } | null;
+                /** @description Membership status: always `active` except in admins' views (bans, deleted accounts). */
+                status: components["schemas"]["PlayerStatus"];
                 /** @description String setup, if shared. */
                 strings?: string | null;
                 /**
@@ -2060,6 +2065,8 @@ export interface components {
             socials?: {
                 [key: string]: string;
             } | null;
+            /** @description Membership status: always `active` except in admins' views (bans, deleted accounts). */
+            status: components["schemas"]["PlayerStatus"];
             /** @description String setup, if shared. */
             strings?: string | null;
             /**
@@ -5416,6 +5423,11 @@ export interface operations {
                 location?: string;
                 /** @description Case-insensitive substring of the display name. */
                 q?: string;
+                /**
+                 * @description Admins only: players in this status instead of active members (`banned`, `deleted`);
+                 *     these lists include unverified accounts.
+                 */
+                status?: components["schemas"]["PlayerStatus"];
                 /** @description Opaque cursor from the previous page's `next_cursor`. */
                 cursor?: string;
                 /** @description Page size. */
