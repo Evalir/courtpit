@@ -2,6 +2,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 
 import { useApi } from "@/api/client";
+import { ModerationButton } from "@/features/admin/ModerationButton";
+import { moderation } from "@/features/admin/roles";
 import { formatUtr, playPrefLabel } from "@/features/format";
 import { Detail, DetailsCard, gearLine, socialsLine } from "@/features/players/ProfileDetails";
 import { useSignedIn } from "@/session/SessionProvider";
@@ -17,7 +19,8 @@ import { Text } from "@/ui/Text";
 export default function Player() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { $api } = useApi();
-  const me = useSignedIn().player_id;
+  const session = useSignedIn();
+  const me = session.player_id;
   const player = $api.useQuery("get", "/api/v1/players/{id}", { params: { path: { id } } });
 
   if (player.isPending) return <LoadingState />;
@@ -26,6 +29,7 @@ export default function Player() {
   const data = player.data;
   const gear = gearLine(data.racket, data.strings, data.tension_kg);
   const socials = socialsLine(data.socials);
+  const moderate = moderation({ id: me, role: session.role }, data);
 
   return (
     <Screen refreshing={player.isRefetching} onRefresh={() => void player.refetch()}>
@@ -37,8 +41,9 @@ export default function Player() {
         <View style={{ flexDirection: "row", gap: space.sm }}>
           <Badge label={`UTR ${formatUtr(data.utr)}`} tone="primary" />
           {data.role !== "player" ? <Badge label="Club admin" tone="accent" /> : null}
+          {data.status === "banned" ? <Badge label="Banned" tone="danger" /> : null}
         </View>
-        {data.id !== me ? (
+        {data.id !== me && data.status === "active" ? (
           <Button
             label="Challenge to a match"
             icon="tennisball-outline"
@@ -47,6 +52,7 @@ export default function Player() {
             }
           />
         ) : null}
+        {moderate ? <ModerationButton player={data} action={moderate} /> : null}
       </View>
       <DetailsCard title="Tennis">
         <Detail icon="tennisball-outline" label="Plays" value={playPrefLabel[data.play_pref]} />

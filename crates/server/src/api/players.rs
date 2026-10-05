@@ -31,13 +31,17 @@ pub struct DirectoryQuery {
     /// Case-insensitive substring of the display name.
     #[serde(rename = "q")]
     pub search: Option<String>,
+    /// Admins only: players in this status instead of active members (`banned`, `deleted`);
+    /// these lists include unverified accounts.
+    pub status: Option<PlayerStatus>,
     /// Opaque cursor from the previous page's `next_cursor`.
     pub cursor: Option<String>,
     /// Page size.
     pub limit: Option<i64>,
 }
 
-/// Lists verified, active players of the community (excluding the caller).
+/// Lists verified, active players of the community (excluding the caller); admins may list
+/// banned or deleted members instead.
 #[utoipa::path(get, path = "/api/v1/players", tag = "players", params(DirectoryQuery),
     security(("bearer" = [])),
     responses((status = 200, body = Page<PlayerPublic>), (status = 401, body = crate::error::ErrorBody)))]
@@ -51,11 +55,20 @@ pub async fn list_players(
         limit: query.limit,
     };
     let limit = page.limit();
+    let status = query.status.unwrap_or(PlayerStatus::Active);
+    if status != PlayerStatus::Active {
+        viewer.require_admin()?;
+    }
     let mut qb: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
         "SELECT {PLAYER_COLUMNS} FROM players p JOIN users u ON u.id = p.user_id
-         WHERE p.status = 'active' AND u.email_verified_at IS NOT NULL AND p.community_id = "
+         WHERE p.status = "
     ));
+    let _ = qb.push_bind(status);
+    if status == PlayerStatus::Active {
+        let _ = qb.push(" AND u.email_verified_at IS NOT NULL");
+    }
     let _ = qb
+        .push(" AND p.community_id = ")
         .push_bind(viewer.tenant.id())
         .push(" AND p.id <> ")
         .push_bind(viewer.id);

@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { useApi } from "@/api/client";
 import { formatDate, formatUtr, playPrefLabel } from "@/features/format";
 import { Detail, DetailsCard, gearLine, socialsLine } from "@/features/players/ProfileDetails";
+import { isAdmin } from "@/features/admin/roles";
 import { ExportButton } from "@/features/profile/ExportButton";
 import { useSession } from "@/session/SessionProvider";
 import { useCommunity } from "@/tenant/TenantProvider";
@@ -103,6 +104,15 @@ export default function Profile() {
             .join(", ")}
         />
       </DetailsCard>
+      {isAdmin(player.role) ? (
+        <Button
+          label="Club admin"
+          variant="secondary"
+          icon="shield-checkmark-outline"
+          block
+          onPress={() => router.push("/admin")}
+        />
+      ) : null}
       <Button
         label={account.has_password ? "Change password" : "Set a password"}
         variant="secondary"

@@ -166,6 +166,8 @@ pub struct PlayerPublic {
     pub socials: Option<Value>,
     /// Role within the community.
     pub role: PlayerRole,
+    /// Membership status: always `active` except in admins' views (bans, deleted accounts).
+    pub status: PlayerStatus,
 }
 
 impl PlayerPublic {
@@ -185,6 +187,7 @@ impl PlayerPublic {
             phone: row.phone.filter(|_| show_phone),
             socials: show_socials.then_some(row.socials.0),
             role: row.role,
+            status: row.status,
         }
     }
 }

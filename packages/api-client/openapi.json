@@ -4240,7 +4240,7 @@
         "tags": [
           "players"
         ],
-        "summary": "Lists verified, active players of the community (excluding the caller).",
+        "summary": "Lists verified, active players of the community (excluding the caller); admins may list\nbanned or deleted members instead.",
         "operationId": "list_players",
         "parameters": [
           {
@@ -4288,6 +4288,15 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Admins only: players in this status instead of active members (`banned`, `deleted`);\nthese lists include unverified accounts.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PlayerStatus"
             }
           },
           {
@@ -6468,7 +6477,8 @@
                 "display_name",
                 "play_pref",
                 "preferred_locations",
-                "role"
+                "role",
+                "status"
               ],
               "properties": {
                 "display_name": {
@@ -6521,6 +6531,10 @@
                   "propertyNames": {
                     "type": "string"
                   }
+                },
+                "status": {
+                  "$ref": "#/components/schemas/PlayerStatus",
+                  "description": "Membership status: always `active` except in admins' views (bans, deleted accounts)."
                 },
                 "strings": {
                   "type": [
@@ -6874,7 +6888,8 @@
           "display_name",
           "play_pref",
           "preferred_locations",
-          "role"
+          "role",
+          "status"
         ],
         "properties": {
           "display_name": {
@@ -6927,6 +6942,10 @@
             "propertyNames": {
               "type": "string"
             }
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlayerStatus",
+            "description": "Membership status: always `active` except in admins' views (bans, deleted accounts)."
           },
           "strings": {
             "type": [

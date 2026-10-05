@@ -163,6 +163,12 @@ async fn admin_ban_and_unban() {
         .send()
         .await
         .expect(StatusCode::FORBIDDEN);
+    let _ = app
+        .get("/api/v1/players?status=banned")
+        .as_(&ana)
+        .send()
+        .await
+        .expect(StatusCode::FORBIDDEN);
     app.make_admin(&ana).await;
     let _ = app
         .post(&url)
@@ -183,6 +189,22 @@ async fn admin_ban_and_unban() {
         .await
         .expect(StatusCode::OK);
     assert_eq!(listed["items"].as_array().unwrap().len(), 0);
+    // Admins find banned members to lift the ban; the profile says so.
+    let banned = app
+        .get("/api/v1/players?status=banned")
+        .as_(&ana)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(banned["items"][0]["id"], json!(bo.player_id));
+    assert_eq!(banned["items"][0]["status"], "banned");
+    let profile = app
+        .get(&format!("/api/v1/players/{}", bo.player_id))
+        .as_(&ana)
+        .send()
+        .await
+        .expect(StatusCode::OK);
+    assert_eq!(profile["status"], "banned");
     // Admins cannot ban themselves or other admins (only owners can).
     let _ = app
         .post(&format!("/api/v1/admin/players/{}/ban", ana.player_id))

@@ -174,7 +174,9 @@ Home sorts the player's matches (`features/matches/match.ts`, unit-tested):
 | Password | `/profile/password` (modal) | `PUT /auth/password` | built |
 | Download my data | `/profile` | `GET /me/export` (web: a JSON download; native: the share sheet) | built |
 | Delete account | `/profile/delete` (modal) | `DELETE /me` | built |
-| Admin: leagues, disputes, moderation | `/admin/*` | `/admin/*` | F7 |
+| Club admin: banned members | `/admin` | `GET /players?status=banned`, `POST /admin/players/{id}/unban` | built |
+| Player: ban or lift a ban (admins) | `/players/[id]` | `POST /admin/players/{id}/ban`, `…/unban` | built |
+| Admin: leagues, disputes | `/admin/*` | `/admin/*` | F7 |
 
 ## 7. Data conventions
 
@@ -252,6 +254,17 @@ viewer's entry, with the number of complete entries beside the heading.
   `DELETE /me`, then signs the device out.
 - Modals close with `closeModal(fallback)`: back when there is history, else the fallback
   (a modal opened straight from a link has nothing behind it).
+
+### Club admin
+
+Admins and owners get a "Club admin" button on Profile (`/admin`); everyone else never sees
+admin screens, and the server refuses their requests anyway. `features/admin/roles.ts` mirrors
+the server's moderation rule: never oneself or a deleted account, and only a lower rank (owners
+may moderate admins).
+
+- **Moderation.** A member's profile shows a "Banned" badge and, to admins who outrank them,
+  "Ban from the club" (asks first) or "Lift the ban". The hub lists banned members
+  (`GET /players?status=banned`, admins only, decision 93) with "Lift the ban" on each.
 
 ### Match requests
 
