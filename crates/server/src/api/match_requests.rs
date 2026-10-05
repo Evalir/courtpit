@@ -21,6 +21,7 @@ use crate::{
     extract::{ApiJson, ApiPath, ApiQuery},
     matches::{self, DbDiscipline, NewMatch},
     models::{Page, PageParams, paginate},
+    notify,
     players::{self, Names, PlayerRef},
 };
 
@@ -477,6 +478,8 @@ async fn fill(
     .bind(match_id)
     .execute(&mut **tx)
     .await?;
+    let others = everyone.iter().copied().filter(|&other| other != player.id);
+    notify::tell(tx, others, notify::Event::RequestFilled { match_id }, now).await?;
     Ok(())
 }
 

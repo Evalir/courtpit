@@ -14,6 +14,7 @@ use crate::{
     auth::CurrentPlayer,
     extract::{ApiJson, ApiPath},
     matches::{self, DbMatchStatus, MatchView, ProposalStatus},
+    notify,
 };
 
 /// Longest a proposal may look ahead.
@@ -69,6 +70,17 @@ pub async fn propose(
     let _ = match_row.transition(actor, Event::Propose)?;
     let _ =
         matches::insert_proposal(&mut tx, id, player.id, body.time, location.as_deref()).await?;
+    let event = notify::Event::ProposalReceived {
+        match_id: id,
+        by: player.id,
+    };
+    notify::tell(
+        &mut tx,
+        notify::other_side(&match_row, player.id),
+        event,
+        state.clock.now(),
+    )
+    .await?;
     let view = matches::view_with_proposals(&mut tx, match_row).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(view)))
@@ -146,6 +158,12 @@ pub async fn accept_proposal(
     .bind(proposal.location)
     .execute(&mut *tx)
     .await?;
+    let event = notify::Event::ProposalAccepted {
+        match_id: id,
+        by: player.id,
+    };
+    let proposers = match_row.players(proposed_by).to_vec();
+    notify::tell(&mut tx, proposers, event, state.clock.now()).await?;
     let match_row = matches::load(&mut tx, id, false).await?;
     let view = matches::view_with_proposals(&mut tx, match_row).await?;
     tx.commit().await?;
@@ -172,6 +190,12 @@ pub async fn decline_proposal(
         .ok_or_else(|| ApiError::conflict("the proposer no longer plays in this match"))?;
     let _ = match_row.transition(actor, Event::DeclineProposal { proposed_by })?;
     close_proposal(&mut tx, proposal_id, ProposalStatus::Declined).await?;
+    let event = notify::Event::ProposalDeclined {
+        match_id: id,
+        by: player.id,
+    };
+    let proposers = match_row.players(proposed_by).to_vec();
+    notify::tell(&mut tx, proposers, event, state.clock.now()).await?;
     let view = matches::view_with_proposals(&mut tx, match_row).await?;
     tx.commit().await?;
     Ok(Json(view))

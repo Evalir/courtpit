@@ -168,6 +168,8 @@ async fn a_proposed_match_without_proposals_reports_and_auto_confirms() {
     let view = report(&app, &bo, id, straight_sets_a()).await;
     assert_eq!(view["status"], "reported");
     assert_eq!(view["winner_side"], "a");
+    // The challenge and the report notify straight away; then only the auto-confirm waits.
+    let _ = jobs::run_due(&app.state, "t").await.unwrap();
     app.clock.advance(Duration::days(3) + Duration::minutes(1));
     assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 1);
     let view = app
@@ -438,6 +440,8 @@ async fn unanswered_reports_auto_confirm_after_the_window() {
                 .clone()
         }
     };
+    // Notifications go out at once; the auto-confirm waits for its deadline.
+    let _ = jobs::run_due(&app.state, "t").await.unwrap();
     assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 0);
     app.clock.advance(Duration::days(1));
     assert_eq!(jobs::run_due(&app.state, "t").await.unwrap(), 0);

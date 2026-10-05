@@ -358,6 +358,12 @@ pub async fn delete_me(State(state): State<AppState>, user: CurrentUser) -> ApiR
     .bind(user.user_id)
     .execute(&mut *tx)
     .await?;
+    let _ = sqlx::query(
+        "DELETE FROM device_tokens WHERE player_id IN (SELECT id FROM players WHERE user_id = $1)",
+    )
+    .bind(user.user_id)
+    .execute(&mut *tx)
+    .await?;
     for table in ["auth_identities", "email_codes", "sessions"] {
         let _ = sqlx::query(&format!("DELETE FROM {table} WHERE user_id = $1"))
             .bind(user.user_id)

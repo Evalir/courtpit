@@ -21,6 +21,7 @@ use courtpit_server::{
     communities::{Branding, CreatedCommunity, NewCommunity, create_community},
     db,
     mailer::LogMailer,
+    push::LogPusher,
     tenancy::Community,
 };
 use http_body_util::BodyExt;
@@ -161,6 +162,8 @@ pub(crate) struct TestApp {
     pub router: Router,
     pub db: PgPool,
     pub mailer: Arc<LogMailer>,
+    /// Every push notification sent.
+    pub pusher: Arc<LogPusher>,
     /// The app's clock; `advance` it to drive deadlines and jobs.
     pub clock: Arc<OffsetClock>,
 }
@@ -195,8 +198,11 @@ impl TestApp {
         let options = fresh_database().await;
         let db = db::connect_with(options, 5).await.unwrap();
         let mailer = Arc::new(LogMailer::default());
+        let pusher = Arc::new(LogPusher::default());
         let clock = OffsetClock::shared();
-        let state = AppState::new(config, db.clone(), mailer.clone()).with_clock(clock.clone());
+        let state = AppState::new(config, db.clone(), mailer.clone())
+            .with_clock(clock.clone())
+            .with_pusher(pusher.clone());
         // `oneshot` has no socket peer; stand in for the `ConnectInfo` that `serve` provides.
         let peer = ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0)));
         let web = state
@@ -212,6 +218,7 @@ impl TestApp {
             router,
             db,
             mailer,
+            pusher,
             clock,
         }
     }

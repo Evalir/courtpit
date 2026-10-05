@@ -253,6 +253,19 @@ impl Names {
         ))
     }
 
+    /// The name of `id`, or "A former member" when it is not a player here.
+    pub fn name(&self, id: Uuid) -> &str {
+        self.0.get(&id).map_or("A former member", String::as_str)
+    }
+
+    /// The names of `ids` joined with " & " (a doubles side).
+    pub fn joined(&self, ids: &[Uuid]) -> String {
+        ids.iter()
+            .map(|&id| self.name(id))
+            .collect::<Vec<_>>()
+            .join(" & ")
+    }
+
     /// References for `ids` in first-seen order, without duplicates or unknown ids.
     pub fn refs(&self, ids: impl IntoIterator<Item = Uuid>) -> Vec<PlayerRef> {
         let mut refs: Vec<PlayerRef> = Vec::new();

@@ -72,13 +72,22 @@ pub enum Job {
         /// The player to tell.
         player_id: Uuid,
     },
+    /// Tells one player about something that happened (push, or email as a fallback).
+    Notify {
+        /// The player's community.
+        community_id: Uuid,
+        /// The player to tell.
+        player_id: Uuid,
+        /// What happened.
+        event: crate::notify::Event,
+    },
 }
 
 impl Job {
     /// Key ensuring at most one pending job of this identity; re-enqueueing reschedules it.
     pub fn dedupe_key(&self) -> Option<String> {
         match self {
-            Self::Noop {} => None,
+            Self::Noop {} | Self::Notify { .. } => None,
             Self::AutoConfirmMatch { match_id, .. } => Some(format!("auto_confirm:{match_id}")),
             Self::RefreshRankings { community_id } => {
                 Some(format!("refresh_rankings:{community_id}"))
@@ -242,6 +251,11 @@ async fn execute(state: &AppState, job: Job) -> anyhow::Result<()> {
             crate::leagues::notify::league_cancelled(state, community_id, league_id, player_id)
                 .await
         }
+        Job::Notify {
+            community_id,
+            player_id,
+            event,
+        } => crate::notify::send(state, community_id, player_id, event).await,
     }
 }
 

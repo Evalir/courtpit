@@ -37,6 +37,12 @@ pub struct Config {
     /// Resend API key (required with `--mailer resend`).
     #[arg(long, env = "RESEND_API_KEY", hide_env_values = true)]
     pub resend_api_key: Option<String>,
+    /// Push transport.
+    #[arg(long, env = "COURTPIT_PUSH", value_enum, default_value_t)]
+    pub push: PushKind,
+    /// Expo access token, when the Expo project requires authenticated push requests.
+    #[arg(long, env = "EXPO_ACCESS_TOKEN", hide_env_values = true)]
+    pub expo_access_token: Option<String>,
     /// Sender address for outgoing email.
     #[arg(
         long,
@@ -163,6 +169,16 @@ impl Default for BackupConfig {
     }
 }
 
+/// Which [`crate::push::Pusher`] to use.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum PushKind {
+    /// Log notifications (development and tests).
+    #[default]
+    Log,
+    /// Send through Expo's push service.
+    Expo,
+}
+
 /// Which [`crate::mailer::Mailer`] to use.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum MailerKind {
@@ -185,6 +201,8 @@ impl Default for Config {
             auth_ip_limit_per_hour: 30,
             mailer: MailerKind::Log,
             resend_api_key: None,
+            push: PushKind::Log,
+            expo_access_token: None,
             email_from: "Courtpit <no-reply@courtpit.app>".to_owned(),
             jobs_enabled: true,
             job_poll_ms: 1000,
