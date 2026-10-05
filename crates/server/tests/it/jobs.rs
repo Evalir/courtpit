@@ -145,6 +145,39 @@ async fn stale_leases_are_reclaimed() {
     assert_eq!(again[0].attempts, 2);
 }
 
+/// A batch comes back in due order whatever plan Postgres picks: under a hash join the
+/// `UPDATE ... RETURNING` yields rows in table order, which once ran a league's season finish
+/// before the auto-confirm it was waiting on.
+#[tokio::test]
+async fn a_claimed_batch_is_in_due_order() {
+    let app = TestApp::spawn().await;
+    let now = Utc::now();
+    let (due_last, due_first) = (Uuid::now_v7(), Uuid::now_v7());
+    // Inserted first but due last, so table order and due order disagree.
+    for (id, due) in [
+        (due_last, now - Duration::minutes(1)),
+        (due_first, now - Duration::minutes(2)),
+    ] {
+        let _ = sqlx::query("INSERT INTO jobs (id, kind, run_at) VALUES ($1, 'noop', $2)")
+            .bind(id)
+            .bind(due)
+            .execute(&app.db)
+            .await
+            .unwrap();
+    }
+    let mut tx = app.db.begin().await.unwrap();
+    for setting in ["enable_nestloop", "enable_mergejoin"] {
+        let _ = sqlx::query(&format!("SET LOCAL {setting} = off"))
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+    }
+    let batch = jobs::claim(&mut *tx, "w", 10, now).await.unwrap();
+    tx.rollback().await.unwrap();
+    let order: Vec<Uuid> = batch.iter().map(|job| job.id).collect();
+    assert_eq!(order, [due_first, due_last]);
+}
+
 #[tokio::test]
 async fn loop_runs_jobs_and_stops_on_shutdown() {
     let app = TestApp::spawn().await;
