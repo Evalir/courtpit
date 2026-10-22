@@ -315,8 +315,11 @@ gh secret set FLY_API_TOKEN
 embeds `migrations/` at compile time, and the runtime is `debian:trixie-slim` with
 `ca-certificates`, a non-root user (uid 10001), the binary at `/usr/local/bin/racquetcollective-server`
 and `postgresql-client-18` from the PostgreSQL (PGDG) apt repository. `CMD` is
-`racquetcollective-server serve` and there is no `ENTRYPOINT`, so `release_command` and the tick
-Machine replace the command cleanly.
+`racquetcollective-server migrate && exec racquetcollective-server serve` (through `sh -c`), so a
+host with no release step (Caster) still gets the schema; on Fly the `release_command` has already
+migrated and the second `migrate` finds nothing to do. There is no `ENTRYPOINT`, so
+`release_command` and the tick Machine replace the command cleanly. Base image tags are literal in
+each `FROM` (decision 108).
 
 `pg_dump` must be at least as new as the server. Neon creates Postgres 18 projects by default
 and supports 14 to 18; Debian trixie ships only 17 (bookworm 15), so the client comes from

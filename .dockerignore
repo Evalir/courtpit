@@ -8,8 +8,6 @@ docs/
 .env
 .env.*
 *.md
-Dockerfile
-.dockerignore
 fly.toml
 **/node_modules/
 apps/mobile/dist/
