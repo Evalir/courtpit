@@ -1,25 +1,17 @@
-# syntax=docker/dockerfile:1
-#
 # Racquet Collective server image: a release build of `racquetcollective-server`, the exported web app it serves,
 # and the Postgres client tools the nightly backup job shells out to (`pg_dump`). Five stages:
 # chef (toolchain + cargo-chef), planner (dependency recipe), builder (cached dependency build,
 # then the workspace), web (the Expo web export), runtime.
 #
-# There is deliberately no ENTRYPOINT: `CMD` runs the server, while Fly's
-# `release_command = "racquetcollective-server migrate"` and the scheduled `racquetcollective-server tick`
-# Machine replace the command and keep working (docs/deploy.md).
+# There is deliberately no ENTRYPOINT: `CMD` applies migrations and then runs the server, while
+# Fly's `release_command = "racquetcollective-server migrate"` and the scheduled
+# `racquetcollective-server tick` Machine replace the command and keep working (docs/deploy.md).
+#
+# Base image tags are written out in each `FROM` (no `ARG` in `FROM`), so builders that read the
+# Dockerfile without evaluating build arguments still recognise it.
 
 # Any Rust >= the workspace `rust-version` (1.88, edition 2024) works; CI builds with stable.
-ARG RUST_VERSION=1.99
-ARG DEBIAN_RELEASE=trixie
-# pg_dump must be at least as new as the server it dumps. Neon creates PG 18 projects by
-# default (and supports 14-18); a newer client dumps every older server, so track the newest
-# major and bump it when Neon's default moves. Debian trixie itself only ships 17, hence PGDG.
-ARG PG_MAJOR=18
-# Node for the web build stage; the app's toolchain (Expo SDK 57) wants 22 or newer.
-ARG NODE_VERSION=22
-
-FROM rust:${RUST_VERSION}-slim-${DEBIAN_RELEASE} AS chef
+FROM rust:1.99-slim-trixie AS chef
 # Smaller binary without touching Cargo.toml. Set here so `cook` and `build` agree on the profile.
 ENV CARGO_PROFILE_RELEASE_STRIP=symbols
 RUN cargo install cargo-chef --locked --version 0.1.78
@@ -44,7 +36,8 @@ RUN cargo build --release --locked --package racquetcollective-server --bin racq
 # RACQUETCOLLECTIVE_WEB_DIR. One export serves every community host: it is built without
 # EXPO_PUBLIC_COMMUNITY, so the browser's Host picks the community. Text files get a `.gz`
 # twin that the server sends to clients accepting gzip.
-FROM node:${NODE_VERSION}-slim AS web
+# Node 22 or newer: the app's toolchain (Expo SDK 57) wants it.
+FROM node:22-slim AS web
 WORKDIR /web
 # Manifests first, so `npm ci` is reused until a manifest or the lockfile changes.
 COPY package.json package-lock.json ./
@@ -58,9 +51,13 @@ RUN cd apps/mobile \
     && find /web/dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.json' \
         -o -name '*.svg' -o -name '*.ttf' -o -name '*.map' \) -exec gzip -9 --keep {} +
 
-FROM debian:${DEBIAN_RELEASE}-slim AS runtime
-ARG DEBIAN_RELEASE
-ARG PG_MAJOR
+# Keep DEBIAN_RELEASE equal to the release in the `FROM` tag.
+FROM debian:trixie-slim AS runtime
+ARG DEBIAN_RELEASE=trixie
+# pg_dump must be at least as new as the server it dumps. Neon creates PG 18 projects by
+# default (and supports 14-18); a newer client dumps every older server, so track the newest
+# major and bump it when Neon's default moves. Debian trixie itself only ships 17, hence PGDG.
+ARG PG_MAJOR=18
 # postgresql-common ships the PGDG archive key; the repo is added by hand so the build needs
 # neither curl nor gnupg.
 RUN apt-get update \
@@ -76,4 +73,6 @@ COPY --from=web /web/dist /app/web
 ENV RACQUETCOLLECTIVE_WEB_DIR=/app/web
 USER racquetcollective
 EXPOSE 8080
-CMD ["racquetcollective-server", "serve"]
+# `migrate` does nothing when the schema is current; `exec` makes the server PID 1, so it gets
+# SIGTERM directly and shuts down gracefully.
+CMD ["sh", "-c", "racquetcollective-server migrate && exec racquetcollective-server serve"]
