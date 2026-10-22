@@ -821,8 +821,8 @@ export interface paths {
         };
         /**
          * Exports the account and all memberships across communities.
-         * @description This reads across tenants for the user's *own* rows, so it deliberately uses the pool
-         *     (privileged path) with an explicit `user_id` filter instead of a `TenantTx`.
+         * @description This reads across tenants for the user's *own* rows, so it deliberately uses a [`GlobalTx`]
+         *     with an explicit `user_id` filter instead of a `TenantTx`.
          */
         get: operations["export"];
         put?: never;
@@ -862,6 +862,23 @@ export interface paths {
         /** Sets the signed-in player's notification preferences. */
         put: operations["set_notifications"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/communities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates a community and, optionally, its owner. */
+        post: operations["create_community"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1094,6 +1111,38 @@ export interface components {
         CancelMatch: {
             /** @description Optional reason, recorded as the resolution note. */
             note?: string | null;
+        };
+        /** @description A community to create. */
+        CommunityCreate: {
+            /** @description Initial theme; defaults apply to missing keys. */
+            branding?: components["schemas"]["Branding"];
+            /** @description A host the community answers on besides `{slug}.{base domain}`. */
+            custom_domain?: string | null;
+            /** @description Display name. */
+            name: string;
+            /** @description The owner: an existing or new user, made verified and given an `owner` player. */
+            owner_email?: string | null;
+            /** @description URL-safe identifier: lowercase letters, digits and inner dashes, at most 63 characters. */
+            slug: string;
+        };
+        /** @description A community just created. */
+        CommunityCreated: {
+            /** @description Registered custom domain, lowercase. */
+            custom_domain?: string | null;
+            /**
+             * Format: uuid
+             * @description Community id.
+             */
+            id: string;
+            /** @description Display name. */
+            name: string;
+            /**
+             * Format: uuid
+             * @description The owner's player, when an owner was given.
+             */
+            owner_player_id?: string | null;
+            /** @description URL-safe identifier. */
+            slug: string;
         };
         /** @description Body of `POST /admin/leagues`. */
         CreateLeague: {
@@ -5621,6 +5670,75 @@ export interface operations {
             };
             /** @description Missing, invalid or expired session. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is malformed or breaks a rule. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Any other error; see `error.code`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_community: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunityCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityCreated"];
+                };
+            };
+            /** @description Missing or wrong platform token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No platform token is configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The slug or custom domain is taken */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

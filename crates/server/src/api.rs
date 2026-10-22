@@ -10,6 +10,7 @@ pub mod match_results;
 pub mod matches;
 pub mod me;
 pub mod oidc;
+pub mod platform;
 pub mod players;
 pub mod proposals;
 pub mod rankings;

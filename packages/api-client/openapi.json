@@ -4266,7 +4266,7 @@
           "me"
         ],
         "summary": "Exports the account and all memberships across communities.",
-        "description": "This reads across tenants for the user's *own* rows, so it deliberately uses the pool\n(privileged path) with an explicit `user_id` filter instead of a `TenantTx`.",
+        "description": "This reads across tenants for the user's *own* rows, so it deliberately uses a [`GlobalTx`]\nwith an explicit `user_id` filter instead of a `TenantTx`.",
         "operationId": "export",
         "responses": {
           "200": {
@@ -4471,6 +4471,92 @@
           },
           {
             "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/platform/communities": {
+      "post": {
+        "tags": [
+          "platform"
+        ],
+        "summary": "Creates a community and, optionally, its owner.",
+        "operationId": "create_community",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong platform token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No platform token is configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The slug or custom domain is taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body is malformed or breaks a rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any other error; see `error.code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "platform": []
           }
         ]
       }
@@ -5132,6 +5218,81 @@
           }
         },
         "additionalProperties": false
+      },
+      "CommunityCreate": {
+        "type": "object",
+        "description": "A community to create.",
+        "required": [
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "branding": {
+            "$ref": "#/components/schemas/Branding",
+            "description": "Initial theme; defaults apply to missing keys."
+          },
+          "custom_domain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A host the community answers on besides `{slug}.{base domain}`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner_email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The owner: an existing or new user, made verified and given an `owner` player."
+          },
+          "slug": {
+            "type": "string",
+            "description": "URL-safe identifier: lowercase letters, digits and inner dashes, at most 63 characters."
+          }
+        }
+      },
+      "CommunityCreated": {
+        "type": "object",
+        "description": "A community just created.",
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "custom_domain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Registered custom domain, lowercase."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Community id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner_player_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The owner's player, when an owner was given."
+          },
+          "slug": {
+            "type": "string",
+            "description": "URL-safe identifier."
+          }
+        }
       },
       "CreateLeague": {
         "type": "object",
@@ -7832,6 +7993,11 @@
         "scheme": "bearer",
         "description": "Session token (native clients)."
       },
+      "platform": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Platform operator token (`RACQUETCOLLECTIVE_PLATFORM_TOKEN`)."
+      },
       "session_cookie": {
         "type": "apiKey",
         "in": "cookie",
@@ -7880,6 +8046,10 @@
     {
       "name": "admin",
       "description": "Community administration (admins only)."
+    },
+    {
+      "name": "platform",
+      "description": "Work above any one community (platform operator token)."
     }
   ]
 }

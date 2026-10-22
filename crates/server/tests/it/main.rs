@@ -19,6 +19,7 @@ mod names;
 mod notify;
 mod oidc;
 mod owner_mode;
+mod platform;
 mod pooling;
 mod profiles;
 mod proposals;

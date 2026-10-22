@@ -3,7 +3,8 @@
 //! Handlers declare only what is specific to them (`#[utoipa::path]`). Everything that is the
 //! same for every operation is applied here, once, so it cannot drift:
 //!
-//! - an operation with `security(("bearer" = []))` also accepts the session cookie;
+//! - an operation with `security(("bearer" = []))` also accepts the session cookie; the platform
+//!   routes (`security(("platform" = []))`) take only the platform token;
 //! - every operation has a `default` response with the shared [`ErrorBody`] (clients switch on
 //!   `error.code`); secured operations also have a `401` and operations with a body a `422` (the
 //!   extractors answer both before the handler runs);
@@ -27,6 +28,10 @@ use crate::{auth::SESSION_COOKIE, error::ErrorBody};
 const BEARER: &str = "bearer";
 /// Name of the session-cookie security scheme (added next to [`BEARER`] by [`ApiConventions`]).
 const SESSION_COOKIE_SCHEME: &str = "session_cookie";
+/// Name of the platform-token security scheme; its operations take no session cookie.
+const PLATFORM: &str = "platform";
+/// Path prefix of the operations secured by [`PLATFORM`].
+const PLATFORM_PATHS: &str = "/api/v1/platform/";
 
 const DESCRIPTION: &str = "Racquet Collective REST API.\n\n\
 **Community.** Every request is scoped to one community. Native clients send \
@@ -55,6 +60,7 @@ community answers `400`, an unknown one `404`.\n\n\
         (name = "leagues", description = "Leagues, registration and standings."),
         (name = "rankings", description = "Rankings and their points ledger."),
         (name = "admin", description = "Community administration (admins only)."),
+        (name = "platform", description = "Work above any one community (platform operator token)."),
     )
 )]
 pub(crate) struct ApiDoc;
@@ -84,9 +90,25 @@ impl Modify for ApiConventions {
                 "Session cookie (web clients); alternative to the bearer token.",
             ))),
         );
-        for item in api.paths.paths.values_mut() {
+        components.add_security_scheme(
+            PLATFORM,
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .description(Some(
+                        "Platform operator token (`RACQUETCOLLECTIVE_PLATFORM_TOKEN`).",
+                    ))
+                    .build(),
+            ),
+        );
+        for (path, item) in &mut api.paths.paths {
+            let credentials = if path.starts_with(PLATFORM_PATHS) {
+                Credentials::PlatformToken
+            } else {
+                Credentials::Session
+            };
             for operation in operations(item) {
-                apply_conventions(operation);
+                apply_conventions(operation, credentials);
             }
         }
     }
@@ -108,11 +130,24 @@ fn operations(item: &mut PathItem) -> impl Iterator<Item = &mut Operation> {
     .flatten()
 }
 
-fn apply_conventions(operation: &mut Operation) {
+/// What a secured operation authenticates with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Credentials {
+    /// A session: the bearer token or the session cookie.
+    Session,
+    /// The platform operator token only.
+    PlatformToken,
+}
+
+/// Applies the shared conventions; [`Credentials::Session`] operations also accept the cookie.
+fn apply_conventions(operation: &mut Operation, credentials: Credentials) {
     if let Some(requirements) =
         operation.security.as_mut().filter(|requirements| !requirements.is_empty())
     {
-        requirements.push(SecurityRequirement::new(SESSION_COOKIE_SCHEME, Vec::<String>::new()));
+        if credentials == Credentials::Session {
+            requirements
+                .push(SecurityRequirement::new(SESSION_COOKIE_SCHEME, Vec::<String>::new()));
+        }
         ensure_error(operation, "401", "Missing, invalid or expired session.");
     }
     if operation.request_body.is_some() {
@@ -287,7 +322,8 @@ mod tests {
                     assert!(schemes.contains_key(name), "{method} {path}: scheme {name}");
                 }
             }
-            assert_eq!(requirements.len(), 2, "{method} {path}: bearer or cookie");
+            let expected = if path.starts_with(PLATFORM_PATHS) { 1 } else { 2 };
+            assert_eq!(requirements.len(), expected, "{method} {path}: bearer or cookie");
         }
     }
 

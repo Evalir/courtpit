@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use axum_client_ip::ClientIpSource;
 
-use crate::db::DbConfig;
+use crate::{auth::PlatformToken, db::DbConfig};
 
 /// Configuration for `racquetcollective-server serve`. Every field has an env var; see
 /// `.env.example`.
@@ -45,6 +45,10 @@ pub struct Config {
     /// Expo access token, when the Expo project requires authenticated push requests.
     #[arg(long, env = "EXPO_ACCESS_TOKEN", hide_env_values = true)]
     pub expo_access_token: Option<String>,
+    /// Platform operator token for `/api/v1/platform/*` (at least 32 characters); unset, those
+    /// routes answer `404`.
+    #[arg(long, env = "RACQUETCOLLECTIVE_PLATFORM_TOKEN", hide_env_values = true)]
+    pub platform_token: Option<PlatformToken>,
     /// Sender address for outgoing email.
     #[arg(
         long,
@@ -189,6 +193,7 @@ impl Default for Config {
             resend_api_key: None,
             push: PushKind::Log,
             expo_access_token: None,
+            platform_token: None,
             email_from: "Racquet Collective <no-reply@racquetcollective.app>".to_owned(),
             jobs_enabled: true,
             job_poll_ms: 1000,

@@ -87,6 +87,17 @@ Things to know:
 - **Cold starts.** After 5 idle minutes Neon suspends the compute and the next query waits for
   it to wake (typically under a second; the pool waits up to 5 s for a connection).
 
+On a host with no shell into the container (Caster), create communities over the API instead:
+set `RACQUETCOLLECTIVE_PLATFORM_TOKEN` (at least 32 characters) and send
+
+```sh
+curl -X POST https://<host>/api/v1/platform/communities \
+  -H "Authorization: Bearer $RACQUETCOLLECTIVE_PLATFORM_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"slug":"demo","name":"Demo Club","custom_domain":"<host>","owner_email":"you@example.com"}'
+```
+
+(decision 111).
+
 ## 4. Backups (Cloudflare R2)
 
 The nightly job dumps with `pg_dump`, which cannot use transaction pooling, so it needs

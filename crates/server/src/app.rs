@@ -131,6 +131,7 @@ pub fn api_router() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .routes(routes!(api::auth::session))
         .routes(routes!(api::oidc::oidc_login))
         .routes(routes!(api::oidc::oidc_link))
+        .routes(routes!(api::platform::create_community))
         .routes(routes!(api::me::get_me, api::me::patch_me, api::me::delete_me))
         .routes(routes!(api::me::join))
         .routes(routes!(api::me::export))
