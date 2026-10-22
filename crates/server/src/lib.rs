@@ -34,4 +34,4 @@ pub mod web;
 pub use app::{AppState, router};
 pub use config::Config;
 pub use error::{ApiError, ApiResult};
-pub use tenancy::{Tenant, TenantTx};
+pub use tenancy::{GlobalTx, Tenant, TenantTx};

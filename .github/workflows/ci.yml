@@ -183,6 +183,15 @@ jobs:
         if: ${{ failure() && steps.run.outputs.pooled == 'true' }}
         run: cat "$RUNNER_TEMP/pgbouncer.log" || true
 
+      # The suite again with the app connecting as a database owner that may not create roles
+      # (RlsMode::Owner, as on Caster), which forced row-level security binds: catches tenant
+      # queries that skip TenantTx/GlobalTx (decision 110). Same trigger as the pgbouncer pass.
+      - name: cargo test (owner mode)
+        if: ${{ !cancelled() && steps.run.outputs.pooled == 'true' }}
+        env:
+          RACQUETCOLLECTIVE_TEST_RLS_MODE: owner
+        run: cargo test -p racquetcollective-server --test it
+
       # npm workspaces: one lockfile at the root for packages/* and apps/*.
       - uses: actions/setup-node@v4
         if: ${{ !cancelled() && steps.run.outputs.node == 'true' }}

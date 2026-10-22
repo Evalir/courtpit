@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use racquetcollective_server::TenantTx;
+use racquetcollective_server::{TenantTx, db::RlsMode};
 use uuid::Uuid;
 
 use crate::{common::TestApp, tenancy::add_player};
@@ -31,10 +31,18 @@ async fn concurrent_tenant_transactions_never_cross_communities() {
         communities.push((id, players));
     }
 
+    // The role tenant transactions run as: `courtpit_app`, or the owner itself.
+    let tenant_role: String = match RlsMode::detect(&app.state.db).await.unwrap() {
+        RlsMode::AppRole => "courtpit_app".to_owned(),
+        RlsMode::Owner => {
+            sqlx::query_scalar("SELECT current_user::text").fetch_one(&app.state.db).await.unwrap()
+        }
+    };
     let mut tasks = Vec::new();
     for task in 0..TASKS {
-        let db = app.db.clone();
+        let db = app.state.db.clone();
         let (community, players) = communities[task % 2].clone();
+        let tenant_role = tenant_role.clone();
         tasks.push(tokio::spawn(async move {
             for round in 0..ROUNDS {
                 let mut tx = TenantTx::begin(&db, community).await.unwrap();
@@ -51,7 +59,7 @@ async fn concurrent_tenant_transactions_never_cross_communities() {
                 .await
                 .unwrap();
                 assert_eq!(setting, community.to_string());
-                assert_eq!(role, "courtpit_app");
+                assert_eq!(role, tenant_role);
                 // Alternate commit and rollback; both must release the settings.
                 if round % 2 == 0 {
                     tx.commit().await.unwrap();
@@ -73,7 +81,7 @@ async fn transaction_settings_do_not_leak_to_the_next_transaction() {
 
     let mut tasks = Vec::new();
     for task in 0..TASKS {
-        let db = app.db.clone();
+        let db = app.state.db.clone();
         tasks.push(tokio::spawn(async move {
             for round in 0..ROUNDS {
                 let mut tx = TenantTx::begin(&db, community).await.unwrap();

@@ -40,6 +40,60 @@ const OWNER_ROLE: &str = "racquetcollective_owner";
 const TEMPLATE_LOCK: i64 = 7_253_001;
 
 static TEMPLATE: OnceCell<String> = OnceCell::const_new();
+static OWNER_TEMPLATE: OnceCell<String> = OnceCell::const_new();
+
+/// The login role the application under test connects as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DbRole {
+    /// The admin role of `DATABASE_URL` (a superuser): `RlsMode::AppRole`.
+    Admin,
+    /// [`OWNER_ROLE`], which owns the database and may not create roles: `RlsMode::Owner`.
+    Owner,
+}
+
+impl DbRole {
+    /// [`Self::Owner`] when `RACQUETCOLLECTIVE_TEST_RLS_MODE=owner`, so the whole suite can run as
+    /// a role that row-level security binds.
+    fn from_env() -> Self {
+        match std::env::var("RACQUETCOLLECTIVE_TEST_RLS_MODE").as_deref() {
+            Ok("owner") => Self::Owner,
+            _ => Self::Admin,
+        }
+    }
+
+    fn template_name(self) -> String {
+        let mut hasher = DefaultHasher::new();
+        for migration in db::MIGRATOR.iter() {
+            migration.version.hash(&mut hasher);
+            migration.checksum.hash(&mut hasher);
+        }
+        let kind = match self {
+            Self::Admin => "",
+            Self::Owner => "owner_",
+        };
+        format!("racquetcollective_tpl_{kind}{:016x}", hasher.finish())
+    }
+
+    /// Options for the application pool on `database`. The owner always connects directly: the
+    /// CI pooler knows only the admin role.
+    fn app_options(self, database: &str) -> PgConnectOptions {
+        match self {
+            Self::Admin => app_options().database(database),
+            Self::Owner => admin_options()
+                .username(OWNER_ROLE)
+                .password("racquetcollective")
+                .database(database),
+        }
+    }
+
+    /// The `OWNER` clause for databases this role's app runs on.
+    fn owner_clause(self) -> String {
+        match self {
+            Self::Admin => String::new(),
+            Self::Owner => format!(" OWNER {OWNER_ROLE}"),
+        }
+    }
+}
 
 /// Reads the first of `names` that is set, falling back to the default URL.
 fn url_from_env(names: &[&str]) -> PgConnectOptions {
@@ -64,81 +118,105 @@ fn app_options() -> PgConnectOptions {
     db::pooled_options(url_from_env(&["DATABASE_URL"]), pooled)
 }
 
-fn template_name() -> String {
-    let mut hasher = DefaultHasher::new();
-    for migration in db::MIGRATOR.iter() {
-        migration.version.hash(&mut hasher);
-        migration.checksum.hash(&mut hasher);
-    }
-    format!("racquetcollective_tpl_{:016x}", hasher.finish())
-}
-
-/// Ensures the migrated template exists (once per process) and returns its name.
-async fn template() -> &'static str {
-    TEMPLATE
-        .get_or_init(async || {
-            let name = template_name();
-            let mut conn = PgConnection::connect_with(&admin_options()).await.unwrap();
-            let _ = sqlx::query("SELECT pg_advisory_lock($1)")
-                .bind(TEMPLATE_LOCK)
-                .execute(&mut conn)
-                .await
-                .unwrap();
-
-            // Clean up databases left behind by earlier runs; ignore ones still in use.
-            let stale: Vec<String> = sqlx::query_scalar(
-                "SELECT datname FROM pg_database
-                 WHERE datname LIKE 'racquetcollective\\_test\\_%'
-                    OR (datname LIKE 'racquetcollective\\_tpl\\_%' AND datname <> $1)",
-            )
-            .bind(&name)
-            .fetch_all(&mut conn)
+/// Ensures the migrated template for `role` exists (once per process) and returns its name.
+async fn template(role: DbRole) -> &'static str {
+    let cell = match role {
+        DbRole::Admin => &TEMPLATE,
+        DbRole::Owner => &OWNER_TEMPLATE,
+    };
+    cell.get_or_init(async || {
+        let name = role.template_name();
+        let mut conn = PgConnection::connect_with(&admin_options()).await.unwrap();
+        let _ = sqlx::query("SELECT pg_advisory_lock($1)")
+            .bind(TEMPLATE_LOCK)
+            .execute(&mut conn)
             .await
             .unwrap();
-            for db_name in stale {
-                let _ =
-                    conn.execute(format!(r#"DROP DATABASE IF EXISTS "{db_name}""#).as_str()).await;
-            }
 
-            let exists: bool =
-                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)")
-                    .bind(&name)
-                    .fetch_one(&mut conn)
-                    .await
-                    .unwrap();
-            if !exists {
-                let build = format!("{name}_build");
-                let _ = conn
-                    .execute(format!(r#"DROP DATABASE IF EXISTS "{build}""#).as_str())
-                    .await
-                    .unwrap();
-                let _ =
-                    conn.execute(format!(r#"CREATE DATABASE "{build}""#).as_str()).await.unwrap();
-                let pool = db::connect_with(admin_options().database(&build), 2).await.unwrap();
-                let _ = db::migrate(&pool).await.unwrap();
-                pool.close().await;
-                let _ = conn
-                    .execute(format!(r#"ALTER DATABASE "{build}" RENAME TO "{name}""#).as_str())
-                    .await
-                    .unwrap();
-            }
+        // Clean up databases left behind by earlier runs; ignore ones still in use. Both
+        // current templates stay.
+        let stale: Vec<String> = sqlx::query_scalar(
+            "SELECT datname FROM pg_database
+             WHERE datname LIKE 'racquetcollective\\_test\\_%'
+                OR (datname LIKE 'racquetcollective\\_tpl\\_%' AND datname NOT IN ($1, $2))",
+        )
+        .bind(DbRole::Admin.template_name())
+        .bind(DbRole::Owner.template_name())
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+        for db_name in stale {
+            let _ = conn.execute(format!(r#"DROP DATABASE IF EXISTS "{db_name}""#).as_str()).await;
+        }
 
-            let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
-                .bind(TEMPLATE_LOCK)
-                .execute(&mut conn)
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&name)
+                .fetch_one(&mut conn)
                 .await
                 .unwrap();
-            name
-        })
-        .await
+        if !exists {
+            if role == DbRole::Owner {
+                let _ = conn
+                    .execute(
+                        format!(
+                            "DO $$ BEGIN
+                                CREATE ROLE {OWNER_ROLE} LOGIN PASSWORD 'racquetcollective'
+                                    NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+                            EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
+                            END $$"
+                        )
+                        .as_str(),
+                    )
+                    .await
+                    .unwrap();
+            }
+            let build = format!("{name}_build");
+            let _ = conn
+                .execute(format!(r#"DROP DATABASE IF EXISTS "{build}""#).as_str())
+                .await
+                .unwrap();
+            let owner = role.owner_clause();
+            let _ = conn
+                .execute(format!(r#"CREATE DATABASE "{build}"{owner}"#).as_str())
+                .await
+                .unwrap();
+            let migrating = match role {
+                DbRole::Admin => admin_options().database(&build),
+                DbRole::Owner => role.app_options(&build),
+            };
+            let pool = db::connect_with(migrating, 2).await.unwrap();
+            let mode = db::migrate(&pool).await.unwrap();
+            assert_eq!(
+                mode == db::RlsMode::Owner,
+                role == DbRole::Owner,
+                "unexpected RLS mode {mode}"
+            );
+            pool.close().await;
+            let _ = conn
+                .execute(format!(r#"ALTER DATABASE "{build}" RENAME TO "{name}""#).as_str())
+                .await
+                .unwrap();
+        }
+
+        let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
+            .bind(TEMPLATE_LOCK)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        name
+    })
+    .await
 }
 
-/// Creates a fresh database for one test, cloned from the migrated template.
-async fn fresh_database() -> PgConnectOptions {
-    let template = template().await;
+/// Creates a fresh database for one test, cloned from `role`'s migrated template, and returns
+/// its name.
+async fn fresh_database(role: DbRole) -> String {
+    let template = template(role).await;
     let name = format!("racquetcollective_test_{}", Uuid::now_v7().simple());
     let mut conn = PgConnection::connect_with(&admin_options()).await.unwrap();
-    let sql = format!(r#"CREATE DATABASE "{name}" TEMPLATE "{template}""#);
+    let owner = role.owner_clause();
+    let sql = format!(r#"CREATE DATABASE "{name}" TEMPLATE "{template}"{owner}"#);
     let mut attempts = 0;
     loop {
         match conn.execute(sql.as_str()).await {
@@ -152,7 +230,7 @@ async fn fresh_database() -> PgConnectOptions {
             Err(err) => panic!("creating test database: {err}"),
         }
     }
-    app_options().database(&name)
+    name
 }
 
 /// An application under test with its own database.
@@ -188,47 +266,30 @@ impl TestApp {
         Self::spawn_with(test_config()).await
     }
 
-    /// Spawns with a custom configuration.
+    /// Spawns with a custom configuration, as the role `RACQUETCOLLECTIVE_TEST_RLS_MODE` picks.
     pub(crate) async fn spawn_with(config: Config) -> Self {
-        Self::spawn_on(config, fresh_database().await).await
+        Self::spawn_as(config, DbRole::from_env()).await
     }
 
-    /// Spawns against a new database owned by [`OWNER_ROLE`] and migrated as it, so without the
-    /// `courtpit_app` role. Uses the direct URL: the CI pooler knows only the admin role.
+    /// Spawns against a database owned by [`OWNER_ROLE`] and migrated as it, so without the
+    /// `courtpit_app` role, whatever `RACQUETCOLLECTIVE_TEST_RLS_MODE` says.
     pub(crate) async fn spawn_owner_mode() -> Self {
-        let name = format!("racquetcollective_test_{}", Uuid::now_v7().simple());
-        let mut conn = PgConnection::connect_with(&admin_options()).await.unwrap();
-        let _ = conn
-            .execute(
-                format!(
-                    "DO $$ BEGIN
-                        CREATE ROLE {OWNER_ROLE} LOGIN PASSWORD 'racquetcollective'
-                            NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
-                    EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
-                    END $$"
-                )
-                .as_str(),
-            )
-            .await
-            .unwrap();
-        let _ = conn
-            .execute(format!(r#"CREATE DATABASE "{name}" OWNER {OWNER_ROLE}"#).as_str())
-            .await
-            .unwrap();
-        let options =
-            admin_options().username(OWNER_ROLE).password("racquetcollective").database(&name);
-        let pool = db::connect_with(options.clone(), 2).await.unwrap();
-        assert_eq!(db::migrate(&pool).await.unwrap(), db::RlsMode::Owner);
-        pool.close().await;
-        Self::spawn_on(test_config(), options).await
+        Self::spawn_as(test_config(), DbRole::Owner).await
     }
 
-    async fn spawn_on(config: Config, options: PgConnectOptions) -> Self {
-        let db = db::connect_with(options, 5).await.unwrap();
+    /// The app connects as `role`; [`Self::db`] is the admin role on the same database, which
+    /// row-level security never restricts, for test setup and assertions.
+    async fn spawn_as(config: Config, role: DbRole) -> Self {
+        let name = fresh_database(role).await;
+        let app_db = db::connect_with(role.app_options(&name), 5).await.unwrap();
+        let db = match role {
+            DbRole::Admin => app_db.clone(),
+            DbRole::Owner => db::connect_with(admin_options().database(&name), 5).await.unwrap(),
+        };
         let mailer = Arc::new(LogMailer::default());
         let pusher = Arc::new(LogPusher::default());
         let clock = OffsetClock::shared();
-        let state = AppState::new(config, db.clone(), mailer.clone())
+        let state = AppState::new(config, app_db, mailer.clone())
             .with_clock(clock.clone())
             .with_pusher(pusher.clone());
         // `oneshot` has no socket peer; stand in for the `ConnectInfo` that `serve` provides.
@@ -327,7 +388,7 @@ impl TestApp {
         owner: Option<&str>,
     ) -> CreatedCommunity {
         create_community(
-            &self.db,
+            &self.state.db,
             NewCommunity {
                 slug: slug.to_owned(),
                 name: format!("{slug} club"),

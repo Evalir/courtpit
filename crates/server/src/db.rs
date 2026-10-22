@@ -9,7 +9,9 @@
 //! (Neon, RDS, a superuser), the migrations create the `courtpit_app` role and [`TenantTx`]
 //! drops to it. Where it may not (a managed Postgres that gives the app one owner role, such as
 //! Caster), [`migrate`] runs the same migrations without their role statements
-//! ([`RoleFreeMigrations`]) and tenant transactions stay on the owner role.
+//! ([`RoleFreeMigrations`]) and tenant transactions stay on the owner role, which RLS still
+//! binds because every tenant table forces it. Cross-tenant work opens a
+//! [`GlobalTx`](crate::GlobalTx).
 //!
 //! [`TenantTx`]: crate::TenantTx
 
@@ -136,9 +138,9 @@ impl RlsMode {
     pub fn log(self) {
         match self {
             Self::AppRole => tracing::info!("tenant transactions run as `courtpit_app`"),
-            Self::Owner => tracing::warn!(
-                "no `courtpit_app` role: tenant transactions run as the login role, which \
-                 row-level security does not restrict"
+            Self::Owner => tracing::info!(
+                "no `courtpit_app` role: tenant transactions run as the login role, which forced \
+                 row-level security binds"
             ),
         }
     }

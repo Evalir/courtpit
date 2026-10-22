@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    ApiError, ApiResult, AppState, Tenant,
+    ApiError, ApiResult, AppState, GlobalTx, Tenant,
     auth::{CurrentPlayer, CurrentUser, ensure_player},
     extract::ApiJson,
     models::{Gender, Patch, PlayPref},
@@ -284,8 +284,8 @@ pub struct AccountExport {
 
 /// Exports the account and all memberships across communities.
 ///
-/// This reads across tenants for the user's *own* rows, so it deliberately uses the pool
-/// (privileged path) with an explicit `user_id` filter instead of a `TenantTx`.
+/// This reads across tenants for the user's *own* rows, so it deliberately uses a [`GlobalTx`]
+/// with an explicit `user_id` filter instead of a `TenantTx`.
 #[utoipa::path(get, path = "/api/v1/me/export", tag = "me", security(("bearer" = [])),
     responses((status = 200, body = AccountExport), (status = 401, body = crate::error::ErrorBody)))]
 pub async fn export(
@@ -305,13 +305,15 @@ pub async fn export(
     .bind(user.user_id)
     .fetch_all(&state.db)
     .await?;
+    let mut tx = GlobalTx::begin(&state.db).await?;
     let memberships: Vec<SqlJson<Value>> = sqlx::query_scalar(
         "SELECT to_jsonb(p) || jsonb_build_object('community_slug', c.slug)
          FROM players p JOIN communities c ON c.id = p.community_id WHERE p.user_id = $1",
     )
     .bind(user.user_id)
-    .fetch_all(&state.db)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(Json(AccountExport {
         exported_at: Utc::now(),
         user: exported,
@@ -325,7 +327,8 @@ pub async fn export(
 #[utoipa::path(delete, path = "/api/v1/me", tag = "me", security(("bearer" = [])),
     responses((status = 204), (status = 401, body = crate::error::ErrorBody)))]
 pub async fn delete_me(State(state): State<AppState>, user: CurrentUser) -> ApiResult<StatusCode> {
-    let mut tx = state.db.begin().await?;
+    // Every community's membership of this user, filtered by `user_id`.
+    let mut tx = GlobalTx::begin(&state.db).await?;
     let _ = sqlx::query(
         "UPDATE players SET display_name = 'Deleted player', utr = NULL, gender = 'undisclosed',
             phone = NULL, phone_visible = false, socials = '{}', socials_visible = false,

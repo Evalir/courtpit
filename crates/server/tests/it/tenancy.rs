@@ -64,7 +64,7 @@ async fn create_community_with_owner() {
     let app = TestApp::spawn().await;
     let created = app.community_with_owner("owned", Some("Owner@Example.test")).await;
     let player = created.owner_player_id.unwrap();
-    let mut tx = TenantTx::begin(&app.db, created.community.id).await.unwrap();
+    let mut tx = TenantTx::begin(&app.state.db, created.community.id).await.unwrap();
     let role: String = sqlx::query_scalar("SELECT role::text FROM players WHERE id = $1")
         .bind(player)
         .fetch_one(&mut *tx)
@@ -82,7 +82,7 @@ pub(crate) async fn add_player(app: &TestApp, community: Uuid, email: &str) -> U
             .fetch_one(&app.db)
             .await
             .unwrap();
-    let mut tx = TenantTx::begin(&app.db, community).await.unwrap();
+    let mut tx = TenantTx::begin(&app.state.db, community).await.unwrap();
     let id = sqlx::query_scalar(
         "INSERT INTO players (id, community_id, user_id, display_name) VALUES ($1, $2, $3, $4)
          RETURNING id",
@@ -108,7 +108,7 @@ async fn rls_isolates_communities() {
     let alpha_player = add_player(&app, alpha, "a@example.test").await;
     let beta_player = add_player(&app, beta, "b@example.test").await;
 
-    let mut tx = TenantTx::begin(&app.db, alpha).await.unwrap();
+    let mut tx = TenantTx::begin(&app.state.db, alpha).await.unwrap();
     let visible: Vec<Uuid> =
         sqlx::query_scalar("SELECT id FROM players").fetch_all(&mut *tx).await.unwrap();
     assert_eq!(visible, vec![alpha_player]);
@@ -138,7 +138,7 @@ async fn rls_isolates_communities() {
     assert!(err.contains("row-level security"), "{err}");
     drop(tx);
 
-    let mut tx = TenantTx::begin(&app.db, beta).await.unwrap();
+    let mut tx = TenantTx::begin(&app.state.db, beta).await.unwrap();
     let name: String = sqlx::query_scalar("SELECT display_name FROM players WHERE id = $1")
         .bind(beta_player)
         .fetch_one(&mut *tx)

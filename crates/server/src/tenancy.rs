@@ -3,7 +3,8 @@
 //! Every handler that touches community data takes a [`Tenant`]; every tenant-scoped query runs
 //! inside a [`TenantTx`], which scopes the transaction to the community *and*, where the
 //! database has it ([`RlsMode`](crate::db::RlsMode)), drops to the `courtpit_app` role so
-//! Postgres row-level security is enforced.
+//! Postgres row-level security is enforced. Work that must see every community opens a
+//! [`GlobalTx`] instead.
 
 use std::{
     ops::{Deref, DerefMut},
@@ -236,6 +237,46 @@ impl Deref for TenantTx {
 }
 
 impl DerefMut for TenantTx {
+    fn deref_mut(&mut self) -> &mut PgConnection {
+        &mut self.tx
+    }
+}
+
+/// A transaction that sees every community: `app.rls_bypass` is on until it ends, which the
+/// `rls_bypass` policy admits on every tenant table (migration `force_rls`, decision 110).
+///
+/// For work that is cross-tenant by nature and filters explicitly instead, such as a user's own
+/// rows in every community. Derefs to a connection like [`TenantTx`]; dropped without
+/// [`commit`](Self::commit) it rolls back.
+#[derive(Debug)]
+pub struct GlobalTx {
+    tx: Transaction<'static, Postgres>,
+}
+
+impl GlobalTx {
+    /// Begins a transaction with `app.rls_bypass` on.
+    pub async fn begin(db: &PgPool) -> Result<Self, sqlx::Error> {
+        let mut tx = db.begin().await?;
+        let _ = sqlx::query("SELECT set_config('app.rls_bypass', 'on', true)")
+            .execute(&mut *tx)
+            .await?;
+        Ok(Self { tx })
+    }
+
+    /// Commits the transaction.
+    pub async fn commit(self) -> Result<(), sqlx::Error> {
+        self.tx.commit().await
+    }
+}
+
+impl Deref for GlobalTx {
+    type Target = PgConnection;
+    fn deref(&self) -> &PgConnection {
+        &self.tx
+    }
+}
+
+impl DerefMut for GlobalTx {
     fn deref_mut(&mut self) -> &mut PgConnection {
         &mut self.tx
     }

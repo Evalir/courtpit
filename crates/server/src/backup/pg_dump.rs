@@ -63,8 +63,12 @@ impl PgDump {
 impl DumpSource for PgDump {
     fn start(&self) -> anyhow::Result<DumpReader> {
         let mut child = Command::new(&self.program)
-            .args(["--format=custom", "--no-owner", "--no-privileges"])
+            // Row security on, with the `rls_bypass` policy admitting every row: a role that
+            // forced RLS binds (the owner in `RlsMode::Owner`) would otherwise make pg_dump
+            // refuse. A superuser or BYPASSRLS role dumps the same either way.
+            .args(["--format=custom", "--no-owner", "--no-privileges", "--enable-row-security"])
             .arg(format!("--dbname={}", self.uri))
+            .env("PGOPTIONS", "-c app.rls_bypass=on")
             .envs(self.user.as_ref().map(|user| ("PGUSER", user)))
             .envs(self.password.as_ref().map(|password| ("PGPASSWORD", password)))
             .stdin(Stdio::null())

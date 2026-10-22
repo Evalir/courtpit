@@ -249,6 +249,10 @@ adding procedural glue.
   `SET LOCAL ROLE courtpit_app` (a NOBYPASSRLS, non-owner role) so RLS actually applies.
   RLS is the backstop, not the filter: every query on a scoped table still says
   `WHERE community_id = $n` explicitly (bind `tenant.id()` / `tx.community_id()`).
+  Tenant tables force RLS, so a query on one outside `TenantTx` sees nothing: cross-tenant work
+  (a user's own rows in every community) opens a `GlobalTx` and filters explicitly. Run the
+  suite as a role RLS binds with `RACQUETCOLLECTIVE_TEST_RLS_MODE=owner`; in tests, give app
+  code `app.state.db` (`app.db` is the admin pool).
   Global tables (`users`, `sessions`, `email_codes`, `auth_identities`, `communities`, `jobs`)
   are queried on the pool directly.
 - **OpenAPI**: every handler has `#[utoipa::path]` and is registered with `routes!` in

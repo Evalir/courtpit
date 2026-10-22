@@ -76,7 +76,8 @@ Things to know:
 
   On a host where the login role cannot create roles and nobody can create it for you (Caster's
   managed Postgres), `migrate` runs the migrations without their role statements and tenant
-  transactions stay on the login role (`RlsMode::Owner`, decision 109); `serve` logs a warning.
+  transactions stay on the login role (`RlsMode::Owner`, decision 109), which forced row-level
+  security still binds (decision 110).
 
 - **Transaction pooling.** The app only uses transaction-scoped state (`SET LOCAL`,
   `set_config(.., true)`) and protocol-level prepared statements, which Neon's PgBouncer
