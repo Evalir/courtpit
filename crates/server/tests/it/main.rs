@@ -18,6 +18,7 @@ mod matches;
 mod names;
 mod notify;
 mod oidc;
+mod owner_mode;
 mod pooling;
 mod profiles;
 mod proposals;

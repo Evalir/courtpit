@@ -1,8 +1,9 @@
 //! Tenant resolution and tenant-scoped transactions.
 //!
 //! Every handler that touches community data takes a [`Tenant`]; every tenant-scoped query runs
-//! inside a [`TenantTx`], which scopes the transaction to the community *and* drops to the
-//! `courtpit_app` role so Postgres row-level security is enforced.
+//! inside a [`TenantTx`], which scopes the transaction to the community *and*, where the
+//! database has it ([`RlsMode`](crate::db::RlsMode)), drops to the `courtpit_app` role so
+//! Postgres row-level security is enforced.
 
 use std::{
     ops::{Deref, DerefMut},
@@ -184,7 +185,8 @@ impl FromRequestParts<AppState> for Tenant {
     }
 }
 
-/// A transaction scoped to one community, running as the RLS-bound `courtpit_app` role.
+/// A transaction scoped to one community, running as the RLS-bound `courtpit_app` role where
+/// the database has it.
 ///
 /// Derefs to a connection: use `.fetch_one(&mut *tx)`. Dropped without [`commit`](Self::commit)
 /// it rolls back.
@@ -195,14 +197,23 @@ pub struct TenantTx {
 }
 
 impl TenantTx {
-    /// Begins a transaction, sets `app.community_id` and switches to `courtpit_app`.
+    /// Begins a transaction, sets `app.community_id` and, in [`RlsMode::AppRole`], switches to
+    /// `courtpit_app` (`set_config('role', .., true)` is `SET LOCAL ROLE`). In
+    /// [`RlsMode::Owner`] it stays on the login role.
+    ///
+    /// [`RlsMode::AppRole`]: crate::db::RlsMode::AppRole
+    /// [`RlsMode::Owner`]: crate::db::RlsMode::Owner
     pub async fn begin(db: &PgPool, community_id: Uuid) -> Result<Self, sqlx::Error> {
         let mut tx = db.begin().await?;
-        let _ = sqlx::query("SELECT set_config('app.community_id', $1, true)")
-            .bind(community_id.to_string())
-            .execute(&mut *tx)
-            .await?;
-        let _ = sqlx::query("SET LOCAL ROLE courtpit_app").execute(&mut *tx).await?;
+        let _ = sqlx::query(
+            "SELECT set_config('app.community_id', $1, true),
+                    CASE WHEN to_regrole('courtpit_app') IS NULL THEN NULL
+                         WHEN pg_has_role(current_user, 'courtpit_app', 'MEMBER')
+                         THEN set_config('role', 'courtpit_app', true) END",
+        )
+        .bind(community_id.to_string())
+        .execute(&mut *tx)
+        .await?;
         Ok(Self { tx, community_id })
     }
 

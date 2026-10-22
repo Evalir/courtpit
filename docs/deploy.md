@@ -74,6 +74,10 @@ Things to know:
   GRANT courtpit_app TO <the login role in DATABASE_URL>;
   ```
 
+  On a host where the login role cannot create roles and nobody can create it for you (Caster's
+  managed Postgres), `migrate` runs the migrations without their role statements and tenant
+  transactions stay on the login role (`RlsMode::Owner`, decision 109); `serve` logs a warning.
+
 - **Transaction pooling.** The app only uses transaction-scoped state (`SET LOCAL`,
   `set_config(.., true)`) and protocol-level prepared statements, which Neon's PgBouncer
   tracks. Migrations and `pg_dump` take session-level locks and snapshots, so they use the

@@ -119,8 +119,8 @@ async fn main() -> anyhow::Result<()> {
         Command::Tick(args) => tick(args).await,
         Command::Migrate(cfg) => {
             let pool = db::connect_direct(&cfg).await?;
-            db::migrate(&pool).await?;
-            tracing::info!("migrations applied");
+            let mode = db::migrate(&pool).await?;
+            tracing::info!(rls_mode = %mode, "migrations applied");
             Ok(())
         }
         Command::Openapi { out } => print_openapi(out.as_deref()),
@@ -200,6 +200,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .with_context(|| format!("binding {}", config.bind))?;
     let pool = db::connect(&config.db).await?;
     tracing::info!(addr = %config.bind, "listening");
+    db::RlsMode::detect(&pool).await.context("reading the RLS mode")?.log();
     if let Some(notice) = rate_limit_notice(std::env::var("FLY_MACHINE_ID").ok().as_deref()) {
         tracing::warn!("{notice}");
     }

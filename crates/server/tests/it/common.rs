@@ -33,6 +33,9 @@ use uuid::Uuid;
 
 const DEFAULT_URL: &str =
     "postgres://racquetcollective:racquetcollective@127.0.0.1/racquetcollective";
+/// A login role that owns its database but may not create roles, like a managed Postgres's
+/// app role (Caster): migrations run in `RlsMode::Owner`.
+const OWNER_ROLE: &str = "racquetcollective_owner";
 /// Advisory lock key serialising template creation across test processes.
 const TEMPLATE_LOCK: i64 = 7_253_001;
 
@@ -112,7 +115,7 @@ async fn template() -> &'static str {
                 let _ =
                     conn.execute(format!(r#"CREATE DATABASE "{build}""#).as_str()).await.unwrap();
                 let pool = db::connect_with(admin_options().database(&build), 2).await.unwrap();
-                db::migrate(&pool).await.unwrap();
+                let _ = db::migrate(&pool).await.unwrap();
                 pool.close().await;
                 let _ = conn
                     .execute(format!(r#"ALTER DATABASE "{build}" RENAME TO "{name}""#).as_str())
@@ -187,7 +190,40 @@ impl TestApp {
 
     /// Spawns with a custom configuration.
     pub(crate) async fn spawn_with(config: Config) -> Self {
-        let options = fresh_database().await;
+        Self::spawn_on(config, fresh_database().await).await
+    }
+
+    /// Spawns against a new database owned by [`OWNER_ROLE`] and migrated as it, so without the
+    /// `courtpit_app` role. Uses the direct URL: the CI pooler knows only the admin role.
+    pub(crate) async fn spawn_owner_mode() -> Self {
+        let name = format!("racquetcollective_test_{}", Uuid::now_v7().simple());
+        let mut conn = PgConnection::connect_with(&admin_options()).await.unwrap();
+        let _ = conn
+            .execute(
+                format!(
+                    "DO $$ BEGIN
+                        CREATE ROLE {OWNER_ROLE} LOGIN PASSWORD 'racquetcollective'
+                            NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+                    EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
+                    END $$"
+                )
+                .as_str(),
+            )
+            .await
+            .unwrap();
+        let _ = conn
+            .execute(format!(r#"CREATE DATABASE "{name}" OWNER {OWNER_ROLE}"#).as_str())
+            .await
+            .unwrap();
+        let options =
+            admin_options().username(OWNER_ROLE).password("racquetcollective").database(&name);
+        let pool = db::connect_with(options.clone(), 2).await.unwrap();
+        assert_eq!(db::migrate(&pool).await.unwrap(), db::RlsMode::Owner);
+        pool.close().await;
+        Self::spawn_on(test_config(), options).await
+    }
+
+    async fn spawn_on(config: Config, options: PgConnectOptions) -> Self {
         let db = db::connect_with(options, 5).await.unwrap();
         let mailer = Arc::new(LogMailer::default());
         let pusher = Arc::new(LogPusher::default());
